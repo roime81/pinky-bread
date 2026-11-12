@@ -1,0 +1,64 @@
+services:
+  api:
+    build: .
+    container_name: pinky-bread-api
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: docker
+      DEV_MODE: "true"
+      MOCK_INFERENCE: "true"
+      DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
+      REDIS_URL: redis://redis:6379/0
+      AGENT_CONFIG_DIR: /opt/pinky-bread/config/agents
+      UPLOAD_DIR: /opt/pinky-bread/data/uploads
+    volumes:
+      - ./data:/opt/pinky-bread/data
+      - ./config/agents:/opt/pinky-bread/config/agents:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pinky-bread-postgres
+    environment:
+      POSTGRES_DB: pinky_bread
+      POSTGRES_USER: pinky_bread
+      POSTGRES_PASSWORD: pinky_bread_dev_only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pinky_bread -d pinky_bread"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: pinky-bread-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+networks:
+  pinky_bread_internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:

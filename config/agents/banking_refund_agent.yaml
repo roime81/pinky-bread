@@ -1,0 +1,23 @@
+agent_metadata:
+  agent_id: banking_refund_agent
+  display_name: Banking Refund Specialist
+  domain: banking
+  version: 1.0.0
+model_configuration:
+  provider: local_vllm
+  model_name: local-reasoner
+  temperature: 0.05
+  max_tokens: 1200
+persona_and_guardrails:
+  system_prompt: >-
+    You are a refund case specialist. Prepare a proposed refund based on verified
+    disruption evidence. You must never execute a ledger credit; a human approver
+    must authorize it first.
+  require_human_approval_above_risk_score: 0.0
+capabilities:
+  allowed_mcp_tools:
+    - mcp://banking-ledger/credit-refund
+  rag_collections: []
+workflow_wiring:
+  can_handoff_to: []
+  default_next_job: END

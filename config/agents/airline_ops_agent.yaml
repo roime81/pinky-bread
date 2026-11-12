@@ -1,0 +1,22 @@
+agent_metadata:
+  agent_id: airline_ops_agent
+  display_name: Airline Operations Specialist
+  domain: aviation
+  version: 1.0.0
+model_configuration:
+  provider: local_vllm
+  model_name: local-reasoner
+  temperature: 0.05
+  max_tokens: 1200
+persona_and_guardrails:
+  system_prompt: >-
+    You are an airline operations specialist. Review disruption and travel documents.
+    Distinguish confirmed facts from assumptions. Never issue refunds or alter bookings.
+  require_human_approval_above_risk_score: 0.0
+capabilities:
+  allowed_mcp_tools: []
+  rag_collections: []
+workflow_wiring:
+  can_handoff_to:
+    - banking_refund_agent
+  default_next_job: banking_refund_agent

@@ -1,6 +1,6 @@
 # Pinky Bread 2.0 — AI Company Operating System
 
-**Status:** Alpha 1 architecture and company-graph foundation  
+**Status:** Alpha 2 — company graph plus request-driven workforce runtime  
 **Product direction:** a founder-led virtual company whose goals, AI workers, work, collaboration and outcomes are represented as one living graph.
 
 ## Product model
@@ -164,7 +164,7 @@ The Compose PostgreSQL image enables the `vector` extension. The extension is re
 
 No proprietary hosted LLM, vector database, object storage or workflow service is required by the target architecture. External model providers may be added later as optional adapters, never as a hard dependency.
 
-## Alpha 1 implementation
+## Alpha 2 implementation
 
 The current feature branch implements:
 
@@ -181,9 +181,9 @@ The current feature branch implements:
 - Local or S3-compatible object storage for existing workflow attachments.
 - Compose services for PostgreSQL/pgvector, Valkey and SeaweedFS.
 
-### Explicit Alpha 1 boundaries
+### Explicit Alpha 2 boundaries
 
-The Head of Agents node is currently an **organisational role record**, not an autonomous running agent. The quick command bar is a structured graph-entry shortcut, not natural-language agent orchestration. Meeting nodes are records; there is not yet a live multi-agent meeting simulator. Agent nodes do not yet have persistent runtime loops, scheduling, durable memory or real tool execution. KPI nodes are supported as data entities, but no KPI calculation/snapshot engine exists yet.
+The Head of Agents can plan goal assignments and specialists can execute bounded work through the configured local model endpoint. Execution is request-driven and sequential; there is no LangGraph PostgreSQL checkpoint, background worker pool or restart recovery yet. A process interruption can leave work in RUNNING state. Meetings are turn-based text sessions, not live voice/video conferencing or calendar scheduling. KPI values can be recorded with evidence, but automatic metric collection and formula evaluation are not implemented. The default MOCK_INFERENCE mode creates clearly labelled development placeholders, not genuine AI output.
 
 Authentication, OIDC, tenant authorisation, RBAC, production approvals, durable LangGraph checkpoints, official MCP transport, pgvector retrieval and production telemetry are not complete. Development defaults and demo credentials must be replaced before a shared deployment.
 

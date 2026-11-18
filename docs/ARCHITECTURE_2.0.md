@@ -123,6 +123,7 @@ The company graph uses relational persistence:
 - `company_graph_nodes`: stable node identity, type, state and data
 - `company_graph_edges`: typed directed relationships
 - `company_graph_events`: append-only activity events with a previous-hash link
+- `stored_objects`: object metadata, tenant/company ownership, content type, byte size, checksum, storage key/backend and retention metadata
 - `workflows`: existing workflow state and workflow audit data
 
 The graph snapshot is rebuilt from these tables. The UI must never be the only place a goal, assignment or relationship exists.
@@ -135,7 +136,7 @@ A graph mutation is committed to PostgreSQL first. The application then publishe
 
 ### SeaweedFS is the S3-compatible object store
 
-Docker Compose uses SeaweedFS for workflow artifact bytes through its S3-compatible API. The application also retains a local filesystem storage mode for development. PostgreSQL-backed workflow state stores artifact metadata, including object key, storage URI, checksum and size.
+Docker Compose uses SeaweedFS for workflow artifact bytes through its S3-compatible API. The application also retains a local filesystem storage mode for development. PostgreSQL stores the `stored_objects` catalogue for workflow artifacts and company documents/deliverables, including owner, company and tenant scope, object key, backend, storage URI, filename, content type, checksum, size and creation metadata. Company document and deliverable uploads create graph nodes and optional `informs` / `produces` relationships; download and listing APIs resolve metadata from PostgreSQL before reading the bytes from the recorded object backend.
 
 Do not store large file bytes in graph JSON fields. Store object keys and metadata in the database and the bytes in the object store.
 

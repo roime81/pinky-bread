@@ -172,9 +172,11 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | Language | Python 3.11+ | Application runtime |
 | API | FastAPI, Uvicorn | REST API, OpenAPI docs, SSE response endpoint |
 | Data validation/configuration | Pydantic v2, pydantic-settings, PyYAML | Request validation, environment settings, agent manifests |
-| Workflow orchestration | Custom Python state machine | Deterministic routing, specialist hand-offs and approval control |
-| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Goal planning, specialist work and meeting turns through local reasoning endpoint |
-| Inference server (optional) | vLLM-compatible endpoint | Local model serving; deployment managed separately |
+| Workflow orchestration | LangGraph StateGraph + PostgreSQL AsyncPostgresSaver | Durable job execution and checkpointed recovery |
+| Job coordination | PostgreSQL queue/leases + Valkey Pub/Sub | Idempotent jobs, worker leases, retry/backoff and worker wake-up |
+| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Goal planning, specialist work, meetings and MCP function calls |
+| Inference server (optional) | Ollama 0.40.16 or vLLM-compatible endpoint | Self-hosted open-weight model serving; weights supplied separately |
+| Tool protocol | MCP Python SDK v2, Streamable HTTP | Official MCP server/client with role-scoped tools and trusted identity injection |
 | Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state plus company graph nodes, typed edges and event history |
 | Vector extension image | pgvector PostgreSQL image | Extension enabled; embeddings and semantic retrieval are not yet implemented |
 | Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
@@ -198,7 +200,7 @@ No GPU is required when `MOCK_INFERENCE=true` (the default).
 ### For Docker Compose
 
 - Docker Engine or Docker Desktop with Compose v2
-- Sufficient memory and disk for the API, PostgreSQL, Valkey and SeaweedFS containers
+- Sufficient memory and disk for API, PostgreSQL, Valkey, SeaweedFS and the worker; local models require additional RAM/VRAM and model storage
 
 ### For local model inference (optional)
 
@@ -259,7 +261,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 - OpenAPI JSON: <http://127.0.0.1:8080/openapi.json>
 - Health endpoint: <http://127.0.0.1:8080/api/healthz>
 
-The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Docker Compose instead runs PostgreSQL/pgvector, Valkey and SeaweedFS. A GPU is not required for mock mode.
+The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker and internal MCP; Ollama is an optional profile. A GPU is not required for mock mode.
 
 ## Run with Docker Compose
 
@@ -280,6 +282,9 @@ docker compose logs -f api
 # Show service state
 docker compose ps
 
+# Scale durable job workers (PostgreSQL coordinates the replicas)
+docker compose up -d --scale worker=3
+
 # Stop containers and preserve named volumes
 docker compose down
 
@@ -289,18 +294,21 @@ docker compose down --volumes
 
 The Compose stack contains:
 
-- `api`: Pinky Bread FastAPI application
-- `postgres`: PostgreSQL 16 using the pgvector image
-- `valkey`: Valkey with append-only persistence enabled
+- `api`: FastAPI web console and company/workforce API
+- `worker`: LangGraph worker process; scale by adding replicas
+- `mcp`: internal MCP v2 Streamable HTTP server (port 8090 is not published to the host)
+- `postgres`: PostgreSQL 16 using the pgvector image; durable queue and checkpoints
+- `valkey`: Valkey with append-only persistence enabled; worker wake-up only
 - `seaweedfs`: SeaweedFS S3-compatible object storage
+- `ollama`: optional `local-llm` profile for self-hosted models
 
-The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Valkey is used for best-effort graph event notifications; durable event history is read from PostgreSQL. SeaweedFS stores workflow attachment bytes via its S3 API; PostgreSQL workflow state contains object key, URI and checksum metadata. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
+The default application network is configured as `internal: true`, which restricts container egress. The optional Ollama profile is attached to a separate model-download network so it can pull the model explicitly; remove that egress path after preloading models for an air-gapped deployment. **Compose is not proof of a fully air-gapped deployment.** Host firewall rules, ingress, routing, DNS, secrets, image sources and infrastructure controls must be reviewed independently. PostgreSQL owns durable job/checkpoint state; Valkey only wakes workers and publishes live graph notifications. SeaweedFS stores documents and outputs while PostgreSQL keeps object metadata and checksums. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
 
 The PostgreSQL password and SeaweedFS S3 keys are development-only values. Replace them with managed secrets and restrict the S3 identity before any shared or non-development deployment.
 
-## Configure local vLLM inference
+## Configure a self-hosted local model
 
-Mock mode is enabled by default. To use a local OpenAI-compatible endpoint, edit `.env`:
+Mock mode is enabled by default. To use a local OpenAI-compatible endpoint, edit `.env`. vLLM and Ollama can both be used when configured with the compatible chat-completions API:
 
 ```dotenv
 MOCK_INFERENCE=false
@@ -310,6 +318,15 @@ MULTIMODAL_API_URL=http://127.0.0.1:8002/v1
 MULTIMODAL_MODEL=your-vision-model
 VLLM_API_KEY=local-development-key
 ```
+
+For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+
+```bash
+docker compose --profile local-llm up -d
+docker compose exec ollama ollama pull <model-name>
+```
+
+Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
 
 Then restart the application. The adapter sends requests to:
 

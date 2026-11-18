@@ -11,8 +11,8 @@ The design goal is self-hosted operation without mandatory proprietary SaaS depe
 | Vector extension | pgvector | Semantic memory and document retrieval | Extension enabled; vector pipeline pending |
 | Live events | Valkey 9.1.3 | Pub/Sub notifications for the living graph | Implemented |
 | Object storage | SeaweedFS 4.53 S3 API | Uploaded documents and workflow artifacts | Compose and storage adapter implemented |
-| Local LLM | vLLM-compatible API | Local reasoning and vision inference | Existing adapter; inference server/model deployed separately |
-| Workflow orchestration | LangGraph | Durable multi-agent state graph and checkpoints | Planned |
+| Local LLM | vLLM-compatible API | Head-of-Agents planning, specialist execution and meeting turns | Adapter used by Alpha 2; inference server/model deployed separately |
+| Workforce planning and execution | FastAPI service + SQLAlchemy graph events + local OpenAI-compatible inference | Goal decomposition, assigned work, bounded request-driven execution | Implemented in Alpha 2; no durable worker/checkpoint yet |\n| Durable workflow orchestration | LangGraph + PostgreSQL checkpointer | Restartable multi-agent state graph | Planned |
 | Tool protocol | Official MCP Python SDK | Standard tool/resource/prompt integration | Planned; current tool gateway is a local demo adapter |
 | Identity | Keycloak / OIDC | Login, SSO, company membership and identity claims | Planned |
 | Secrets | OpenBao | Runtime credentials, rotation and access control | Planned |

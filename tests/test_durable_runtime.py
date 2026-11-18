@@ -122,6 +122,7 @@ def test_postgres_job_queue_deduplicates_claims_heartbeats_and_recovers_expired_
     reclaimed = claim_next_job("worker-three", lease_seconds=30)
     assert reclaimed["job_id"] == second["job_id"]
     assert reclaimed["attempts"] == 2
+    assert complete_job(second["job_id"], "worker-three", {"ok": True}) is True
 
 
 def test_founder_coordination_is_persisted_and_queues_plan_jobs():

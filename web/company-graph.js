@@ -50,10 +50,6 @@
       }
       state.company = state.companies[0];
       $("#graph-company-picker").value = state.company.id;
-      await api(`/v2/companies/${state.company.id}/workforce/bootstrap`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
-      });
       await loadGraph(true);
     } catch (error) {
       setWorkspaceVisible(false);
@@ -238,8 +234,9 @@
 
     $("#graph-node-count").textContent = `${nodes.length} NODES`;
     $("#graph-goal-count").textContent = nodes.filter((node) => node.type === "goal").length;
-    $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent").length;
+    $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent" && node.status !== "ARCHIVED").length;
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
+    renderAgentDirectory();
     $("#graph-company-name").textContent = state.company.name;
     $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
@@ -446,8 +443,17 @@
     });
 
     const actions = [];
+    if (node.type === "agent") {
+      if (node.status !== "ARCHIVED") {
+        actions.push('<button class="secondary-btn" id="inspect-edit-agent">Edit agent profile</button>');
+        actions.push('<div class="agent-inspector-rank"><button class="graph-tool-btn" id="inspect-demote-agent">− Demote</button><span>Level ' + escapeHtml((node.data || {}).seniority_level || 3) + ' / 10</span><button class="graph-tool-btn" id="inspect-promote-agent">＋ Promote</button></div>');
+        actions.push('<button class="danger-btn" id="inspect-remove-agent">Remove agent</button>');
+      } else {
+        actions.push('<span class="inspector-description">This agent is archived. Its history and previous deliverables are retained.</span>');
+      }
+    }
     if (node.type === "goal") {
-      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
+      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with company coordinator</button>');
       actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
     }
     if (node.type === "work" && node.status !== "COMPLETED") {
@@ -465,6 +471,10 @@
     if (actions.length) {
       $("#graph-inspector").insertAdjacentHTML("beforeend", `<div class="inspector-divider"></div><div class="inspector-section-title">ACTIONS</div><div class="inspector-actions">${actions.join("")}</div>`);
     }
+    $("#inspect-edit-agent")?.addEventListener("click", () => openAgentEditor(node));
+    $("#inspect-promote-agent")?.addEventListener("click", () => changeAgentSeniority(nodeId, "promote"));
+    $("#inspect-demote-agent")?.addEventListener("click", () => changeAgentSeniority(nodeId, "demote"));
+    $("#inspect-remove-agent")?.addEventListener("click", () => removeAgent(nodeId));
     $("#inspect-plan-goal")?.addEventListener("click", () => planGoal(nodeId));
     $("#inspect-run-goal")?.addEventListener("click", () => runGoal(nodeId));
     $("#inspect-execute-work")?.addEventListener("click", () => executeWork(nodeId, node.status === "FAILED"));
@@ -534,14 +544,10 @@
       state.companies.push(company);
       renderCompanyPicker();
       setWorkspaceVisible(true);
-      await api(`/v2/companies/${company.id}/workforce/bootstrap`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: company.tenant_id, actor_id: "founder" }),
-      });
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
       startJobsPolling();
-      toast("Your company graph and virtual workforce have been created");
+      toast("Company created. Build the virtual team you want by adding your own agents.");
     } catch (error) {
       toast(error.message);
     } finally {
@@ -588,14 +594,161 @@
     }
   }
 
-  async function addAgent() {
-    const name = askForName("Name this AI employee", "Product Agent");
-    if (!name) return;
-    const role = askForName("What is this agent responsible for?", "Product management") || "General specialist";
+  function activeAgents() {
+    return (state.graph.nodes || []).filter((node) =>
+      node.type === "agent" && !["ARCHIVED", "DISABLED"].includes(node.status)
+    );
+  }
+
+  function _isCoordinatorForUi(agent) {
+    const data = agent?.data || {};
+    const role = String(data.role || "").toLowerCase();
+    return String(data.authority || "").toUpperCase() === "COORDINATOR"
+      || ["head_of_agents", "chief_of_staff", "chief-of-staff"].includes(role);
+  }
+
+  function renderAgentDirectory() {
+    const target = $("#company-agent-list");
+    if (!target) return;
+    const agents = activeAgents();
+    if (!agents.length) {
+      target.innerHTML = '<div class="empty-state">No agents yet. Create your first agent and choose whether it should coordinate the company or work as a specialist.</div>';
+      return;
+    }
+    const byId = new Map((state.graph.nodes || []).map((node) => [node.id, node]));
+    target.innerHTML = agents
+      .slice()
+      .sort((a, b) => Number(_isCoordinatorForUi(b)) - Number(_isCoordinatorForUi(a))
+        || Number((b.data || {}).seniority_level || 3) - Number((a.data || {}).seniority_level || 3)
+        || a.name.localeCompare(b.name))
+      .map((agent) => {
+        const data = agent.data || {};
+        const managerEdge = (state.graph.edges || []).find((edge) =>
+          edge.source === agent.id && edge.relationship === "reports_to"
+        );
+        const manager = managerEdge ? byId.get(managerEdge.target) : null;
+        const authority = _isCoordinatorForUi(agent) ? "COORDINATOR" : "SPECIALIST";
+        const title = data.title || data.role || "AI Employee";
+        const status = agent.status || "ACTIVE";
+        return `<div class="company-agent-card">
+          <button class="company-agent-identity" data-select-agent="${escapeHtml(agent.id)}">
+            <span class="company-agent-avatar">${escapeHtml(agent.name.slice(0, 1).toUpperCase())}</span>
+            <span><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(title)} · ${escapeHtml(data.role || "General function")}</small></span>
+          </button>
+          <div class="company-agent-meta">
+            <span class="agent-authority-badge ${authority.toLowerCase()}">${authority === "COORDINATOR" ? "Coordinator" : "Specialist"}</span>
+            <span>Level ${escapeHtml(data.seniority_level || 3)}</span>
+            <span>${escapeHtml(status)}</span>
+            <span>Reports to: ${escapeHtml(manager?.name || "Company")}</span>
+          </div>
+          <button class="graph-tool-btn" data-edit-agent="${escapeHtml(agent.id)}">Edit</button>
+        </div>`;
+      }).join("");
+  }
+
+  function openAgentEditor(agent = null, presetName = "") {
+    if (!state.company) return;
+    const dialog = $("#agent-editor-dialog");
+    const form = $("#agent-editor-form");
+    form.reset();
+    const editing = Boolean(agent);
+    const data = agent?.data || {};
+    $("#agent-editor-heading").textContent = editing ? "Edit agent" : "Create an agent";
+    $("#agent-editor-id").value = agent?.id || "";
+    $("#agent-editor-name").value = agent?.name || presetName || "";
+    $("#agent-editor-role").value = data.role || "";
+    $("#agent-editor-title").value = data.title || "";
+    $("#agent-editor-level").value = String(data.seniority_level || 3);
+    $("#agent-editor-authority").value = _isCoordinatorForUi(agent) ? "COORDINATOR" : (editing ? "SPECIALIST" : (activeAgents().length ? "SPECIALIST" : "COORDINATOR"));
+    $("#agent-editor-description").value = agent?.description || "";
+    $("#agent-editor-skills").value = Array.isArray(data.skills) ? data.skills.join(", ") : "";
+    $("#agent-editor-responsibilities").value = Array.isArray(data.responsibilities) ? data.responsibilities.join("\n") : "";
+    $("#agent-editor-prompt").value = data.system_prompt || "";
+    const managerEdge = (state.graph.edges || []).find((edge) =>
+      edge.source === agent?.id && edge.relationship === "reports_to"
+    );
+    const currentManager = managerEdge?.target || data.manager_id || "";
+    const managers = activeAgents().filter((candidate) => candidate.id !== agent?.id);
+    $("#agent-editor-manager").innerHTML = '<option value="">No manager / direct to company</option>' + managers.map((candidate) =>
+      `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.name)} · ${escapeHtml(candidate.data?.title || candidate.data?.role || "Agent")}</option>`
+    ).join("");
+    $("#agent-editor-manager").value = currentManager;
+    $("#agent-editor-feedback").textContent = "";
+    $("#agent-editor-save").textContent = editing ? "Save changes" : "Create agent";
+    dialog.showModal();
+    $("#agent-editor-name").focus();
+  }
+
+  async function saveAgent(event) {
+    event.preventDefault();
+    if (!state.company) return;
+    const agentId = $("#agent-editor-id").value;
+    const payload = {
+      tenant_id: state.company.tenant_id,
+      actor_id: "founder",
+      name: $("#agent-editor-name").value.trim(),
+      role: $("#agent-editor-role").value.trim(),
+      title: $("#agent-editor-title").value.trim(),
+      description: $("#agent-editor-description").value.trim(),
+      seniority_level: Number($("#agent-editor-level").value),
+      authority: $("#agent-editor-authority").value,
+      manager_id: $("#agent-editor-manager").value || null,
+      skills: $("#agent-editor-skills").value.split(",").map((value) => value.trim()).filter(Boolean),
+      responsibilities: $("#agent-editor-responsibilities").value.split("\n").map((value) => value.trim()).filter(Boolean),
+      system_prompt: $("#agent-editor-prompt").value.trim(),
+    };
+    const button = $("#agent-editor-save");
+    button.disabled = true;
+    $("#agent-editor-feedback").textContent = "Saving…";
     try {
-      await createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED");
-      toast("Agent role added. Runtime activation is a separate setup step.");
+      const path = agentId
+        ? `/v2/companies/${state.company.id}/agents/${agentId}`
+        : `/v2/companies/${state.company.id}/agents`;
+      const result = await api(path, {
+        method: agentId ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      $("#agent-editor-dialog").close();
+      await loadGraph();
+      selectNode(result.id);
+      toast(agentId ? "Agent profile updated" : "Agent created and added to your company");
+    } catch (error) {
+      $("#agent-editor-feedback").textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function changeAgentSeniority(agentId, action) {
+    if (!state.company) return;
+    try {
+      await api(`/v2/companies/${state.company.id}/agents/${agentId}/${action}`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      await loadGraph();
+      selectNode(agentId);
+      toast(`Agent ${action === "promote" ? "promoted" : "demoted"}`);
     } catch (error) { toast(error.message); }
+  }
+
+  async function removeAgent(agentId) {
+    if (!state.company) return;
+    const agent = (state.graph.nodes || []).find((node) => node.id === agentId);
+    if (!agent || !window.confirm(`Remove ${agent.name} from the active team? Previous assignments, deliverables and audit history will be retained. Direct reports will be reassigned to this agent's manager when possible.`)) return;
+    try {
+      await api(`/v2/companies/${state.company.id}/agents/${agentId}`, {
+        method: "DELETE",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      state.selectedId = null;
+      await loadGraph();
+      toast("Agent removed from the active team. History retained.");
+    } catch (error) { toast(error.message); }
+  }
+
+  async function addAgent() {
+    openAgentEditor();
   }
 
   async function addWork() {
@@ -754,12 +907,7 @@
       else toast("Select a goal dot or use run: with an existing goal name");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
-      if (name) {
-        const role = askForName("What is this agent responsible for?", "General specialist") || "General specialist";
-        createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED")
-          .then(() => toast("Agent role added; runtime is not activated yet"))
-          .catch((error) => toast(error.message));
-      }
+      openAgentEditor(null, name);
     } else {
       addGoal(command);
     }
@@ -790,6 +938,20 @@
   $("#graph-add-goal")?.addEventListener("click", () => addGoal());
   $("#graph-add-kpi")?.addEventListener("click", addKpi);
   $("#graph-add-agent")?.addEventListener("click", addAgent);
+  $("#graph-add-agent-directory")?.addEventListener("click", addAgent);
+  $("#agent-editor-form")?.addEventListener("submit", saveAgent);
+  $("#agent-editor-close")?.addEventListener("click", () => $("#agent-editor-dialog").close());
+  $("#agent-editor-cancel")?.addEventListener("click", () => $("#agent-editor-dialog").close());
+  $("#company-agent-list")?.addEventListener("click", (event) => {
+    const edit = event.target.closest("[data-edit-agent]");
+    const select = event.target.closest("[data-select-agent]");
+    const agentId = edit?.dataset.editAgent || select?.dataset.selectAgent;
+    if (!agentId) return;
+    const agent = (state.graph.nodes || []).find((node) => node.id === agentId);
+    if (!agent) return;
+    if (edit) openAgentEditor(agent);
+    else selectNode(agentId);
+  });
   $("#graph-add-work")?.addEventListener("click", addWork);
   $("#graph-add-meeting")?.addEventListener("click", addMeeting);
   $("#graph-upload-file")?.addEventListener("click", () => $("#company-artifact-file")?.click());

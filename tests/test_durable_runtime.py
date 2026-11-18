@@ -173,6 +173,27 @@ def test_langgraph_checkpoint_resume_after_worker_lease_expiry_is_idempotent():
     os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
     company, goal = _company_and_goal(f"langgraph-resume-{uuid.uuid4().hex[:8]}")
     tenant = company["tenant_id"]
+    # New companies no longer receive a predefined roster. Provision the
+    # coordinator and the six specialists explicitly as a founder would.
+    with TestClient(app) as client:
+        coordinator = client.post(f"/v2/companies/{company['id']}/agents", json={
+            "tenant_id": tenant,
+            "actor_id": "founder",
+            "name": "Nora",
+            "role": "Company coordination",
+            "title": "Chief of Staff",
+            "authority": "COORDINATOR",
+        })
+        assert coordinator.status_code == 201, coordinator.text
+        for index in range(1, 7):
+            specialist = client.post(f"/v2/companies/{company['id']}/agents", json={
+                "tenant_id": tenant,
+                "actor_id": "founder",
+                "name": f"Specialist {index}",
+                "role": f"Custom function {index}",
+                "title": f"Specialist {index}",
+            })
+            assert specialist.status_code == 201, specialist.text
     queued = enqueue_job(
         company_id=company["id"],
         tenant_id=tenant,

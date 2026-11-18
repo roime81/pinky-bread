@@ -363,8 +363,27 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
             f"Goal: {goal['name']}\nDescription: {goal.get('description', '')}\n"
             f"Available specialists: {', '.join(sorted(set(ROLE_SPECS) - {'head_of_agents'}))}"
         )
-        tasks = _parse_plan(await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.15, max_tokens=2400))
-        planner_mode = "local-model"
+        if settings.mcp_enabled:
+            from .mcp_client import complete_with_mcp
+
+            plan_response = await complete_with_mcp(
+                system_prompt=system,
+                user_prompt=prompt,
+                role="head_of_agents",
+                company_id=company_id,
+                tenant_id=tenant_id,
+                agent_id=head["id"],
+                max_tokens=2400,
+            )
+        else:
+            plan_response = await _chat_completion(
+                system_prompt=system,
+                user_prompt=prompt,
+                temperature=0.15,
+                max_tokens=2400,
+            )
+        tasks = _parse_plan(plan_response)
+        planner_mode = "local-model+mcp" if settings.mcp_enabled else "local-model"
     missing = sorted({task["role"] for task in tasks} - set(agents))
     if missing:
         raise RuntimeError(f"Workforce is missing specialist roles: {', '.join(missing)}")

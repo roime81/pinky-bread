@@ -77,14 +77,20 @@
     const parent = nodeType === "agent"
       ? state.graph.nodes.find((item) => item.type === "agent" && item.data?.role === "chief_of_staff")
       : null;
+    const selectedGoal = nodeType === "kpi"
+      ? state.graph.nodes.find((item) => item.id === state.selectedId && item.type === "goal")
+      : null;
+    const sourceId = selectedGoal ? selectedGoal.id : parent ? node.id : state.company.id;
+    const targetId = selectedGoal ? node.id : parent ? parent.id : node.id;
+    const relationship = selectedGoal ? "measures" : parent ? "reports_to" : "owns";
     await api(`/v2/companies/${state.company.id}/edges`, {
       method: "POST",
       body: JSON.stringify({
         tenant_id: state.company.tenant_id,
         actor_id: "founder",
-        source_node_id: parent ? node.id : state.company.id,
-        target_node_id: parent ? parent.id : node.id,
-        relationship: parent ? "reports_to" : "owns",
+        source_node_id: sourceId,
+        target_node_id: targetId,
+        relationship,
         data: { created_from: "company_graph_workspace" },
       }),
     });
@@ -416,6 +422,30 @@
     } catch (error) { toast(error.message); }
   }
 
+
+  async function addKpi() {
+    const name = askForName("Name the KPI", "Paying customers");
+    if (!name) return;
+    const target = askForName("What is the target value?", "20");
+    if (target === null) return;
+    const unit = askForName("What is the unit?", "customers") || "count";
+    const selectedGoal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal");
+    try {
+      await createNode("kpi", name, `Target: ${target} ${unit}`, {
+        metric: name,
+        target: Number.isFinite(Number(target)) ? Number(target) : target,
+        actual: null,
+        unit,
+        period: "monthly",
+        measurement_state: "not_connected",
+      }, "TRACKING");
+      if (!selectedGoal) toast("KPI added. Select a goal and connect it using Connect.");
+      else toast(`KPI added to ${selectedGoal.name}`);
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+
   async function addAgent() {
     const name = askForName("Name this AI employee", "Product Agent");
     if (!name) return;
@@ -491,6 +521,7 @@
     setWorkspaceVisible(false);
   });
   $("#graph-add-goal")?.addEventListener("click", () => addGoal());
+  $("#graph-add-kpi")?.addEventListener("click", addKpi);
   $("#graph-add-agent")?.addEventListener("click", addAgent);
   $("#graph-add-work")?.addEventListener("click", addWork);
   $("#graph-add-meeting")?.addEventListener("click", addMeeting);

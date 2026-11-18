@@ -219,6 +219,13 @@ def job_cancel_requested(job_id: str, worker_id: str | None = None) -> bool:
         return True
     if worker_id is not None and job["lease_owner"] != worker_id:
         return True
+    lease_value = job.get("lease_expires_at")
+    if lease_value:
+        lease_expiry = datetime.fromisoformat(str(lease_value).replace("Z", "+00:00"))
+        if lease_expiry.tzinfo is None:
+            lease_expiry = lease_expiry.replace(tzinfo=timezone.utc)
+        if lease_expiry <= utcnow():
+            return True
     return False
 
 
@@ -281,6 +288,7 @@ def heartbeat_job(job_id: str, worker_id: str, lease_seconds: int = 90) -> bool:
             WorkforceJob.job_id == job_id,
             WorkforceJob.status == "RUNNING",
             WorkforceJob.lease_owner == worker_id,
+            WorkforceJob.lease_expires_at > now,
         ).update(
             {
                 WorkforceJob.lease_expires_at: now + timedelta(seconds=max(lease_seconds, 15)),
@@ -299,6 +307,7 @@ def complete_job(job_id: str, worker_id: str, result: dict[str, Any]) -> bool:
             WorkforceJob.job_id == job_id,
             WorkforceJob.status == "RUNNING",
             WorkforceJob.lease_owner == worker_id,
+            WorkforceJob.lease_expires_at > now,
         ).update(
             {
                 WorkforceJob.status: "COMPLETED",
@@ -322,6 +331,7 @@ def fail_or_retry_job(job_id: str, worker_id: str, error: str) -> bool:
             WorkforceJob.job_id == job_id,
             WorkforceJob.status == "RUNNING",
             WorkforceJob.lease_owner == worker_id,
+            WorkforceJob.lease_expires_at > now,
         ).first()
         if job is None:
             return False
@@ -367,7 +377,7 @@ def recover_expired_jobs() -> int:
             WorkforceJob.status == "RUNNING",
             WorkforceJob.lease_expires_at.is_not(None),
             WorkforceJob.lease_expires_at < now,
-        ).all()
+        ).with_for_update(skip_locked=True).all()
         count = 0
         for job in expired:
             job.lease_owner = None

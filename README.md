@@ -648,6 +648,22 @@ See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the
 
 ## Troubleshooting
 
+### Local API startup and PostgreSQL connection refused
+
+The sample `.env.example` uses SQLite for API-only local development, so the
+API can start without a separately installed PostgreSQL server. If your existing
+`.env` still points to PostgreSQL at `localhost:5432`, either change
+`DATABASE_URL` to `sqlite:///./data/pinky_bread.db` and set
+`AUTO_CREATE_SCHEMA=true`, or start the full stack with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Compose runs a one-shot `migrate` service after PostgreSQL is healthy. The API,
+worker and MCP services wait for it to complete and do not race to create the
+schema. Do not run the API with a PostgreSQL URL unless PostgreSQL is reachable.
+
 ### `ModuleNotFoundError` when starting the API
 
 Confirm the virtual environment is activated and install dependencies again:

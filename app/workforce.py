@@ -100,10 +100,12 @@ def _mock_plan(agents: list[dict[str, Any]], goal: dict[str, Any]) -> dict[str, 
     """Create transparent placeholder assignments from the agents a founder actually defined."""
     candidates = [agent for agent in agents if not _is_coordinator(agent)] or agents
     tasks = []
+    previous_key: str | None = None
     for index, agent in enumerate(candidates[:8], start=1):
         title = _agent_title(agent)
+        task_key = f"agent_contribution_{index}"
         tasks.append({
-            "key": f"agent_contribution_{index}",
+            "key": task_key,
             "title": f"{agent['name']}: {goal['name']}",
             "agent_id": agent["id"],
             "description": (
@@ -116,8 +118,9 @@ def _mock_plan(agents: list[dict[str, Any]], goal: dict[str, Any]) -> dict[str, 
                 "Assumptions and material risks are identified",
                 "Concrete next steps are recommended",
             ],
-            "depends_on": [],
+            "depends_on": [previous_key] if previous_key else [],
         })
+        previous_key = task_key
     return {"tasks": tasks}
 
 

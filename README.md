@@ -6,7 +6,7 @@ Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led
 
 Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce platform. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
 
-> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 3 upgrade is being developed on [feature/pinky-bread-v2-durable-runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-durable-runtime), stacked on [Alpha 2 workforce runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-workforce-runtime) and the initial [company graph foundation](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
+> **Versioning:** the complete Pinky Bread 2.0 Alpha 3 stack is now merged into the default `main` branch. The [Alpha 1 company graph](https://github.com/roime81/pinky-bread/pull/1), [Alpha 2 workforce runtime](https://github.com/roime81/pinky-bread/pull/2) and [Alpha 3 durable runtime](https://github.com/roime81/pinky-bread/pull/3) were delivered as a stacked sequence. This README describes the current `main` branch. Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and remaining work.
 
 > [!IMPORTANT]
 > **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production RBAC/tenant isolation, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
@@ -281,9 +281,6 @@ docker compose logs -f api
 
 # Show service state
 docker compose ps
-
-# Scale durable job workers (PostgreSQL coordinates the replicas)
-docker compose up -d --scale worker=3
 
 # Scale durable job workers (PostgreSQL coordinates the replicas)
 docker compose up -d --scale worker=3

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+import httpx2
+from mcp import Client
+from mcp.client.streamable_http import streamable_http_client
 
 from .settings import get_settings
 
@@ -29,7 +29,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, set[str]] = {
 
 
 def _tool_schema(tool: Any) -> dict[str, Any]:
-    schema = getattr(tool, "inputSchema", None) or getattr(tool, "input_schema", None) or {}
+    schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None) or {}
     if not isinstance(schema, dict):
         schema = {}
     schema = json.loads(json.dumps(schema))
@@ -45,7 +45,7 @@ def _tool_schema(tool: Any) -> dict[str, Any]:
 
 
 def _tool_result_text(result: Any) -> str:
-    if getattr(result, "isError", False):
+    if getattr(result, "is_error", False) or getattr(result, "isError", False):
         raise RuntimeError("MCP tool returned an error")
     parts = []
     for item in getattr(result, "content", []) or []:
@@ -54,7 +54,7 @@ def _tool_result_text(result: Any) -> str:
             parts.append(value)
     if parts:
         return "\n".join(parts)
-    structured = getattr(result, "structuredContent", None)
+    structured = getattr(result, "structured_content", None) or getattr(result, "structuredContent", None)
     if structured is not None:
         return json.dumps(structured, ensure_ascii=False, default=str)
     return str(result)
@@ -87,9 +87,15 @@ async def complete_with_mcp(
     ]
     endpoint = f"{settings.reasoning_api_url.rstrip('/')}/chat/completions"
     model_tools: list[dict[str, Any]] = []
-    async with streamablehttp_client(settings.mcp_server_url, headers=headers) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
+    async with httpx2.AsyncClient(
+        headers=headers,
+        timeout=httpx2.Timeout(30.0, read=300.0),
+    ) as http_client:
+        transport = streamable_http_client(
+            url=settings.mcp_server_url,
+            http_client=http_client,
+        )
+        async with Client(transport) as session:
             discovered = await session.list_tools()
             available = {
                 tool.name: tool
@@ -164,7 +170,7 @@ async def complete_with_mcp(
                             "tenant_id": tenant_id,
                             "actor_id": agent_id,
                         }
-                        result = await session.call_tool(name, arguments=safe_arguments)
+                        result = await session.call_tool(name, safe_arguments)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call.get("id", ""),

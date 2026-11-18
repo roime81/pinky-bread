@@ -46,6 +46,10 @@
       }
       state.company = state.companies[0];
       $("#graph-company-picker").value = state.company.id;
+      await api(`/v2/companies/${state.company.id}/workforce/bootstrap`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
       await loadGraph(true);
     } catch (error) {
       setWorkspaceVisible(false);
@@ -75,7 +79,7 @@
       }),
     });
     const parent = nodeType === "agent"
-      ? state.graph.nodes.find((item) => item.type === "agent" && item.data?.role === "chief_of_staff")
+      ? state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role))
       : null;
     const selectedGoal = nodeType === "kpi"
       ? state.graph.nodes.find((item) => item.id === state.selectedId && item.type === "goal")
@@ -310,6 +314,32 @@
       $("#graph-mode-label").textContent = "SELECT SECOND NODE";
       toast("Select another dot to connect it");
     });
+
+    const actions = [];
+    if (node.type === "goal") {
+      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
+      actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
+    }
+    if (node.type === "work" && node.status !== "COMPLETED") {
+      actions.push('<button class="primary-btn" id="inspect-execute-work">Execute this assignment</button>');
+    }
+    if (node.type === "meeting" && node.status !== "COMPLETED") {
+      actions.push('<button class="primary-btn" id="inspect-convene-meeting">Convene agent meeting</button>');
+    }
+    if (node.type === "kpi") {
+      actions.push('<button class="secondary-btn" id="inspect-record-kpi">Record KPI measurement</button>');
+    }
+    if (node.data?.download_endpoint) {
+      actions.push(`<a class="secondary-btn graph-download-link" href="${escapeHtml(node.data.download_endpoint)}" target="_blank" rel="noopener">Download stored output</a>`);
+    }
+    if (actions.length) {
+      $("#graph-inspector").insertAdjacentHTML("beforeend", `<div class="inspector-divider"></div><div class="inspector-section-title">ACTIONS</div><div class="inspector-actions">${actions.join("")}</div>`);
+    }
+    $("#inspect-plan-goal")?.addEventListener("click", () => planGoal(nodeId));
+    $("#inspect-run-goal")?.addEventListener("click", () => runGoal(nodeId));
+    $("#inspect-execute-work")?.addEventListener("click", () => executeWork(nodeId, node.status === "FAILED"));
+    $("#inspect-convene-meeting")?.addEventListener("click", () => conveneMeetingNode(nodeId));
+    $("#inspect-record-kpi")?.addEventListener("click", () => recordKpi(nodeId));
     if (rerender) renderGraph();
   }
 
@@ -374,28 +404,9 @@
       state.companies.push(company);
       renderCompanyPicker();
       setWorkspaceVisible(true);
-      const head = await api(`/v2/companies/${company.id}/nodes`, {
+      await api(`/v2/companies/${company.id}/workforce/bootstrap`, {
         method: "POST",
-        body: JSON.stringify({
-          tenant_id: company.tenant_id,
-          actor_id: "founder",
-          node_type: "agent",
-          name: "Head of Agents",
-          description: "Proposed Chief of Staff role. Runtime activation and delegated tool permissions are not configured yet.",
-          status: "PROPOSED",
-          data: { role: "chief_of_staff", runtime_status: "not_configured", authority: "coordination_only" },
-        }),
-      });
-      await api(`/v2/companies/${company.id}/edges`, {
-        method: "POST",
-        body: JSON.stringify({
-          tenant_id: company.tenant_id,
-          actor_id: "founder",
-          source_node_id: company.id,
-          target_node_id: head.id,
-          relationship: "owns",
-          data: {},
-        }),
+        body: JSON.stringify({ tenant_id: company.tenant_id, actor_id: "founder" }),
       });
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
@@ -514,6 +525,84 @@
     }
   }
 
+  async function planGoal(goalId) {
+    if (!state.company) return;
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/plan`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      await loadGraph();
+      selectNode(goalId);
+      toast(result.created ? `${result.count} assignments created by the Head of Agents` : result.message);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function runGoal(goalId) {
+    if (!state.company) return;
+    const button = $("#inspect-run-goal");
+    if (button) { button.disabled = true; button.textContent = "Executing workflow…"; }
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/execute`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      await loadGraph();
+      selectNode(goalId);
+      toast(`Completed ${result.completed} work items · ${result.errors.length} errors · ${result.progress.progress}% goal progress`);
+    } catch (error) { toast(error.message); }
+    finally { if (button) { button.disabled = false; button.textContent = "Execute goal workflow"; } }
+  }
+
+  async function executeWork(workId, retry = false) {
+    if (!state.company) return;
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/work/${workId}/execute`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder", retry }),
+      });
+      await loadGraph();
+      selectNode(workId);
+      toast(result.idempotent ? result.message : "Assignment completed and deliverable stored");
+    } catch (error) { toast(error.message); }
+  }
+
+  async function conveneMeetingNode(meetingId) {
+    if (!state.company) return;
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/meetings/${meetingId}/convene`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      await loadGraph();
+      selectNode(meetingId);
+      toast(result.idempotent ? result.message : `Meeting completed · ${result.participants.length} agents · minutes stored`);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function recordKpi(kpiId) {
+    const actual = askForName("Enter the actual KPI value", "0");
+    if (actual === null || !Number.isFinite(Number(actual))) return;
+    const source = askForName("Where did this measurement come from?", "Founder-reported measurement");
+    if (!source) return;
+    const evidence = askForName("Add a short evidence note (optional)", "") || "";
+    try {
+      await api(`/v2/companies/${state.company.id}/kpis/${kpiId}/measure`, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          actual_value: Number(actual),
+          source,
+          evidence,
+        }),
+      });
+      await loadGraph();
+      selectNode(kpiId);
+      toast("KPI measurement recorded in company history");
+    } catch (error) { toast(error.message); }
+  }
+
   function handleCommand() {
     const input = $("#company-command-input");
     const command = input.value.trim();
@@ -521,6 +610,16 @@
     const lower = command.toLowerCase();
     if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
       addGoal(command.split(":").slice(1).join(":").trim());
+    } else if (lower.startsWith("plan:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
+      if (goal) planGoal(goal.id);
+      else toast("Select a goal dot or use plan: with an existing goal name");
+    } else if (lower.startsWith("run:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
+      if (goal) runGoal(goal.id);
+      else toast("Select a goal dot or use run: with an existing goal name");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
       if (name) {

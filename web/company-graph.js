@@ -83,7 +83,9 @@
       }),
     });
     const parent = nodeType === "agent"
-      ? state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role))
+      ? (data.manager_id
+        ? state.graph.nodes.find((item) => item.id === data.manager_id)
+        : state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role)))
       : null;
     const selectedGoal = nodeType === "kpi"
       ? state.graph.nodes.find((item) => item.id === state.selectedId && item.type === "goal")
@@ -592,9 +594,20 @@
     const name = askForName("Name this AI employee", "Product Agent");
     if (!name) return;
     const role = askForName("What is this agent responsible for?", "Product management") || "General specialist";
+    const provider = askForName("LLM provider (ollama, openai-compatible, anthropic, etc.)", "ollama") || "ollama";
+    const model = askForName("Model identifier", "llama3.1:8b") || "llama3.1:8b";
+    const leaders = state.graph.nodes.filter((node) => node.type === "agent");
+    const leaderOptions = ["Founder", ...leaders.map((node) => node.name)].join(", ");
+    const managerName = askForName(`Who should ${name} report to? Available: ${leaderOptions}`, leaders.find((node) => ["head_of_agents", "chief_of_staff"].includes(node.data?.role))?.name || "Founder") || "Founder";
+    const manager = leaders.find((node) => node.name.toLowerCase() === managerName.toLowerCase());
     try {
-      await createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED");
-      toast("Agent role added. Runtime activation is a separate setup step.");
+      await createNode("agent", name, role, {
+        role, rank: "specialist", title: "Specialist",
+        manager_id: manager?.id || state.company.id,
+        model_configuration: { provider, model_name: model },
+        runtime_status: "not_configured", assigned_goals: [],
+      }, "PROPOSED");
+      toast(`${name} added · reports to ${manager?.name || "Founder"} · ${provider}/${model}`);
     } catch (error) { toast(error.message); }
   }
 
@@ -735,6 +748,20 @@
     } catch (error) { toast(error.message); }
   }
 
+  async function addAgentFromCommand(name) {
+    const role = askForName("What is this agent responsible for?", "General specialist") || "General specialist";
+    const provider = askForName("LLM provider", "ollama") || "ollama";
+    const model = askForName("Model identifier", "llama3.1:8b") || "llama3.1:8b";
+    const manager = state.graph.nodes.find((node) => node.type === "agent" && ["head_of_agents", "chief_of_staff"].includes(node.data?.role));
+    await createNode("agent", name, role, {
+      role, rank: "specialist", title: "Specialist",
+      manager_id: manager?.id || state.company.id,
+      model_configuration: { provider, model_name: model },
+      runtime_status: "not_configured", assigned_goals: [],
+    }, "PROPOSED");
+    toast(`${name} created under ${manager?.name || "Founder"}`);
+  }
+
   function handleCommand() {
     const input = $("#company-command-input");
     const command = input.value.trim();
@@ -754,12 +781,7 @@
       else toast("Select a goal dot or use run: with an existing goal name");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
-      if (name) {
-        const role = askForName("What is this agent responsible for?", "General specialist") || "General specialist";
-        createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED")
-          .then(() => toast("Agent role added; runtime is not activated yet"))
-          .catch((error) => toast(error.message));
-      }
+      if (name) addAgentFromCommand(name).catch((error) => toast(error.message));
     } else {
       addGoal(command);
     }

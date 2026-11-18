@@ -25,7 +25,7 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 - [x] Node inspector and interactive relationship creation
 - [x] Local and S3-compatible workflow artifact storage adapter
 - [x] PostgreSQL pgvector extension enabled for future semantic memory
-- [ ] CI verification of the feature branch and runtime Compose smoke test
+- [x] CI verification of Alpha 1 code branch (Compose runtime smoke test remains pending)
 
 ## Phase 2 — Identity, company boundaries and governance
 
@@ -42,15 +42,15 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 
 ## Phase 3 — Durable agent workforce
 
-- Replace the demo dispatcher with LangGraph StateGraph workflows.
-- Use PostgreSQL-backed checkpoints and tested restart/resume semantics.
-- Introduce a persistent Agent Runtime record: agent identity, role, persona, skills, model selection, memory scope, current assignments, schedule, health and version.
-- Implement the Head of Agents as an actual orchestrator with its own model policy, planning cycle and delegated authority.
-- Introduce specialist agents for Strategy, Product, Technology, Marketing, Sales, Operations, Finance and Administration.
-- Build a goal decomposition service that creates proposed work items, dependencies, owners and acceptance criteria.
-- Support an agent being assigned to multiple goals without copying or forking the agent identity.
-- Add bounded retries, cancellation, timeout, concurrency limits, budget limits and idempotent execution.
-- Add model, prompt, agent, skill and tool version pinning with rollback.
+- [ ] Replace the request-driven dispatcher with LangGraph StateGraph workflows.
+- [ ] Use PostgreSQL-backed LangGraph checkpoints and tested restart/resume semantics.
+- [x] Persist reusable AI employee identities with role, persona, skills, local model selection, runtime mode, health/status and version in the company graph.
+- [x] Implement a Head of Agents planning service using the configured local model endpoint (or an explicit mock planner) to decompose goals into validated work.
+- [x] Bootstrap specialist agents for Strategy, Product, Technology, Marketing, Operations and Finance under the Head of Agents.
+- [x] Persist assigned work nodes, ownership, acceptance criteria, dependencies and agent-to-goal many-to-many relationships.
+- [x] Execute assignments through the local OpenAI-compatible inference adapter; store successful deliverables in the local/S3 object-store adapter and update goal work-completion progress.
+- [x] Make goal planning idempotent and support explicit retry of a failed individual assignment.
+- [ ] Add durable background workers, restart recovery, cancellation, concurrency limits, token/cost budgets and model/prompt/skill rollback.
 
 **Exit criteria:** an end-to-end goal is decomposed into persisted assignments, independently executed, resumed after restart and reconciled into the graph without duplicate work.
 
@@ -68,23 +68,23 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 
 ## Phase 5 — Virtual workplace and meetings
 
-- Add real meeting records with agenda, meeting type, participants, facilitator, scheduled time, attendance, minutes and outcome.
-- Implement turn-based multi-agent discussion; each contribution is linked to the meeting, speaker agent, agenda item and referenced evidence.
-- Support daily stand-up, scrum planning, review, retrospective, alignment and urgent meetings.
-- Allow the founder to join by text first; add optional local speech-to-text and text-to-speech later.
-- Convert decisions into assignments with explicit owners, due dates and acceptance criteria.
-- Support cross-department meetings and conflict escalation to the Head of Agents.
-- Add meeting summaries, action-item tracking and commitment follow-up.
+- [x] Persist meeting agenda, meeting type, selected participants, facilitator, state, turn-by-turn contributions and completion timestamps.
+- [x] Run a turn-based multi-agent text discussion and persist Markdown minutes in object storage with graph references.
+- [ ] Add calendar scheduling, recurring stand-ups, scrum planning/review/retrospective templates and reminders.
+- [ ] Allow the founder to join live by text; add optional local speech-to-text and text-to-speech later.
+- [ ] Extract proposed decisions and action items into reviewable graph nodes and assignments.
+- [ ] Add cross-department conflict escalation, commitment tracking and follow-up.
 
 **Exit criteria:** a meeting produces reviewable decisions and traceable tasks; the meeting itself does not silently execute consequential actions.
 
 ## Phase 6 — Goal, KPI and work management
 
 - Add goal hierarchy and alignment across company, department and team objectives.
-- Add KPI definitions: formula, unit, target, threshold, reporting period, source and accountable owner.
-- Store time-series KPI snapshots and explain changes from source events.
-- Implement task states, dependencies, blocker propagation, due dates and recurrence.
-- Add workload and capacity views for agents.
+- [x] Record KPI measurements with numeric value, target comparison, source, evidence, timestamp and a bounded measurement history.
+- [x] Derive goal work-completion percentage from persisted assignment states.
+- [ ] Add validated KPI definitions: formula, unit, target, threshold, reporting period, source and accountable owner.
+- [ ] Add automated KPI collectors and time-series snapshots explainable from source events.
+- [ ] Add due dates, recurrence, automatic blocker propagation, workload and agent capacity views.
 - Support project plans, milestones, release gates and deliverable acceptance.
 - Trace every result to its goal and the work and agents that produced it.
 - Add planned-vs-actual budget and operational cost tracking.
@@ -134,4 +134,4 @@ Pinky Bread 2.0 should not be called complete until:
 
 ## Suggested next engineering slice
 
-After Alpha 1 CI is green, implement **Phase 2 identity and company boundaries** before giving the Head of Agents broad autonomy. Then add durable LangGraph orchestration and official MCP tools. This avoids building a large autonomous workforce on top of unauthenticated development endpoints.
+Alpha 2 introduces a working request-driven workforce loop. Before broad autonomy or untrusted shared deployment, implement **Phase 2 identity and company boundaries**, then add durable LangGraph checkpoints and background workers. Then add durable LangGraph orchestration and official MCP tools. This avoids building a large autonomous workforce on top of unauthenticated development endpoints.

@@ -479,6 +479,41 @@
     } catch (error) { toast(error.message); }
   }
 
+
+  async function uploadCompanyArtifact(file) {
+    if (!file || !state.company) return;
+    const kind = askForName("Store this file as a document or deliverable? Enter document or deliverable.", "document");
+    if (!kind) return;
+    if (!["document", "deliverable"].includes(kind.toLowerCase())) {
+      toast("Choose either document or deliverable");
+      return;
+    }
+    const form = new FormData();
+    form.append("file", file);
+    form.append("tenant_id", state.company.tenant_id);
+    form.append("actor_id", "founder");
+    form.append("kind", kind.toLowerCase());
+    form.append("title", file.name);
+    if (state.selectedId && state.selectedId !== state.company.id) {
+      form.append("related_node_id", state.selectedId);
+    }
+    try {
+      const response = await fetch(`/v2/companies/${state.company.id}/artifacts`, {
+        method: "POST",
+        body: form,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || `Upload failed (${response.status})`);
+      await loadGraph();
+      if (payload.artifact?.node_id) selectNode(payload.artifact.node_id);
+      toast(`${kind} saved to the company graph`);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      $("#company-artifact-file").value = "";
+    }
+  }
+
   function handleCommand() {
     const input = $("#company-command-input");
     const command = input.value.trim();
@@ -525,6 +560,8 @@
   $("#graph-add-agent")?.addEventListener("click", addAgent);
   $("#graph-add-work")?.addEventListener("click", addWork);
   $("#graph-add-meeting")?.addEventListener("click", addMeeting);
+  $("#graph-upload-file")?.addEventListener("click", () => $("#company-artifact-file")?.click());
+  $("#company-artifact-file")?.addEventListener("change", (event) => uploadCompanyArtifact(event.target.files?.[0]));
   $("#graph-connect")?.addEventListener("click", () => {
     state.connectMode = !state.connectMode;
     state.connectSource = null;

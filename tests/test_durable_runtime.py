@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+
+os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
 from datetime import timedelta
 
 from fastapi.testclient import TestClient
@@ -228,3 +230,56 @@ def test_langgraph_checkpoint_resume_after_worker_lease_expiry_is_idempotent():
     final_job = get_job(job_id=queued["job_id"])
     assert final_job["status"] == "COMPLETED"
     assert final_job["attempts"] == 2
+
+
+def test_official_mcp_v2_server_exposes_scoped_tools_and_client_removes_runtime_identity_fields(monkeypatch):
+    from mcp import Client
+    from app.mcp_client import ROLE_TOOL_ALLOWLIST, _tool_schema
+    from app.mcp_server import StaticBearerVerifier, mcp
+    from app.settings import get_settings
+
+    class ExampleTool:
+        input_schema = {
+            "type": "object",
+            "properties": {
+                "company_id": {"type": "string"},
+                "tenant_id": {"type": "string"},
+                "actor_id": {"type": "string"},
+                "goal_id": {"type": "string"},
+            },
+            "required": ["company_id", "tenant_id", "goal_id"],
+        }
+
+    schema = _tool_schema(ExampleTool())
+    assert set(schema["properties"]) == {"goal_id"}
+    assert schema["required"] == ["goal_id"]
+    assert "queue_goal_execution" in ROLE_TOOL_ALLOWLIST["head_of_agents"]
+    assert "queue_goal_execution" not in ROLE_TOOL_ALLOWLIST["strategy"]
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mcp_api_token", "internal-workforce-token")
+    monkeypatch.setattr(settings, "mcp_read_token", "readonly-workforce-token")
+    verifier = StaticBearerVerifier()
+    write_access = asyncio.run(verifier.verify_token("internal-workforce-token"))
+    read_access = asyncio.run(verifier.verify_token("readonly-workforce-token"))
+    denied_access = asyncio.run(verifier.verify_token("not-a-token"))
+    assert write_access is not None
+    assert set(write_access.scopes) == {"company:read", "workforce:enqueue"}
+    assert read_access is not None
+    assert read_access.scopes == ["company:read"]
+    assert denied_access is None
+
+    async def discover_tools():
+        async with Client(mcp) as client:
+            result = await client.list_tools()
+            return {tool.name for tool in result.tools}
+
+    names = asyncio.run(discover_tools())
+    assert {
+        "company_graph_snapshot",
+        "list_company_goals",
+        "list_goal_work",
+        "get_workforce_job",
+        "queue_goal_plan",
+        "queue_goal_execution",
+    }.issubset(names)

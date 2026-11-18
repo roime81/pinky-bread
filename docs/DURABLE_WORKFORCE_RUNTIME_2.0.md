@@ -126,8 +126,8 @@ Alpha 3 uses the official MCP Python SDK v2.x and Streamable HTTP:
 ### Authentication limitation
 
 The current internal MCP verifier uses two static development bearer tokens:
-- `MCP_API_TOKEN`: `company:read` plus `workforce:enqueue`
-- `MCP_READ_TOKEN`: `company:read` only
+- `MCP_API_TOKEN`: `company:read` plus `workforce:enqueue`; used only by the Head of Agents.
+- `MCP_READ_TOKEN`: `company:read` only; used by specialist agents.
 
 This is a scoped internal-development verifier, **not a production OAuth 2.1 identity provider or Keycloak integration**. The configured issuer URL is only the resource-server metadata value for this static verifier; it does not issue or validate Keycloak-signed JWTs. Keep the service on the private network, replace both default tokens with long random secrets, and do not publish port 8090 directly. Keycloak/OIDC JWT/JWKS or introspection validation, company membership claims, short-lived tokens, per-agent grants and audited tool receipts remain required before shared or internet-facing operation.
 

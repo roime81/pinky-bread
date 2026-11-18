@@ -159,6 +159,14 @@ def test_founder_coordination_is_persisted_and_queues_plan_jobs():
         interval_seconds=60,
     )
     assert paused["enabled"] is False
+    # Keep the global worker queue isolated for the following restart test.
+    from app.durable_runtime import cancel_job
+    cancelled = cancel_job(
+        job_id=goal_jobs[0]["job_id"],
+        company_id=company["id"],
+        tenant_id=tenant,
+    )
+    assert cancelled["status"] == "CANCELLED"
 
 
 def test_langgraph_checkpoint_resume_after_worker_lease_expiry_is_idempotent():

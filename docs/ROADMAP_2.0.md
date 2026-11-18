@@ -1,6 +1,6 @@
 # Pinky Bread 2.0 — Delivery Roadmap
 
-Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 introduced the persisted company graph; Alpha 2 adds a request-driven workforce that plans goals, assigns and executes specialist work, convenes text meetings and records KPI measurements. Durable autonomous operations, authenticated multi-company governance and a production-ready company are still future milestones.
+Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 introduced the persisted company graph; Alpha 2 added the specialist workforce and goal-to-result flow; Alpha 3 adds PostgreSQL-backed jobs, LangGraph checkpoints, lease-based restart recovery, Valkey coordination, recurring founder-controlled Head-of-Agents schedules and MCP v2 for local model tools. Authenticated multi-company governance, policy enforcement and production operations remain future milestones.
 
 ## Programme principles
 

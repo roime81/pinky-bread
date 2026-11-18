@@ -187,3 +187,64 @@ def test_object_store_rejects_traversal_and_round_trips_local_bytes(tmp_path, mo
             assert False, f"unsafe object key should be rejected: {unsafe}"
         except ValueError:
             pass
+
+
+def test_company_artifacts_are_catalogued_in_database_and_downloaded_from_store():
+    init_db()
+    with TestClient(app) as client:
+        company = client.post("/v2/companies", json={
+            "tenant_id": "artifact-tenant",
+            "owner_id": "founder",
+            "name": "Artifact Studio",
+        }).json()
+        company_id = company["id"]
+        goal = client.post(f"/v2/companies/{company_id}/nodes", json={
+            "tenant_id": "artifact-tenant",
+            "actor_id": "founder",
+            "node_type": "goal",
+            "name": "Prepare company strategy",
+        }).json()
+
+        upload = client.post(
+            f"/v2/companies/{company_id}/artifacts",
+            data={
+                "tenant_id": "artifact-tenant",
+                "actor_id": "founder",
+                "kind": "document",
+                "title": "Strategy brief",
+                "related_node_id": goal["id"],
+            },
+            files={"file": ("strategy.txt", b"company vision and strategy", "text/plain")},
+        )
+        assert upload.status_code == 201, upload.text
+        artifact = upload.json()["artifact"]
+        assert artifact["filename"] == "strategy.txt"
+        assert artifact["size_bytes"] == len(b"company vision and strategy")
+        assert len(artifact["sha256"]) == 64
+
+        listed = client.get(
+            f"/v2/companies/{company_id}/artifacts?tenant_id=artifact-tenant"
+        )
+        assert listed.status_code == 200
+        assert listed.json()["artifacts"][0]["object_id"] == artifact["object_id"]
+
+        downloaded = client.get(
+            f"/v2/companies/{company_id}/artifacts/{artifact['object_id']}?tenant_id=artifact-tenant"
+        )
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"company vision and strategy"
+
+        wrong_tenant = client.get(
+            f"/v2/companies/{company_id}/artifacts/{artifact['object_id']}?tenant_id=other-tenant"
+        )
+        assert wrong_tenant.status_code == 404
+
+        graph = client.get(
+            f"/v2/companies/{company_id}/graph?tenant_id=artifact-tenant"
+        ).json()
+        doc = next(node for node in graph["nodes"] if node["data"].get("object_id") == artifact["object_id"])
+        assert doc["type"] == "document"
+        assert any(
+            edge["source"] == doc["id"] and edge["target"] == goal["id"] and edge["relationship"] == "informs"
+            for edge in graph["edges"]
+        )

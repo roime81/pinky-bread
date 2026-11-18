@@ -4,7 +4,7 @@ import json
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -15,6 +15,11 @@ from .settings import get_settings
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+
+class WorkforceExecutionCancelled(RuntimeError):
+    """Cooperative cancellation at safe agent/task boundaries."""
 
 
 ROLE_SPECS: dict[str, dict[str, Any]] = {
@@ -473,7 +478,10 @@ def _goal_progress(company_id: str, tenant_id: str, goal_id: str, actor_id: str)
     return {"progress": progress, "completed_work": completed, "total_work": len(tasks)}
 
 
-async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_id: str, retry: bool = False) -> dict[str, Any]:
+async def execute_task(
+    *, company_id: str, tenant_id: str, work_id: str, actor_id: str,
+    retry: bool = False, cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
@@ -482,6 +490,8 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         raise LookupError("Work item not found")
     if work["status"] == "COMPLETED":
         return {"task": work, "idempotent": True, "message": "This assignment is already complete."}
+    if cancel_check and cancel_check():
+        raise WorkforceExecutionCancelled("Workforce job cancelled before assignment start")
     data = work.get("data") or {}
     recovering = False
     if work["status"] == "RUNNING":
@@ -552,6 +562,8 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
     )
     try:
         output = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
+        if cancel_check and cancel_check():
+            raise WorkforceExecutionCancelled("Workforce job cancelled after model inference")
         filename = f"work-{work_id[:8]}-attempt-{max(attempt, 1)}.md"
         object_key = f"companies/{company_id}/deliverables/{work_id}/attempt-{max(attempt, 1)}.md"
         stored = ObjectStore().persist_object_idempotent(
@@ -639,6 +651,16 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         )
         progress = _goal_progress(company_id, tenant_id, str(data.get("goal_id")), agent["id"])
         return {"task": completed, "deliverable": deliverable, "progress": progress, "idempotent": False}
+    except WorkforceExecutionCancelled as exc:
+        update_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=agent["id"],
+            node_id=work_id,
+            status="CANCELLED",
+            data_patch={"cancelled_at": _now(), "last_error": str(exc)[:1000]},
+        )
+        raise
     except Exception as exc:
         update_node(
             company_id=company_id,
@@ -654,6 +676,7 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
 async def execute_goal(
     *, company_id: str, tenant_id: str, goal_id: str, actor_id: str,
     retry_failed: bool = False, raise_on_error: bool = False,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
@@ -669,6 +692,8 @@ async def execute_goal(
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for task in tasks:
+        if cancel_check and cancel_check():
+            raise WorkforceExecutionCancelled("Goal execution cancelled between assignments")
         current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
         current_task = next((node for node in _nodes(current) if node["id"] == task["id"]), task)
         if current_task["status"] == "COMPLETED":
@@ -677,7 +702,7 @@ async def execute_goal(
         try:
             result = await execute_task(
                 company_id=company_id, tenant_id=tenant_id, work_id=task["id"], actor_id=actor_id,
-                retry=retry_failed,
+                retry=retry_failed, cancel_check=cancel_check,
             )
             results.append({"work_id": task["id"], "status": result["task"]["status"], "deliverable_id": result["deliverable"]["id"]})
         except Exception as exc:
@@ -695,7 +720,10 @@ async def execute_goal(
     }
 
 
-async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, actor_id: str) -> dict[str, Any]:
+async def convene_meeting(
+    *, company_id: str, tenant_id: str, meeting_id: str, actor_id: str,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
@@ -734,6 +762,16 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
     )
     discussion: list[dict[str, Any]] = []
     for index, agent in enumerate(agents, start=1):
+        if cancel_check and cancel_check():
+            update_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                node_id=meeting_id,
+                status="CANCELLED",
+                data_patch={"meeting_state": "CANCELLED", "cancelled_at": _now()},
+            )
+            raise WorkforceExecutionCancelled("Meeting cancelled between agent turns")
         prior = "\n".join(f"{item['agent_name']}: {item['contribution']}" for item in discussion)
         prompt = (
             f"Company meeting: {meeting['name']}\nAgenda: {agenda}\n"
@@ -744,6 +782,16 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
             "Do not claim actions have been executed."
         )
         contribution = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
+        if cancel_check and cancel_check():
+            update_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                node_id=meeting_id,
+                status="CANCELLED",
+                data_patch={"meeting_state": "CANCELLED", "cancelled_at": _now()},
+            )
+            raise WorkforceExecutionCancelled("Meeting cancelled after agent response")
         discussion.append({
             "sequence": index,
             "agent_id": agent["id"],

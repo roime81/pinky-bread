@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+
+os.environ.setdefault('LANGGRAPH_STRICT_MSGPACK', 'true')
 
 from .database import init_db
 from .durable_runtime import run_worker

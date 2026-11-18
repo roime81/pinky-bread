@@ -416,11 +416,24 @@ def list_company_events(
 
 
 def verify_event_chain(*, company_id: str, tenant_id: str) -> dict[str, Any] | None:
-    events = list_company_events(company_id=company_id, tenant_id=tenant_id, limit=1000)
-    if events is None:
-        return None
+    events: list[dict[str, Any]] = []
+    after_event_no = 0
+    while True:
+        batch = list_company_events(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            after_event_no=after_event_no,
+            limit=1000,
+        )
+        if batch is None:
+            return None
+        if not batch:
+            break
+        events.extend(batch)
+        after_event_no = batch[-1]["event_no"]
+
     previous = "GENESIS"
-    for item in events:
+    for index, item in enumerate(events):
         canonical = {
             "id": item["id"],
             "company_id": company_id,
@@ -435,6 +448,6 @@ def verify_event_chain(*, company_id: str, tenant_id: str) -> dict[str, Any] | N
             json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8")
         ).hexdigest()
         if item["previous_hash"] != previous or item["entry_hash"] != expected:
-            return {"valid": False, "checked_events": events.index(item), "failed_event_no": item["event_no"]}
+            return {"valid": False, "checked_events": index, "failed_event_no": item["event_no"]}
         previous = item["entry_hash"]
     return {"valid": True, "checked_events": len(events), "latest_hash": previous}

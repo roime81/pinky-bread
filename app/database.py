@@ -34,6 +34,9 @@ SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
 
 
 def init_db() -> None:
+    # Register the company graph ORM tables before creating the schema.
+    from . import company_graph  # noqa: F401
+
     Base.metadata.create_all(bind=_engine)
 
 

@@ -391,7 +391,7 @@ def create_edge(
         db.commit()
         result = _edge_dict(edge)
         event_data = _event_dict(event)
-    _notify(_event_proxy(event_data))
+    _notify(event_data)
     return result
 
 

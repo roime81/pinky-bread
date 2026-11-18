@@ -15,6 +15,7 @@ The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed rela
 
 ## Contents
 
+- [Pinky Bread 2.0 Alpha 1](#pinky-bread-20-alpha-1)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -180,7 +181,7 @@ No GPU is required when `MOCK_INFERENCE=true` (the default).
 ### For Docker Compose
 
 - Docker Engine or Docker Desktop with Compose v2
-- Sufficient memory and disk for the API, PostgreSQL and Redis containers
+- Sufficient memory and disk for the API, PostgreSQL, Valkey and SeaweedFS containers
 
 ### For local model inference (optional)
 
@@ -241,7 +242,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 - OpenAPI JSON: <http://127.0.0.1:8080/openapi.json>
 - Health endpoint: <http://127.0.0.1:8080/api/healthz>
 
-The default configuration uses SQLite and mock inference. PostgreSQL, Redis and a GPU are not needed for this first local run.
+The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Docker Compose instead runs PostgreSQL/pgvector, Valkey and SeaweedFS. A GPU is not required for mock mode.
 
 ## Run with Docker Compose
 
@@ -452,10 +453,16 @@ The application reads environment variables from the environment and `.env` file
 | `DEV_MODE` | `true` | Development setting; does not enable authentication |
 | `MOCK_INFERENCE` | `true` | Use GPU-free mock responses instead of HTTP model calls |
 | `DATABASE_URL` | `sqlite:///./data/pinky_bread.db` | SQLAlchemy database connection URL |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis URL placeholder; Redis is not yet used by the workflow engine |
+| `REDIS_URL` | `redis://localhost:6379/0` | Valkey/Redis-compatible URL used for best-effort company graph notifications |
 | `AGENT_CONFIG_DIR` | `./config/agents` | Directory containing YAML agent manifests |
-| `UPLOAD_DIR` | `./data/uploads` | Local artifact storage directory |
+| `UPLOAD_DIR` | `./data/uploads` | Local object and upload storage directory |
 | `MAX_UPLOAD_MB` | `12` | Maximum size per artifact |
+| `STORAGE_BACKEND` | `local` | `local` filesystem or `s3` compatible object storage |
+| `S3_ENDPOINT_URL` | `http://localhost:8333` | S3 endpoint, such as SeaweedFS |
+| `S3_REGION` | `us-east-1` | S3 signing region |
+| `S3_BUCKET` | `pinky-bread` | Bucket for workflow artifacts |
+| `S3_ACCESS_KEY` | development value | S3-compatible access key; replace before shared deployment |
+| `S3_SECRET_KEY` | development value | S3-compatible secret; replace before shared deployment |
 | `REASONING_API_URL` | `http://localhost:8001/v1` | OpenAI-compatible local reasoning endpoint base URL |
 | `REASONING_MODEL` | `local-reasoner` | Default reasoning model setting; agent manifest `model_name` is used for reasoning calls |
 | `MULTIMODAL_API_URL` | `http://localhost:8002/v1` | OpenAI-compatible local vision endpoint base URL |
@@ -479,7 +486,7 @@ make install
 make test
 ```
 
-The existing test suite covers agent listing, the aviation-to-banking hand-off, the pending-approval flow, simulated tool execution after approval, rejection without tool execution, general-agent completion, and basic NRIC/email masking.
+The test suite covers agent listing, existing workflow hand-offs and approval behavior, privacy masking, company graph persistence, tenant and cross-company relationship checks, graph event-chain verification, many-to-many agent-to-goal links, KPI-to-goal measurement edges, and local object-store safety.
 
 ## Project structure
 

@@ -80,7 +80,11 @@ async def complete_with_mcp(
     if not allowed:
         raise PermissionError(f"No MCP tools are granted to agent role: {role}")
 
-    headers = {"Authorization": f"Bearer {settings.mcp_api_token}"}
+    # Least privilege: only the Head of Agents receives enqueue scope.
+    bearer = settings.mcp_api_token if role == "head_of_agents" else settings.mcp_read_token
+    if not bearer:
+        raise RuntimeError("The matching MCP bearer token is not configured for this agent role")
+    headers = {"Authorization": f"Bearer {bearer}"}
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},

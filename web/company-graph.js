@@ -179,8 +179,16 @@
   function renderGraph() {
     const svg = $("#company-graph-svg");
     if (!svg) return;
-    const nodes = state.graph.nodes || [];
-    const edges = state.graph.edges || [];
+    // Archived identities remain in PostgreSQL and the audit trail, but leave
+    // the active company canvas so "Remove agent" really removes the person from
+    // the live organisation view.
+    const nodes = (state.graph.nodes || []).filter((node) =>
+      !(node.type === "agent" && node.status === "ARCHIVED")
+    );
+    const visibleNodeIds = new Set(nodes.map((node) => node.id));
+    const edges = (state.graph.edges || []).filter((edge) =>
+      visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
+    );
     const positions = layoutNodes(nodes, edges);
     const activeIds = new Set();
     if (state.selectedId) {

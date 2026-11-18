@@ -56,13 +56,14 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 i
 
 ## Phase 4 — Official tools and open integrations
 
-- Replace the MCP-style demo adapter with the official MCP Python SDK.
-- Support MCP stdio and Streamable HTTP transports with authenticated server identities.
-- Store tool definitions, scopes, versions, grants and execution receipts.
-- Add a tool sandbox and approval policy for external side effects.
-- Add open-source connectors for email, calendar, documents, CRM and issue/work tracking.
-- Keep commercial APIs optional behind pluggable interfaces.
-- Add integration health, credential rotation and audit trails.
+- [x] Replace the workforce demo adapter with the official MCP Python SDK v2 and Streamable HTTP server/client.
+- [x] Discover MCP tools dynamically and filter by agent role allow-list before exposing them to the local model API.
+- [x] Inject company, tenant and agent identity from the runtime rather than model-generated tool arguments.
+- [x] Require workforce:enqueue for MCP job submission; require founder-enabled AUTO_EXECUTE before MCP goal execution.
+- [ ] Replace the static internal development bearer verifier with Keycloak/OIDC JWT/JWKS or introspection validation.
+- [ ] Store tool definitions, grants, versions, approvals and execution receipts in the company database.
+- [ ] Add sandboxed external connectors for email, calendar, documents, CRM and issue/work tracking.
+- [ ] Keep commercial APIs optional behind pluggable interfaces; add integration health and credential rotation.
 
 **Exit criteria:** an agent can discover only its granted tools, call an approved tool, record evidence and recover safely from timeout or duplicate submission.
 
@@ -109,9 +110,12 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 i
 - Add alerts, dashboards, service-level objectives and runbooks.
 - Add database migration management, backup/restore tests and disaster-recovery procedures.
 - Add SeaweedFS lifecycle, replication and recovery policy for retained deliverables.
-- Add Valkey persistence/HA configuration where needed; PostgreSQL remains the durable event source.
-- Add load testing, security tests, SBOM, dependency scanning and signed images.
-- Support worker pools and scale-out agent execution.
+- [x] Add a separate workforce worker service with PostgreSQL-backed job state and Valkey wake-up coordination.
+- [x] Configure Compose for horizontally scalable workers; PostgreSQL leases coordinate replicas.
+- [ ] Add OpenTelemetry traces for job, graph, model and MCP calls; Prometheus metrics and Grafana dashboards.
+- [ ] Add alerts, runbooks, backup/restore tests and disaster-recovery procedures.
+- [ ] Add Valkey HA/persistence and SeaweedFS replication/retention policy where required.
+- [ ] Add load testing, security tests, SBOM, dependency scanning and signed images.
 
 **Exit criteria:** recovery and observability are tested under service, queue, model and storage failures.
 
@@ -134,4 +138,4 @@ Pinky Bread 2.0 should not be called complete until:
 
 ## Suggested next engineering slice
 
-Alpha 2 introduces a working request-driven workforce loop. Before broad autonomy or untrusted shared deployment, implement **Phase 2 identity and company boundaries**, then add durable LangGraph checkpoints and background workers. Then add durable LangGraph orchestration and official MCP tools. This avoids building a large autonomous workforce on top of unauthenticated development endpoints.
+Alpha 3 adds durable job execution and a standards-based internal MCP boundary. The next priority is **Phase 2 identity and company boundaries**: replace caller-supplied tenant/actor IDs and static MCP tokens with Keycloak/OIDC, membership checks, RBAC and per-agent grants before exposing Pinky Bread to untrusted users or enabling consequential external tools. Then add budget/policy enforcement, operational telemetry and the first sandboxed MCP connectors.

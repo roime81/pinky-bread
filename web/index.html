@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pinky Bread · Enterprise Agent Fabric</title>
+  <title>Pinky Bread · AI Company OS</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/company-graph.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -15,7 +16,8 @@
       </div>
       <div class="workspace-label">WORKSPACE</div>
       <nav class="nav-list">
-        <button class="nav-item active" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
+        <button class="nav-item active" data-view="company-graph"><span class="nav-icon">◎</span> Company graph</button>
+        <button class="nav-item" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
         <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflows <span class="nav-count" id="nav-workflow-count">0</span></button>
         <button class="nav-item" data-view="agents"><span class="nav-icon">◇</span> Agent registry</button>
         <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit trail</button>
@@ -31,6 +33,67 @@
         <div class="breadcrumb"><span>Workspace</span><i>/</i><strong id="breadcrumb-current">Overview</strong></div>
         <div class="top-actions"><div class="env-chip"><span class="pulse-dot"></span><span id="environment-label">DEVELOPMENT</span></div><button class="icon-btn" title="Refresh" id="refresh-btn">↻</button><div class="top-avatar">PB</div></div>
       </header>
+
+      <section class="view active" id="view-company-graph">
+        <div class="page-heading graph-heading">
+          <div><div class="eyebrow">COMPANY OPERATING SYSTEM / 2.0</div><h1>Company graph</h1><p>Your goals, AI employees, assignments and outcomes — connected in one living workspace.</p></div>
+          <div class="graph-heading-actions"><span class="graph-live"><i></i> LIVE GRAPH</span><button class="primary-btn" id="graph-create-company-shortcut">＋ New company</button></div>
+        </div>
+
+        <div class="company-onboarding" id="company-onboarding" hidden>
+          <div class="onboarding-copy"><div class="eyebrow">START WITH YOUR VISION</div><h2>Build your company around a goal.</h2><p>Tell Pinky Bread what your company exists to do. You can add goals, KPIs, AI employees and workstreams as your organisation takes shape.</p></div>
+          <form id="company-create-form" class="company-create-form">
+            <label for="company-name">Company name</label><input id="company-name" required minlength="2" maxlength="240" placeholder="e.g. Northstar Studio" />
+            <label for="company-vision">Vision</label><textarea id="company-vision" rows="2" placeholder="What future are you trying to create?"></textarea>
+            <label for="company-mission">Mission</label><textarea id="company-mission" rows="2" placeholder="What does the company do, and for whom?"></textarea>
+            <button type="submit" class="primary-btn">Establish company <span>↗</span></button>
+          </form>
+        </div>
+
+        <div id="company-dashboard" class="company-dashboard" hidden>
+          <div class="company-toolbar">
+            <div class="company-identity"><span class="company-identity-mark">PB</span><div><strong id="graph-company-name">Company</strong><span id="graph-company-mission">Company mission</span></div></div>
+            <div class="graph-tools">
+              <select id="graph-company-picker" aria-label="Select company"></select>
+              <button class="graph-tool-btn" id="graph-add-goal">＋ Goal</button>
+              <button class="graph-tool-btn" id="graph-add-agent">＋ Agent</button>
+              <button class="graph-tool-btn" id="graph-add-work">＋ Work</button>
+              <button class="graph-tool-btn" id="graph-add-meeting">＋ Meeting</button>
+              <button class="graph-tool-btn" id="graph-connect">Connect</button>
+              <button class="graph-tool-btn" id="graph-refresh" title="Refresh graph">↻</button>
+            </div>
+          </div>
+          <div class="company-graph-layout">
+            <div class="company-canvas-wrap">
+              <div class="canvas-topline"><span>NETWORK / <b id="graph-node-count">0 NODES</b></span><span id="graph-mode-label">ALL RELATIONSHIPS</span></div>
+              <svg id="company-graph-svg" viewBox="0 0 1000 650" role="img" aria-label="Interactive graph of the company, goals, agents, work and outcomes"></svg>
+              <div class="canvas-legend">
+                <span><i class="legend-company"></i> Company</span><span><i class="legend-goal"></i> Goals</span><span><i class="legend-agent"></i> Agents</span><span><i class="legend-work"></i> Work</span><span><i class="legend-meeting"></i> Collaboration</span>
+              </div>
+              <div class="canvas-hint">Select a dot to inspect it · Choose Connect to create a relationship between two dots</div>
+            </div>
+            <aside class="graph-inspector" id="graph-inspector">
+              <div class="inspector-empty"><span>◎</span><strong>Select a dot</strong><p>Inspect ownership, assignments, dependencies, activity and evidence.</p></div>
+            </aside>
+          </div>
+          <div class="company-bottom-grid">
+            <section class="graph-activity-panel">
+              <div class="graph-panel-heading"><div><div class="eyebrow">COMPANY EVENT LOG</div><strong>What is changing</strong></div><span id="graph-event-count">0 events</span></div>
+              <div id="company-event-list" class="company-event-list"><div class="empty-state">Company activity will appear here.</div></div>
+            </section>
+            <section class="graph-brief-panel">
+              <div class="eyebrow">FOUNDER VIEW</div><strong>Goal → Work → Result</strong>
+              <p>Follow every objective through the agents assigned to it, their tasks, meetings, decisions and deliverables. The database is the source of truth; this graph is its live projection.</p>
+              <div class="graph-brief-stats"><span><b id="graph-goal-count">0</b> goals</span><span><b id="graph-agent-count">0</b> agents</span><span><b id="graph-work-count">0</b> work items</span></div>
+            </section>
+          </div>
+          <div class="company-command-bar">
+            <span class="command-spark">✳</span><div><strong>Company command</strong><small>Start with a goal or ask the Head of Agents to coordinate the next step.</small></div>
+            <input id="company-command-input" placeholder="e.g. Create a goal to launch our first product..." />
+            <button id="company-command-send" class="primary-btn">Add to graph ↗</button>
+          </div>
+        </div>
+      </section>
 
       <section class="view active" id="view-overview">
         <div class="page-heading"><div><div class="eyebrow">CONTROL PLANE / 001</div><h1>Agent workspace</h1><p>Orchestrate specialist agents, inspect decisions, and govern tool execution.</p></div><button class="primary-btn" id="new-workflow-btn"><span>＋</span> New workflow</button></div>
@@ -95,5 +158,6 @@
   </div>
   <div id="toast" class="toast"></div>
   <script src="/static/app.js"></script>
+  <script src="/static/company-graph.js"></script>
 </body>
 </html>

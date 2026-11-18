@@ -25,6 +25,17 @@ class Settings(BaseSettings):
     multimodal_api_url: str = "http://localhost:8002/v1"
     multimodal_model: str = "local-vision"
     vllm_api_key: str = "local-dev-key"
+    model_provider: Literal["vllm", "ollama", "openai-compatible"] = "openai-compatible"
+    worker_poll_seconds: float = 1.5
+    worker_lease_seconds: int = 120
+    worker_heartbeat_seconds: int = 20
+    worker_max_attempts: int = 5
+    mcp_enabled: bool = False
+    mcp_server_url: str = "http://localhost:8090/mcp"
+    mcp_api_token: str = ""
+    mcp_resource_url: str = "http://localhost:8090/mcp"
+    mcp_issuer_url: str = "http://localhost:8080/issuer"
+    mcp_max_tool_rounds: int = 4
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

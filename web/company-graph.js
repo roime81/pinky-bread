@@ -608,15 +608,17 @@
   }
 
   function renderAgentDirectory() {
-    const target = $("#company-agent-list");
-    if (!target) return;
+    const targets = [$("#company-agent-list"), $("#workspace-agent-list")].filter(Boolean);
+    const count = $("#workspace-agent-count");
     const agents = activeAgents();
+    if (count) count.textContent = `${agents.length} agents`;
     if (!agents.length) {
-      target.innerHTML = '<div class="empty-state">No agents yet. Create your first agent and choose whether it should coordinate the company or work as a specialist.</div>';
+      const empty = '<div class="empty-state">No agents yet. Create your first agent and choose whether it should coordinate the company or work as a specialist.</div>';
+      targets.forEach((target) => { target.innerHTML = empty; });
       return;
     }
     const byId = new Map((state.graph.nodes || []).map((node) => [node.id, node]));
-    target.innerHTML = agents
+    const markup = agents
       .slice()
       .sort((a, b) => Number(_isCoordinatorForUi(b)) - Number(_isCoordinatorForUi(a))
         || Number((b.data || {}).seniority_level || 3) - Number((a.data || {}).seniority_level || 3)
@@ -644,6 +646,7 @@
           <button class="graph-tool-btn" data-edit-agent="${escapeHtml(agent.id)}">Edit</button>
         </div>`;
       }).join("");
+    targets.forEach((target) => { target.innerHTML = markup; });
   }
 
   function openAgentEditor(agent = null, presetName = "") {
@@ -942,7 +945,7 @@
   $("#agent-editor-form")?.addEventListener("submit", saveAgent);
   $("#agent-editor-close")?.addEventListener("click", () => $("#agent-editor-dialog").close());
   $("#agent-editor-cancel")?.addEventListener("click", () => $("#agent-editor-dialog").close());
-  $("#company-agent-list")?.addEventListener("click", (event) => {
+  const handleAgentDirectoryClick = (event) => {
     const edit = event.target.closest("[data-edit-agent]");
     const select = event.target.closest("[data-select-agent]");
     const agentId = edit?.dataset.editAgent || select?.dataset.selectAgent;
@@ -950,8 +953,15 @@
     const agent = (state.graph.nodes || []).find((node) => node.id === agentId);
     if (!agent) return;
     if (edit) openAgentEditor(agent);
-    else selectNode(agentId);
-  });
+    else {
+      state.selectedId = agentId;
+      if ($("#view-company-graph")?.classList.contains("active")) selectNode(agentId);
+      else toast(`Selected ${agent.name}. Open Company graph to inspect its relationships.`);
+    }
+  };
+  $("#company-agent-list")?.addEventListener("click", handleAgentDirectoryClick);
+  $("#workspace-agent-list")?.addEventListener("click", handleAgentDirectoryClick);
+  $("#workspace-add-agent")?.addEventListener("click", addAgent);
   $("#graph-add-work")?.addEventListener("click", addWork);
   $("#graph-add-meeting")?.addEventListener("click", addMeeting);
   $("#graph-upload-file")?.addEventListener("click", () => $("#company-artifact-file")?.click());
@@ -983,6 +993,11 @@
   window.loadCompanyGraph = () => {
     if (!state.company) initialise();
     else loadGraph();
+  };
+  window.loadCompanyAgents = () => {
+    if (!state.company) initialise();
+    else if (!state.graph.nodes?.length) loadGraph(true);
+    else renderAgentDirectory();
   };
 
   initialise();

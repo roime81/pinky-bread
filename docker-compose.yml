@@ -122,6 +122,19 @@ services:
     networks: [pinky_bread_internal]
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:0.40.16
+    container_name: pinky-bread-ollama
+    profiles: ["local-llm"]
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - pinky_bread_internal
+      - ollama_download
+    restart: unless-stopped
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: pinky-bread-postgres
@@ -170,8 +183,11 @@ networks:
   pinky_bread_internal:
     driver: bridge
     internal: true
+  ollama_download:
+    driver: bridge
 
 volumes:
   postgres_data:
   valkey_data:
   seaweed_data:
+  ollama_data:

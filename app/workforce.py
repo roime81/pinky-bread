@@ -816,15 +816,15 @@ async def convene_meeting(
         )
         mode = "MOCK"
     else:
-        summary = await _chat_completion(
-            system_prompt=str((head.get("data") or {}).get("system_prompt") or ROLE_SPECS["head_of_agents"]["system_prompt"]),
-            user_prompt=(
+        summary = await _execute_prompt(
+            head,
+            (
                 "Summarise this virtual company meeting. Include key discussion points, disagreements, decisions proposed, "
                 "risks and recommended action items with suggested owners. Distinguish proposals from approved decisions.\n\n"
                 f"Meeting: {meeting['name']}\nAgenda: {agenda}\nTranscript:\n{transcript}"
             ),
-            temperature=0.2,
-            max_tokens=1800,
+            company_id=company_id,
+            tenant_id=tenant_id,
         )
         mode = "LOCAL_MODEL"
 

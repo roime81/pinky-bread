@@ -72,7 +72,7 @@ class CompanyGraphEvent(Base):
     actor_id: Mapped[str] = mapped_column(String(120))
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    occurred_at: Mapped[str] = mapped_column(String(40))
     previous_hash: Mapped[str] = mapped_column(String(64))
     entry_hash: Mapped[str] = mapped_column(String(64), index=True)
 
@@ -124,7 +124,7 @@ def _event_dict(event: CompanyGraphEvent) -> dict[str, Any]:
         "actor_id": event.actor_id,
         "type": event.event_type,
         "payload": event.payload or {},
-        "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
+        "occurred_at": event.occurred_at,
         "previous_hash": event.previous_hash,
         "entry_hash": event.entry_hash,
     }
@@ -154,7 +154,7 @@ def _append_event(
         .limit(1)
         .scalar()
     ) or "GENESIS"
-    occurred_at = utcnow()
+    occurred_at = utcnow().isoformat()
     event_id = str(uuid.uuid4())
     canonical = {
         "id": event_id,
@@ -185,7 +185,7 @@ def _append_event(
     return event
 
 
-def _notify(event: CompanyGraphEvent) -> None:
+def _notify(event: dict[str, Any]) -> None:
     """Best-effort live notification; durable replay always comes from PostgreSQL."""
     try:
         from redis import Redis
@@ -198,14 +198,13 @@ def _notify(event: CompanyGraphEvent) -> None:
             socket_timeout=0.25,
         )
         client.publish(
-            f"pinky-bread:company:{event.company_id}",
-            json.dumps(_event_dict(event), ensure_ascii=False, default=str),
+            f"pinky-bread:company:{event['company_id']}",
+            json.dumps(event, ensure_ascii=False, default=str),
         )
         client.close()
     except Exception:
         # A broker outage must never roll back a committed company mutation.
         return
-
 
 def _company_exists(db, company_id: str, tenant_id: str) -> CompanyGraphNode | None:
     return db.query(CompanyGraphNode).filter(
@@ -246,13 +245,9 @@ def create_company(
         result = _node_dict(node)
         event_id = event.event_id
         event_data = _event_dict(event)
-    _notify(_event_proxy(event_data))
+    _notify(event_data)
     return result
 
-
-def _event_proxy(data: dict[str, Any]) -> CompanyGraphEvent:
-    """Create a lightweight event-shaped object for the notification serializer."""
-    return type("EventProxy", (), data)()
 
 
 def list_companies(*, tenant_id: str) -> list[dict[str, Any]]:

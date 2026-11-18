@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     mock_inference: bool = True
     database_url: str = "sqlite:///./data/pinky_bread.db"
     redis_url: str = "redis://localhost:6379/0"
+    storage_backend: str = "local"
+    s3_endpoint_url: str = "http://localhost:8333"
+    s3_region: str = "us-east-1"
+    s3_bucket: str = "pinky-bread"
+    s3_access_key: str = "pinky_bread_dev"
+    s3_secret_key: str = "pinky_bread_dev_secret_change_me"
     agent_config_dir: Path = Path("./config/agents")
     upload_dir: Path = Path("./data/uploads")
     max_upload_mb: int = 12

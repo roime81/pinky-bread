@@ -66,10 +66,12 @@ services:
   seaweedfs:
     image: chrislusf/seaweedfs:4.48
     container_name: pinky-bread-seaweedfs
-    command: ["server", "-dir=/data", "-s3", "-s3.config=/etc/seaweedfs/s3.json"]
+    command: ["server", "-dir=/data", "-s3"]
+    environment:
+      AWS_ACCESS_KEY_ID: pinky_bread_dev
+      AWS_SECRET_ACCESS_KEY: pinky_bread_dev_secret_change_me
     volumes:
       - seaweed_data:/data
-      - ./config/storage/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     networks: [pinky_bread_internal]
     restart: unless-stopped
 

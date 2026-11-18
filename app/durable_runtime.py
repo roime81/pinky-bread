@@ -95,6 +95,7 @@ def _job_dict(job: WorkforceJob) -> dict[str, Any]:
         "attempts": job.attempts,
         "max_attempts": job.max_attempts,
         "available_at": job.available_at.isoformat() if job.available_at else None,
+        "lease_owner": job.lease_owner,
         "lease_expires_at": job.lease_expires_at.isoformat() if job.lease_expires_at else None,
         "cancel_requested": job.cancel_requested,
         "created_by": job.created_by,

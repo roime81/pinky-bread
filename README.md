@@ -1,10 +1,12 @@
 # Pinky Bread
 
-**Local-first multimodal multi-agent workflow platform**
+**Pinky Bread 2.0 — Local-first AI Company Operating System**
 
-Pinky Bread is an early-stage enterprise AI platform prototype for defining specialist AI agents, routing work between them, processing document and image artifacts, and placing sensitive downstream actions behind a human approval step. It is designed to run locally and can be configured to use OpenAI-compatible local inference endpoints such as vLLM.
+Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led virtual company. A founder defines the company vision, mission, goals and KPIs; a persistent company graph connects AI employees, assignments, meetings, decisions, deliverables and business outcomes. The graph is the primary workspace and a live projection of database records and company events.
 
-The repository contains a runnable MVP: a FastAPI service, a browser-based operations console, YAML agent manifests, a deterministic workflow engine, local persistence, a simulated MCP-style tool gateway, and hash-linked audit events.
+The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed relationships, hash-linked company events, Valkey live notifications, an S3-compatible object-storage adapter and a graph-first browser workspace. Existing FastAPI workflow APIs, YAML agent manifests, local inference adapters and the simulated approval-gated demo workflow are retained.
+
+> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 1 upgrade is being developed on [feature/pinky-bread-v2-company-os](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
 
 > [!IMPORTANT]
 > **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, production MCP transport, LangGraph checkpoints, production-grade PII detection, and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
@@ -29,6 +31,30 @@ The repository contains a runnable MVP: a FastAPI service, a browser-based opera
 - [Security and operational boundaries](#security-and-operational-boundaries)
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
+
+## Pinky Bread 2.0 Alpha 1
+
+### What is new
+
+- **Living Company Graph:** the default workspace visualises the company, goals, KPI nodes, agent identities, work, meetings, decisions and deliverables as connected dots.
+- **Persistent company data model:** PostgreSQL-backed node, relationship and event records. A single agent identity can connect to multiple goals and assignments.
+- **Founder-first onboarding:** create a company with its vision and mission; a proposed Head of Agents role is created as the initial management node.
+- **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships.
+- **Company event history:** append-only hash-linked records, paginated history and a hash-chain verification endpoint.
+- **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
+- **Open object storage path:** existing workflow attachments use a local or S3-compatible storage adapter; Docker Compose is configured for SeaweedFS.
+- **Open-source Compose stack:** PostgreSQL 16 with pgvector, Valkey and SeaweedFS.
+
+### What is not yet autonomous
+
+Alpha 1 is a company graph and persistence foundation, not yet a fully operating AI company. The Head of Agents is currently a proposed role record, agent nodes do not yet run as persistent autonomous workers, meeting nodes are records rather than live multi-agent meetings, and the command bar performs structured quick-add rather than natural-language delegation. KPI nodes can be defined, but automated metric collection and calculation are not implemented.
+
+Authentication, company-scoped RBAC, durable LangGraph orchestration, official MCP transport, pgvector retrieval, Keycloak/OIDC, secrets management, and production observability are planned. Tenant and actor identifiers in the current Alpha 1 APIs are caller-supplied and are not security boundaries. Do not expose this alpha to untrusted users.
+
+See:
+- [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)
+- [Pinky Bread 2.0 open-source stack](docs/OPEN_SOURCE_STACK_2.0.md)
+- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)
 
 ## Overview
 
@@ -249,7 +275,7 @@ The Compose stack contains:
 - `postgres`: PostgreSQL 16 using the pgvector image
 - `redis`: Redis 7.2 with append-only persistence enabled
 
-The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Redis is currently provisioned but not connected to the application workflow.
+The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Valkey is used for best-effort graph event notifications; durable event history is read from PostgreSQL.
 
 The Compose database password is a development-only value. Replace it with managed secrets before any shared or non-development deployment.
 

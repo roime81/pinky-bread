@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
+import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 
+from .settings import get_settings
 from .company_graph import (
     NODE_TYPES,
     RELATIONSHIPS,
@@ -161,3 +165,50 @@ def verify_events_endpoint(
     if result is None:
         raise HTTPException(404, "Company not found")
     return result
+
+
+@router.get("/companies/{company_id}/events/stream")
+async def stream_company_events(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+):
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+
+    async def event_stream():
+        client = Redis.from_url(
+            get_settings().redis_url,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=2,
+        )
+        pubsub = client.pubsub()
+        try:
+            await pubsub.subscribe(f"pinky-bread:company:{company_id}")
+            yield "event: connected\\ndata: {}\\n\\n"
+            while True:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                if message and message.get("type") == "message":
+                    payload = message.get("data", "{}")
+                    yield f"event: graph_event\\ndata: {payload}\\n\\n"
+                else:
+                    yield ": keep-alive\\n\\n"
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # PostgreSQL event history remains available through the REST endpoint.
+            yield f"event: broker_unavailable\\ndata: {{\\"message\\":\\"{str(exc)[:180]}\\"}}\\n\\n"
+        finally:
+            try:
+                await pubsub.aclose()
+                await client.aclose()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

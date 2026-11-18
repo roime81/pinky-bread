@@ -10,9 +10,10 @@ The design goal is self-hosted operation without mandatory proprietary SaaS depe
 | Persistence | PostgreSQL 16, SQLAlchemy | Company graph, workflows, event history | Implemented |
 | Vector extension | pgvector | Semantic memory and document retrieval | Extension enabled; vector pipeline pending |
 | Live events | Valkey 9.1.3 | Pub/Sub notifications for the living graph | Implemented |
-| Object storage | SeaweedFS 4.53 S3 API | Uploaded documents and workflow artifacts | Compose and storage adapter implemented |
+| Object storage | SeaweedFS 4.53 S3 API | Company documents, generated deliverables, meeting minutes and workflow artifacts | Compose and adapter implemented |
 | Local LLM | vLLM-compatible API | Head-of-Agents planning, specialist execution and meeting turns | Adapter used by Alpha 2; inference server/model deployed separately |
-| Workforce planning and execution | FastAPI service + SQLAlchemy graph events + local OpenAI-compatible inference | Goal decomposition, assigned work, bounded request-driven execution | Implemented in Alpha 2; no durable worker/checkpoint yet |\n| Durable workflow orchestration | LangGraph + PostgreSQL checkpointer | Restartable multi-agent state graph | Planned |
+| Workforce planning and execution | FastAPI service + SQLAlchemy graph events + local OpenAI-compatible inference | Goal decomposition, assigned work, bounded request-driven execution | Implemented in Alpha 2; no durable worker/checkpoint yet |
+| Durable workflow orchestration | LangGraph + PostgreSQL checkpointer | Restartable multi-agent state graph | Planned |
 | Tool protocol | Official MCP Python SDK | Standard tool/resource/prompt integration | Planned; current tool gateway is a local demo adapter |
 | Identity | Keycloak / OIDC | Login, SSO, company membership and identity claims | Planned |
 | Secrets | OpenBao | Runtime credentials, rotation and access control | Planned |

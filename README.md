@@ -4,9 +4,9 @@
 
 Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led virtual company. A founder defines the company vision, mission, goals and KPIs; a persistent company graph connects AI employees, assignments, meetings, decisions, deliverables and business outcomes. The graph is the primary workspace and a live projection of database records and company events.
 
-The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed relationships, hash-linked company events, Valkey live notifications, an S3-compatible object-storage adapter and a graph-first browser workspace. Existing FastAPI workflow APIs, YAML agent manifests, local inference adapters and the simulated approval-gated demo workflow are retained.
+Pinky Bread 2.0 Alpha 2 builds on that graph foundation with a working request-driven virtual workforce: the Head of Agents decomposes goals, reusable specialist agents receive graph-linked assignments, tasks execute through a local OpenAI-compatible model endpoint (or clearly labelled mock mode), and generated deliverables are stored through the local/S3-compatible object adapter. It also adds turn-based multi-agent meetings with stored minutes and provenance-backed KPI measurements.
 
-> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 1 upgrade is being developed on [feature/pinky-bread-v2-company-os](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
+> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 2 upgrade is being developed on [feature/pinky-bread-v2-workforce-runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-workforce-runtime), stacked on the initial [company graph foundation](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
 
 > [!IMPORTANT]
 > **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, production MCP transport, LangGraph checkpoints, production-grade PII detection, and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
@@ -15,7 +15,7 @@ The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed rela
 
 ## Contents
 
-- [Pinky Bread 2.0 Alpha 1](#pinky-bread-20-alpha-1)
+- [Pinky Bread 2.0 Alpha 2](#pinky-bread-20-alpha-2)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -33,7 +33,7 @@ The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed rela
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 
-## Pinky Bread 2.0 Alpha 1
+## Pinky Bread 2.0 Alpha 2
 
 ### What is new
 
@@ -45,12 +45,17 @@ The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed rela
 - **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
 - **Open object storage path:** workflow attachments and company documents/deliverables use a local or S3-compatible adapter. PostgreSQL catalogs ownership, company/tenant scope, checksum, type, size and object key; SeaweedFS stores the bytes in Compose.
 - **Open-source Compose stack:** PostgreSQL 16 with pgvector, Valkey and SeaweedFS.
+- **Working AI workforce:** idempotent bootstrap of Head of Agents and six specialist roles; role identities are reused across goals.
+- **Goal-to-work execution:** Head of Agents creates validated, dependency-aware assignments. Specialists run sequentially through the configured local model endpoint, or through an explicitly labelled development simulation.
+- **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
+- **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
+- **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 
-### What is not yet autonomous
+### What still needs to be built
 
-Alpha 1 is a company graph and persistence foundation, not yet a fully operating AI company. The Head of Agents is currently a proposed role record, agent nodes do not yet run as persistent autonomous workers, meeting nodes are records rather than live multi-agent meetings, and the command bar performs structured quick-add rather than natural-language delegation. KPI nodes can be defined, but automated metric collection and calculation are not implemented.
+Alpha 2 is a functional workforce vertical slice, not yet a fully autonomous or production-ready company. Goal execution is request-driven and sequential; there are no LangGraph PostgreSQL checkpoints, background worker pool or restart recovery yet. Meetings are text-based turn-taking, not voice/video or calendar-scheduled sessions. KPI measurements are recorded manually; automated integrations and metric collection are not implemented. MCP tools are not connected to this workforce runtime, so it does not execute external side effects.
 
-Authentication, company-scoped RBAC, durable LangGraph orchestration, official MCP transport, pgvector retrieval, Keycloak/OIDC, secrets management, and production observability are planned. Tenant and actor identifiers in the current Alpha 1 APIs are caller-supplied and are not security boundaries. Do not expose this alpha to untrusted users.
+Keycloak/OIDC authentication, company-scoped RBAC, OpenBao secrets, OPA policies, durable LangGraph orchestration, official MCP transport, pgvector semantic retrieval and production observability remain future work. Tenant and actor identifiers in the current Alpha 2 APIs are caller-supplied and are not an authorization boundary. Do not expose this alpha to untrusted users.
 
 See:
 - [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)
@@ -74,10 +79,10 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 | Capability | MVP implementation | Current boundary |
 |---|---|---|
 | Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views | Development UI; no login or authenticated tenant boundary |
-| Company graph | Company, goal, KPI, agent, work and meeting nodes with typed edges | Goal/KPI values are records; autonomous workforce execution and KPI calculation remain planned |
+| Company graph and workforce | Company, goals, KPIs, reusable agents, assignments, meetings and deliverables with typed edges | Request-driven sequential execution; no durable worker pool or authenticated tenant boundary yet |
 | Company event history | PostgreSQL append-only company events with SHA-256 chaining and verification API | Tamper-evident, not independently immutable or WORM protected |
 | Live graph updates | Valkey Pub/Sub notifications and SSE | Database event history is authoritative; Valkey notifications are best-effort |
-| Object storage | Local filesystem or S3-compatible SeaweedFS adapter for workflow attachments | Company-wide document lifecycle, retention and authenticated download APIs remain planned |
+| Object storage | Local filesystem or S3-compatible SeaweedFS for source documents, generated deliverables and meeting minutes | PostgreSQL catalogues owner, company/tenant, checksum and object key; auth/retention policies remain planned |
 | Declarative agent registry | YAML manifests, Pydantic validation, reload endpoint | Registry reload is local configuration, not a governed deployment pipeline |
 | Deterministic routing | Router plus explicit specialist hand-off logic | Lightweight Python state machine, not LangGraph |
 | Local LLM integration | OpenAI-compatible chat completions adapter | Endpoint compatibility depends on the selected model/server |
@@ -161,14 +166,14 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | API | FastAPI, Uvicorn | REST API, OpenAPI docs, SSE response endpoint |
 | Data validation/configuration | Pydantic v2, pydantic-settings, PyYAML | Request validation, environment settings, agent manifests |
 | Workflow orchestration | Custom Python state machine | Deterministic routing, specialist hand-offs and approval control |
-| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Calls local reasoning or vision model endpoints |
+| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Goal planning, specialist work and meeting turns through local reasoning endpoint |
 | Inference server (optional) | vLLM-compatible endpoint | Local model serving; deployment managed separately |
 | Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state plus company graph nodes, typed edges and event history |
 | Vector extension image | pgvector PostgreSQL image | Extension enabled; embeddings and semantic retrieval are not yet implemented |
 | Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
 | PDF processing | PyMuPDF | Text extraction from text-based PDFs |
 | Frontend | HTML, CSS, vanilla JavaScript | Browser-based console without a frontend build toolchain |
-| Object storage | SeaweedFS S3 API + boto3 | S3-compatible workflow artifact storage in the v2.0 Compose profile |\n| Containers | Docker, Docker Compose | Local container deployment |
+| Object storage | SeaweedFS S3 API + boto3 | S3-compatible company documents, deliverables, meeting minutes and workflow artifacts |\n| Containers | Docker, Docker Compose | Local container deployment |
 | Tests | pytest, FastAPI TestClient | API and workflow behavior tests |
 
 ## Requirements
@@ -349,7 +354,7 @@ The simple routing and disruption checks are illustrative keyword logic. They do
 
 ## API reference
 
-The service publishes an interactive OpenAPI document at `/docs` when running.
+The service publishes an interactive OpenAPI document at `/docs` when running. The company/workforce API is versioned under `/v2`.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -546,7 +551,7 @@ No regulatory certification, security assurance, production air-gap verification
 
 ## Roadmap
 
-Suggested increments:
+See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the implemented goal-to-result workflow. Remaining roadmap increments:
 
 1. **Durable orchestration:** LangGraph `StateGraph`, PostgreSQL checkpoints, restart recovery, bounded retries and idempotent workflow resume.
 2. **Real MCP integration:** MCP SDK server/client transport, structured tool schemas, authenticated tool identities and tool-level policy checks.

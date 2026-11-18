@@ -100,3 +100,62 @@ def test_company_graph_rejects_unsupported_node_types_and_cross_company_edges():
             "relationship": "owns",
         })
         assert cross_company_edge.status_code == 422
+
+
+def test_one_agent_can_contribute_to_multiple_goals_and_kpi_measures_goal():
+    init_db()
+    with TestClient(app) as client:
+        company = client.post("/v2/companies", json={
+            "tenant_id": "many-to-many-tenant",
+            "owner_id": "founder",
+            "name": "Many-to-many Company",
+        }).json()
+        company_id = company["id"]
+
+        def create_node(node_type, name):
+            response = client.post(f"/v2/companies/{company_id}/nodes", json={
+                "tenant_id": "many-to-many-tenant",
+                "actor_id": "founder",
+                "node_type": node_type,
+                "name": name,
+            })
+            assert response.status_code == 201, response.text
+            return response.json()
+
+        goal_a = create_node("goal", "Launch the SaaS product")
+        goal_b = create_node("goal", "Acquire first customers")
+        agent = create_node("agent", "Growth and Product Agent")
+        kpi = create_node("kpi", "Paying customers")
+
+        def connect(source, target, relationship):
+            response = client.post(f"/v2/companies/{company_id}/edges", json={
+                "tenant_id": "many-to-many-tenant",
+                "actor_id": "founder",
+                "source_node_id": source["id"],
+                "target_node_id": target["id"],
+                "relationship": relationship,
+            })
+            assert response.status_code == 201, response.text
+
+        connect(agent, goal_a, "contributes_to")
+        connect(agent, goal_b, "contributes_to")
+        connect(goal_b, kpi, "measures")
+
+        graph = client.get(
+            f"/v2/companies/{company_id}/graph?tenant_id=many-to-many-tenant"
+        ).json()
+        agent_nodes = [node for node in graph["nodes"] if node["id"] == agent["id"]]
+        assert len(agent_nodes) == 1
+
+        contributions = [
+            edge for edge in graph["edges"]
+            if edge["source"] == agent["id"] and edge["relationship"] == "contributes_to"
+        ]
+        assert {edge["target"] for edge in contributions} == {goal_a["id"], goal_b["id"]}
+
+        measures = [
+            edge for edge in graph["edges"]
+            if edge["source"] == goal_b["id"] and edge["target"] == kpi["id"]
+        ]
+        assert len(measures) == 1
+        assert measures[0]["relationship"] == "measures"

@@ -163,7 +163,7 @@ def _append_event(
         "actor_id": actor_id,
         "type": event_type,
         "payload": payload,
-        "occurred_at": occurred_at.isoformat(),
+        "occurred_at": occurred_at,
         "previous_hash": previous,
     }
     entry_hash = hashlib.sha256(
@@ -243,8 +243,7 @@ def create_company(
         )
         db.commit()
         result = _node_dict(node)
-        event_id = event.event_id
-        event_data = _event_dict(event)
+            event_data = _event_dict(event)
     _notify(event_data)
     return result
 
@@ -334,7 +333,7 @@ def create_node(
         db.commit()
         result = _node_dict(node)
         event_data = _event_dict(event)
-    _notify(_event_proxy(event_data))
+    _notify(event_data)
     return result
 
 

@@ -10,6 +10,7 @@ from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 
 from .company_graph import get_company_graph
+from .database import init_db
 from .durable_runtime import enqueue_job, get_coordination, get_job
 from .settings import get_settings
 
@@ -152,6 +153,7 @@ def queue_goal_execution(company_id: str, tenant_id: str, goal_id: str, actor_id
 
 
 def main() -> None:
+    init_db()
     if not settings.mcp_api_token:
         raise RuntimeError("MCP_API_TOKEN is required before the MCP server can start")
     uvicorn.run(

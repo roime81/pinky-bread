@@ -105,11 +105,19 @@ FastAPI API / Control Plane
        |                       - meeting recordings and notes
        |                       - deliverables and uploads
        |
-       +-------------------- Agent Runtime
-       |                       - LangGraph durable execution (planned)
-       |                       - MCP tools (planned)
-       |                       - local vLLM-compatible inference
-       |                       - policy and human-approval gates
+       +-------------------- Workforce Runtime (Alpha 2)
+       |                       - Head of Agents goal planning
+       |                       - persistent specialist identities
+       |                       - graph-linked assignments and dependencies
+       |                       - request-driven local model execution
+       |                       - object-store deliverables and meeting minutes
+       |                       - provenance-backed KPI measurements
+       |
+       +-------------------- Durable Agent Runtime (planned)
+                               - LangGraph PostgreSQL checkpoints
+                               - background workers and restart recovery
+                               - official MCP tools and policy enforcement
+                               - authenticated approval gates
        |
        +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
 ```

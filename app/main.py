@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from .database import init_db
+from .database import check_db_connection, init_db
 from .engine import WorkflowEngine, WorkflowNotFound, WorkflowConflict
 from .registry import AgentRegistry
 from .schemas import WorkflowInvokeRequest, ApprovalRequest, ArtifactInput
@@ -19,7 +19,12 @@ registry = AgentRegistry(settings.agent_config_dir)
 engine = WorkflowEngine(registry)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
+    if settings.auto_create_schema:
+        # Convenient for local SQLite development. Compose uses a one-shot
+        # migration service and disables schema creation in app containers.
+        init_db()
+    else:
+        check_db_connection()
     yield
 
 

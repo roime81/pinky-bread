@@ -123,7 +123,6 @@ async def complete_with_mcp(
                     }
                     if model_tools:
                         payload["tools"] = model_tools
-                        payload["tool_choice"] = "auto"
                     response = await client.post(
                         endpoint,
                         json=payload,

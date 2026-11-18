@@ -1,4 +1,17 @@
 services:
+  # A single schema bootstrap must finish before app processes start.
+  migrate:
+    build: .
+    command: ["python", "-m", "app.migrate"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
+      AUTO_CREATE_SCHEMA: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [pinky_bread_internal]
+    restart: "no"
+
   api:
     build: .
     container_name: pinky-bread-api
@@ -7,6 +20,7 @@ services:
     environment:
       APP_ENV: docker
       DEV_MODE: "true"
+      AUTO_CREATE_SCHEMA: "false"
       MOCK_INFERENCE: "${MOCK_INFERENCE:-true}"
       MODEL_PROVIDER: "${MODEL_PROVIDER:-vllm}"
       DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
@@ -46,6 +60,10 @@ services:
         condition: service_started
       mcp:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
     networks: [pinky_bread_internal]
     restart: unless-stopped
 
@@ -55,6 +73,7 @@ services:
     environment:
       APP_ENV: docker
       DEV_MODE: "true"
+      AUTO_CREATE_SCHEMA: "false"
       MOCK_INFERENCE: "${MOCK_INFERENCE:-true}"
       MODEL_PROVIDER: "${MODEL_PROVIDER:-vllm}"
       DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
@@ -105,6 +124,7 @@ services:
       - "8090"
     environment:
       APP_ENV: docker
+      AUTO_CREATE_SCHEMA: "false"
       DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
       REDIS_URL: redis://valkey:6379/0
       MCP_HOST: 0.0.0.0
@@ -118,6 +138,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks: [pinky_bread_internal]
     restart: unless-stopped
 

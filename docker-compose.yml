@@ -62,8 +62,6 @@ services:
         condition: service_started
       migrate:
         condition: service_completed_successfully
-      migrate:
-        condition: service_completed_successfully
     networks: [pinky_bread_internal]
     restart: unless-stopped
 
@@ -113,6 +111,8 @@ services:
         condition: service_started
       mcp:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     networks: [pinky_bread_internal]
     restart: unless-stopped
 

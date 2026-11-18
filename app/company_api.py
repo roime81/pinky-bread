@@ -37,6 +37,7 @@ from .company_graph import (
     create_company,
     create_edge,
     create_node,
+    update_node,
     get_company_graph,
     list_companies,
     list_company_events,
@@ -63,6 +64,15 @@ class GraphNodeCreate(BaseModel):
     description: str = Field(default="", max_length=8000)
     status: str = Field(default="PLANNED", min_length=2, max_length=40)
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class GraphNodeUpdate(BaseModel):
+    tenant_id: str = Field(default="demo-tenant", min_length=2, max_length=120)
+    actor_id: str = Field(default="demo-user", min_length=2, max_length=120)
+    name: str | None = Field(default=None, min_length=1, max_length=240)
+    description: str | None = Field(default=None, max_length=8000)
+    status: str | None = Field(default=None, min_length=2, max_length=40)
+    data_patch: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphEdgeCreate(BaseModel):
@@ -172,6 +182,23 @@ def create_node_endpoint(company_id: str, request: GraphNodeCreate) -> dict[str,
         raise HTTPException(422, str(exc)) from exc
     if node is None:
         raise HTTPException(404, "Company not found")
+    return node
+
+
+@router.patch("/companies/{company_id}/nodes/{node_id}")
+def update_node_endpoint(company_id: str, node_id: str, request: GraphNodeUpdate) -> dict[str, Any]:
+    node = update_node(
+        company_id=company_id,
+        tenant_id=request.tenant_id,
+        actor_id=request.actor_id,
+        node_id=node_id,
+        name=request.name,
+        description=request.description,
+        status=request.status,
+        data_patch=request.data_patch,
+    )
+    if node is None:
+        raise HTTPException(404, "Company graph node not found")
     return node
 
 

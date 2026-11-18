@@ -83,7 +83,9 @@
       }),
     });
     const parent = nodeType === "agent"
-      ? state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role))
+      ? (data.manager_id
+        ? state.graph.nodes.find((item) => item.id === data.manager_id)
+        : state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role)))
       : null;
     const selectedGoal = nodeType === "kpi"
       ? state.graph.nodes.find((item) => item.id === state.selectedId && item.type === "goal")
@@ -411,6 +413,46 @@
     }
   }
 
+  async function updateAgent(node, payload) {
+    await api(`/v2/companies/${state.company.id}/nodes/${node.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder", ...payload }),
+    });
+    await loadGraph();
+    selectNode(node.id);
+  }
+
+  async function editAgent(node) {
+    const name = askForName("Agent name", node.name);
+    if (!name) return;
+    const description = askForName("Agent responsibility", node.description || node.data?.role || "");
+    if (description === null) return;
+    const provider = askForName("LLM provider", node.data?.model_configuration?.provider || "ollama");
+    if (!provider) return;
+    const model = askForName("Model identifier", node.data?.model_configuration?.model_name || "llama3.1:8b");
+    if (!model) return;
+    await updateAgent(node, {
+      name, description,
+      data_patch: { role: description, model_configuration: { provider, model_name: model } },
+    });
+    toast("Agent profile and model updated");
+  }
+
+  async function changeAgentRank(node, promote) {
+    const ranks = ["specialist", "lead", "executive"];
+    const current = ranks.indexOf(node.data?.rank || "specialist");
+    const next = ranks[Math.max(0, Math.min(ranks.length - 1, current + (promote ? 1 : -1)))];
+    const title = next === "executive" ? "Head of Agents" : next === "lead" ? "Team Lead" : "Specialist";
+    await updateAgent(node, { data_patch: { rank: next, title, role: next === "executive" ? "head_of_agents" : next } });
+    toast(`${node.name} is now ${title}`);
+  }
+
+  async function archiveAgent(node) {
+    if (!window.confirm(`Archive ${node.name}? This keeps its history but marks it inactive.`)) return;
+    await updateAgent(node, { status: "ARCHIVED", data_patch: { archived: true } });
+    toast("Agent archived");
+  }
+
   function selectNode(nodeId, rerender = true) {
     state.selectedId = nodeId;
     const node = state.graph.nodes.find((item) => item.id === nodeId);
@@ -446,6 +488,12 @@
     });
 
     const actions = [];
+    if (node.type === "agent") {
+      actions.push('<button class="secondary-btn" id="inspect-edit-agent">Edit agent & model</button>');
+      actions.push('<button class="secondary-btn" id="inspect-promote-agent">Promote agent</button>');
+      actions.push('<button class="secondary-btn" id="inspect-demote-agent">Demote agent</button>');
+      if (node.status !== "ARCHIVED") actions.push('<button class="secondary-btn" id="inspect-archive-agent">Archive agent</button>');
+    }
     if (node.type === "goal") {
       actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
       actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
@@ -465,6 +513,10 @@
     if (actions.length) {
       $("#graph-inspector").insertAdjacentHTML("beforeend", `<div class="inspector-divider"></div><div class="inspector-section-title">ACTIONS</div><div class="inspector-actions">${actions.join("")}</div>`);
     }
+    $("#inspect-edit-agent")?.addEventListener("click", () => editAgent(node).catch((error) => toast(error.message)));
+    $("#inspect-promote-agent")?.addEventListener("click", () => changeAgentRank(node, true).catch((error) => toast(error.message)));
+    $("#inspect-demote-agent")?.addEventListener("click", () => changeAgentRank(node, false).catch((error) => toast(error.message)));
+    $("#inspect-archive-agent")?.addEventListener("click", () => archiveAgent(node).catch((error) => toast(error.message)));
     $("#inspect-plan-goal")?.addEventListener("click", () => planGoal(nodeId));
     $("#inspect-run-goal")?.addEventListener("click", () => runGoal(nodeId));
     $("#inspect-execute-work")?.addEventListener("click", () => executeWork(nodeId, node.status === "FAILED"));
@@ -592,9 +644,20 @@
     const name = askForName("Name this AI employee", "Product Agent");
     if (!name) return;
     const role = askForName("What is this agent responsible for?", "Product management") || "General specialist";
+    const provider = askForName("LLM provider (ollama, openai-compatible, anthropic, etc.)", "ollama") || "ollama";
+    const model = askForName("Model identifier", "llama3.1:8b") || "llama3.1:8b";
+    const leaders = state.graph.nodes.filter((node) => node.type === "agent");
+    const leaderOptions = ["Founder", ...leaders.map((node) => node.name)].join(", ");
+    const managerName = askForName(`Who should ${name} report to? Available: ${leaderOptions}`, leaders.find((node) => ["head_of_agents", "chief_of_staff"].includes(node.data?.role))?.name || "Founder") || "Founder";
+    const manager = leaders.find((node) => node.name.toLowerCase() === managerName.toLowerCase());
     try {
-      await createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED");
-      toast("Agent role added. Runtime activation is a separate setup step.");
+      await createNode("agent", name, role, {
+        role, rank: "specialist", title: "Specialist",
+        manager_id: manager?.id || state.company.id,
+        model_configuration: { provider, model_name: model },
+        runtime_status: "not_configured", assigned_goals: [],
+      }, "PROPOSED");
+      toast(`${name} added · reports to ${manager?.name || "Founder"} · ${provider}/${model}`);
     } catch (error) { toast(error.message); }
   }
 
@@ -735,6 +798,20 @@
     } catch (error) { toast(error.message); }
   }
 
+  async function addAgentFromCommand(name) {
+    const role = askForName("What is this agent responsible for?", "General specialist") || "General specialist";
+    const provider = askForName("LLM provider", "ollama") || "ollama";
+    const model = askForName("Model identifier", "llama3.1:8b") || "llama3.1:8b";
+    const manager = state.graph.nodes.find((node) => node.type === "agent" && ["head_of_agents", "chief_of_staff"].includes(node.data?.role));
+    await createNode("agent", name, role, {
+      role, rank: "specialist", title: "Specialist",
+      manager_id: manager?.id || state.company.id,
+      model_configuration: { provider, model_name: model },
+      runtime_status: "not_configured", assigned_goals: [],
+    }, "PROPOSED");
+    toast(`${name} created under ${manager?.name || "Founder"}`);
+  }
+
   function handleCommand() {
     const input = $("#company-command-input");
     const command = input.value.trim();
@@ -754,12 +831,7 @@
       else toast("Select a goal dot or use run: with an existing goal name");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
-      if (name) {
-        const role = askForName("What is this agent responsible for?", "General specialist") || "General specialist";
-        createNode("agent", name, role, { role, runtime_status: "not_configured", assigned_goals: [] }, "PROPOSED")
-          .then(() => toast("Agent role added; runtime is not activated yet"))
-          .catch((error) => toast(error.message));
-      }
+      if (name) addAgentFromCommand(name).catch((error) => toast(error.message));
     } else {
       addGoal(command);
     }

@@ -17,9 +17,10 @@
       <div class="workspace-label">WORKSPACE</div>
       <nav class="nav-list">
         <button class="nav-item active" data-view="company-graph"><span class="nav-icon">◎</span> Company graph</button>
+        <button class="nav-item" data-view="company-agents"><span class="nav-icon">◇</span> AI workforce</button>
         <button class="nav-item" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
         <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflows <span class="nav-count" id="nav-workflow-count">0</span></button>
-        <button class="nav-item" data-view="agents"><span class="nav-icon">◇</span> Agent registry</button>
+        <button class="nav-item" data-view="agents"><span class="nav-icon">▧</span> Workflow templates</button>
         <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit trail</button>
       </nav>
       <div class="sidebar-bottom">
@@ -123,6 +124,17 @@
         </div>
       </section>
 
+      <section class="view" id="view-company-agents">
+        <div class="page-heading">
+          <div><div class="eyebrow">COMPANY WORKFORCE / MANAGEMENT</div><h1>AI workforce</h1><p>Design the virtual team your company needs. Create agents with custom responsibilities, skills, seniority and reporting lines. No pre-defined roster is installed.</p></div>
+          <button class="primary-btn" id="workspace-add-agent">＋ Create agent</button>
+        </div>
+        <section class="agent-management-panel">
+          <div class="graph-panel-heading"><div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Company agents</strong></div><span id="workspace-agent-count">0 agents</span></div>
+          <div id="workspace-agent-list" class="company-agent-list"><div class="empty-state">Select or create a company to start building your team.</div></div>
+        </section>
+      </section>
+
       <section class="view" id="view-overview">
         <div class="page-heading"><div><div class="eyebrow">CONTROL PLANE / 001</div><h1>Agent workspace</h1><p>Orchestrate specialist agents, inspect decisions, and govern tool execution.</p></div><button class="primary-btn" id="new-workflow-btn"><span>＋</span> New workflow</button></div>
         <div class="metric-grid">
@@ -165,9 +177,9 @@
       </section>
 
       <section class="view" id="view-agents">
-        <div class="page-heading"><div><div class="eyebrow">DECLARATIVE CONFIGURATION / 003</div><h1>Agent registry</h1><p>Specialists are defined by YAML manifests and validated on reload.</p></div><button class="secondary-btn" id="reload-agents">↻ Reload manifests</button></div>
+        <div class="page-heading"><div><div class="eyebrow">LEGACY WORKFLOW ROUTING / 003</div><h1>Workflow templates</h1><p>These YAML manifests configure the legacy workflow router. Your company's virtual employees are managed separately in AI workforce.</p></div><button class="secondary-btn" id="reload-agents">↻ Reload templates</button></div>
         <div id="agents-grid" class="agents-grid"></div>
-        <div class="config-note"><strong>Configuration source</strong><span>./config/agents/*.yaml</span><p>Changes are loaded without restarting the API. Invalid manifests are rejected and the last known-good registry remains active.</p></div>
+        <div class="config-note"><strong>Configuration source</strong><span>./config/agents/*.yaml</span><p>These manifests are static routing templates for the legacy workflow API. They are not the agents in your company graph.</p></div>
       </section>
 
       <section class="view" id="view-audit">
@@ -175,7 +187,7 @@
         <section class="panel"><div class="panel-head"><div><h2>Execution events</h2><p>Select a workflow from the list to inspect its audit chain.</p></div><select id="audit-workflow-select" class="audit-select"><option value="">Select workflow…</option></select></div><div id="audit-events" class="audit-events"><div class="empty-state">Choose a workflow to view its event trail.</div></div></section>
       </section>
 
-      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.2</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
+      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.3</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
     </main>
 
     <aside class="right-rail">

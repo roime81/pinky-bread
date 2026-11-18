@@ -855,10 +855,10 @@ async def convene_meeting(
         f"- Runtime: {mode}\n\n"
         f"## Facilitator summary\n{summary}\n\n## Discussion transcript\n{transcript}\n"
     )
-    object_id = str(uuid.uuid4())
     filename = f"meeting-{meeting_id}-minutes.md"
-    stored = ObjectStore().persist_object(
-        key=f"companies/{company_id}/meetings/{object_id}-{filename}",
+    object_key = f"companies/{company_id}/meetings/{meeting_id}/minutes.md"
+    stored = ObjectStore().persist_object_idempotent(
+        key=object_key,
         content=minutes.encode("utf-8"),
         content_type="text/markdown; charset=utf-8",
         tenant_id=tenant_id,
@@ -869,34 +869,58 @@ async def convene_meeting(
         created_by=head["id"],
         metadata={"meeting_id": meeting_id, "participant_ids": [agent["id"] for agent in agents], "runtime_mode": mode},
     )
-    deliverable = create_node(
-        company_id=company_id,
-        tenant_id=tenant_id,
-        actor_id=head["id"],
-        node_type="deliverable",
-        name=f"Minutes: {meeting['name']}",
-        description="Persisted meeting minutes and turn-by-turn agent discussion.",
-        status="STORED",
-        data={
-            "object_id": stored["object_id"],
-            "filename": filename,
-            "content_type": stored["content_type"],
-            "size_bytes": stored["size_bytes"],
-            "sha256": stored["sha256"],
-            "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
-            "meeting_id": meeting_id,
-            "execution_mode": mode,
-        },
+    latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
+    deliverable_data = {
+        "object_id": stored["object_id"],
+        "filename": filename,
+        "content_type": stored["content_type"],
+        "size_bytes": stored["size_bytes"],
+        "sha256": stored["sha256"],
+        "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
+        "meeting_id": meeting_id,
+        "execution_mode": mode,
+    }
+    deliverable = next((
+        node for node in latest_graph["nodes"]
+        if node["type"] == "deliverable"
+        and (node.get("data") or {}).get("meeting_id") == meeting_id
+    ), None)
+    if deliverable is None:
+        deliverable = create_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            node_type="deliverable",
+            name=f"Minutes: {meeting['name']}",
+            description="Persisted meeting minutes and turn-by-turn agent discussion.",
+            status="STORED",
+            data=deliverable_data,
+        )
+    else:
+        deliverable = update_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            node_id=deliverable["id"],
+            status="STORED",
+            data_patch=deliverable_data,
+        ) or deliverable
+    latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or latest_graph
+    has_produces_edge = any(
+        edge["source"] == meeting_id and edge["target"] == deliverable["id"]
+        and edge["relationship"] == "produces"
+        for edge in latest_graph["edges"]
     )
-    create_edge(
-        company_id=company_id,
-        tenant_id=tenant_id,
-        actor_id=head["id"],
-        source_node_id=meeting_id,
-        target_node_id=deliverable["id"],
-        relationship="produces",
-        data={"object_id": stored["object_id"]},
-    )
+    if not has_produces_edge:
+        create_edge(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            source_node_id=meeting_id,
+            target_node_id=deliverable["id"],
+            relationship="produces",
+            data={"object_id": stored["object_id"]},
+        )
     completed = update_node(
         company_id=company_id,
         tenant_id=tenant_id,

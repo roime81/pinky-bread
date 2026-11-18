@@ -13,6 +13,15 @@ from pydantic import BaseModel, Field
 
 from .settings import get_settings
 from .object_store import ObjectStore
+from .workforce import (
+    bootstrap_workforce,
+    plan_goal,
+    execute_goal,
+    execute_task,
+    convene_meeting,
+    record_kpi_measurement,
+)
+
 from .company_graph import (
     NODE_TYPES,
     RELATIONSHIPS,
@@ -54,6 +63,21 @@ class GraphEdgeCreate(BaseModel):
     target_node_id: str = Field(min_length=36, max_length=36)
     relationship: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkforceAction(BaseModel):
+    tenant_id: str = Field(default="demo-tenant", min_length=2, max_length=120)
+    actor_id: str = Field(default="demo-user", min_length=2, max_length=120)
+
+
+class WorkExecutionRequest(WorkforceAction):
+    retry: bool = False
+
+
+class KpiMeasurementRequest(WorkforceAction):
+    actual_value: float
+    source: str = Field(min_length=2, max_length=240)
+    evidence: str = Field(default="", max_length=2000)
 
 
 @router.get("/capabilities")
@@ -383,3 +407,109 @@ def download_company_artifact(
         media_type=record["content_type"],
         headers={"Content-Disposition": f'attachment; filename="{record["filename"]}"'},
     )
+
+
+
+@router.post("/companies/{company_id}/workforce/bootstrap")
+def bootstrap_workforce_endpoint(company_id: str, request: WorkforceAction) -> dict[str, Any]:
+    try:
+        return bootstrap_workforce(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/goals/{goal_id}/plan")
+async def plan_company_goal_endpoint(
+    company_id: str, goal_id: str, request: WorkforceAction
+) -> dict[str, Any]:
+    try:
+        return await plan_goal(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            goal_id=goal_id,
+            actor_id=request.actor_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/goals/{goal_id}/execute")
+async def execute_company_goal_endpoint(
+    company_id: str, goal_id: str, request: WorkforceAction
+) -> dict[str, Any]:
+    try:
+        return await execute_goal(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            goal_id=goal_id,
+            actor_id=request.actor_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/work/{work_id}/execute")
+async def execute_company_work_endpoint(
+    company_id: str, work_id: str, request: WorkExecutionRequest
+) -> dict[str, Any]:
+    try:
+        return await execute_task(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            work_id=work_id,
+            actor_id=request.actor_id,
+            retry=request.retry,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/meetings/{meeting_id}/convene")
+async def convene_company_meeting_endpoint(
+    company_id: str, meeting_id: str, request: WorkforceAction
+) -> dict[str, Any]:
+    try:
+        return await convene_meeting(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            meeting_id=meeting_id,
+            actor_id=request.actor_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/kpis/{kpi_id}/measure")
+def record_company_kpi_endpoint(
+    company_id: str, kpi_id: str, request: KpiMeasurementRequest
+) -> dict[str, Any]:
+    try:
+        return record_kpi_measurement(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            kpi_id=kpi_id,
+            actor_id=request.actor_id,
+            actual_value=request.actual_value,
+            source=request.source,
+            evidence=request.evidence,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc

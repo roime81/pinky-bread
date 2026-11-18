@@ -1,6 +1,6 @@
 # Pinky Bread 2.0 — AI Company Operating System
 
-**Status:** Alpha 1 architecture and company-graph foundation  
+**Status:** Alpha 3 — durable workforce runtime, PostgreSQL checkpoints and MCP v2  
 **Product direction:** a founder-led virtual company whose goals, AI workers, work, collaboration and outcomes are represented as one living graph.
 
 ## Product model
@@ -105,12 +105,21 @@ FastAPI API / Control Plane
        |                       - meeting recordings and notes
        |                       - deliverables and uploads
        |
-       +-------------------- Agent Runtime
-       |                       - LangGraph durable execution (planned)
-       |                       - MCP tools (planned)
-       |                       - local vLLM-compatible inference
-       |                       - policy and human-approval gates
+       +-------------------- Durable Workforce Runtime (Alpha 3)
+       |                       - PostgreSQL job queue and worker leases
+       |                       - LangGraph StateGraph per durable job
+       |                       - AsyncPostgresSaver checkpoints
+       |                       - heartbeat and expired-lease recovery
+       |                       - founder-controlled recurring coordination
+       |                       - cooperative cancellation and bounded retries
        |
+       +-------------------- MCP v2 / Local Model Gateway
+                               - Streamable HTTP MCP server and client
+                               - role-scoped tools and trusted identity injection
+                               - Ollama / vLLM-compatible local model API
+                               - no mandatory hosted model provider
+       |
+       +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
        +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
 ```
 
@@ -125,6 +134,9 @@ The company graph uses relational persistence:
 - `company_graph_events`: append-only activity events with a previous-hash link
 - `stored_objects`: object metadata, tenant/company ownership, content type, byte size, checksum, storage key/backend and retention metadata
 - `workflows`: existing workflow state and workflow audit data
+- `workforce_jobs`: durable job state, idempotency key, lease, retries, cancellation and result
+- `company_coordination`: founder-enabled PLAN_ONLY/AUTO_EXECUTE schedule
+- LangGraph checkpoint tables: durable StateGraph thread snapshots and pending writes
 
 The graph snapshot is rebuilt from these tables. The UI must never be the only place a goal, assignment or relationship exists.
 
@@ -132,7 +144,7 @@ The current event chain is tamper-evident when verified, but it is **not immutab
 
 ### Valkey is a notification layer
 
-A graph mutation is committed to PostgreSQL first. The application then publishes a best-effort notification to Valkey Pub/Sub for connected graph clients. If Valkey is unavailable, the database record remains committed and can be replayed from the event API. Valkey is not the authoritative audit store.
+A graph mutation or workforce job is committed to PostgreSQL first. The application then publishes a best-effort notification to Valkey Pub/Sub for connected graph clients or idle workers. If Valkey is unavailable, database events remain readable and workers poll the durable job queue. Valkey is not the job store, checkpoint store or authoritative audit store.
 
 ### SeaweedFS is the S3-compatible object store
 
@@ -153,9 +165,10 @@ The Compose PostgreSQL image enables the `vector` extension. The extension is re
 | Semantic memory | pgvector | Extension enabled; retrieval pending |
 | Live event distribution | Valkey | Compose service and graph event notifications |
 | Object storage | SeaweedFS S3 API | Compose service and S3-compatible workflow artifact adapter |
-| Local LLM inference | vLLM-compatible OpenAI API | Existing adapter; external model server must be configured |
-| Durable multi-agent orchestration | LangGraph + PostgreSQL checkpointer | Planned |
-| Tool protocol | Official MCP Python SDK | Planned; current gateway remains a demo adapter |
+| Local LLM inference | Ollama or vLLM-compatible OpenAI API | Alpha 3 supports self-hosted `/v1/chat/completions`; Ollama is an optional Compose profile |
+| Durable multi-agent orchestration | LangGraph + `AsyncPostgresSaver` | Implemented for job-level StateGraph checkpoints |
+| Durable job coordination | PostgreSQL jobs/leases + Valkey Pub/Sub | Implemented; PostgreSQL authoritative, Valkey wake-up only |
+| Tool protocol | Official MCP Python SDK v2, Streamable HTTP | Internal Alpha 3 server/client, role allow-list and scoped development bearer tokens |
 | Identity and SSO | Keycloak / OIDC | Planned |
 | Secrets | OpenBao | Planned |
 | Policy | Open Policy Agent (OPA) or equivalent | Planned |
@@ -164,30 +177,31 @@ The Compose PostgreSQL image enables the `vector` extension. The extension is re
 
 No proprietary hosted LLM, vector database, object storage or workflow service is required by the target architecture. External model providers may be added later as optional adapters, never as a hard dependency.
 
-## Alpha 1 implementation
+## Alpha 3 implementation
 
 The current feature branch implements:
 
-- Company creation with vision, mission and values.
-- Persistent graph nodes and typed edges.
-- Tenant-filtered graph snapshots.
-- Append-only company events with SHA-256 hash chaining and a chain verification API.
-- Valkey Pub/Sub notifications and a server-sent event endpoint for connected graph clients.
-- Company Graph as the default UI workspace.
-- First-run company creation and a proposed Head of Agents node.
-- UI creation of goal, agent, work and meeting nodes.
-- UI relationship creation by selecting two nodes.
-- Node inspector, relationship inspection and recent company event list.
-- Local or S3-compatible object storage for existing workflow attachments.
-- Compose services for PostgreSQL/pgvector, Valkey and SeaweedFS.
+- Company creation with vision, mission and values; persistent graph nodes, typed edges and hash-linked company event history.
+- Valkey-backed graph updates, plus PostgreSQL-backed job submission and worker wake-up notifications.
+- Idempotent Head of Agents and six-specialist workforce bootstrap, goal decomposition, assignments and dependencies.
+- LangGraph StateGraph job execution with PostgreSQL `AsyncPostgresSaver` checkpoints keyed by durable job ID.
+- PostgreSQL job leases, worker heartbeats, fencing, bounded retries/backoff, expired-lease recovery and cooperative cancellation.
+- Founder-controlled recurring company coordination in PLAN_ONLY or explicitly enabled AUTO_EXECUTE mode.
+- Local OpenAI-compatible model API through Ollama or vLLM-compatible runtimes; MOCK_INFERENCE remains the GPU-free default.
+- Official MCP Python SDK v2 Streamable HTTP client/server, role tool allow-lists, trusted identity injection and scoped internal bearer credentials.
+- Replay-safe assignment deliverables and meeting minutes in the existing local/S3 object-storage adapter.
+- Turn-based multi-agent meetings and KPI measurement history.
+- Compose services for API, horizontally scalable workers, internal MCP server, PostgreSQL/pgvector, Valkey, SeaweedFS and optional Ollama.
 
-### Explicit Alpha 1 boundaries
+### Explicit Alpha 2 boundaries
 
-The Head of Agents node is currently an **organisational role record**, not an autonomous running agent. The quick command bar is a structured graph-entry shortcut, not natural-language agent orchestration. Meeting nodes are records; there is not yet a live multi-agent meeting simulator. Agent nodes do not yet have persistent runtime loops, scheduling, durable memory or real tool execution. KPI nodes are supported as data entities, but no KPI calculation/snapshot engine exists yet.
+Alpha 3 moves long-running work into a PostgreSQL-backed job queue and LangGraph checkpoint thread. Workers claim jobs with renewable leases, recover expired leases after process loss, and use replay-safe writes for task/meeting outputs. Valkey is a wake-up and notification service, not the source of truth. The founder can enable recurring PLAN_ONLY coordination or explicitly confirm AUTO_EXECUTE for scheduled assignment execution.
 
-Authentication, OIDC, tenant authorisation, RBAC, production approvals, durable LangGraph checkpoints, official MCP transport, pgvector retrieval and production telemetry are not complete. Development defaults and demo credentials must be replaced before a shared deployment.
+The MCP v2 service and client use Streamable HTTP and per-agent role allow-lists. The current bearer-token verifier is a private-development mechanism; it is not a Keycloak/OIDC identity integration. Company tenant/actor IDs are still caller-supplied, so the APIs and MCP endpoint are not a production multi-tenant security boundary. External side-effect tools remain unavailable. MOCK_INFERENCE is still enabled by default and produces labelled development placeholders, not genuine model output.
 
-## API surface added in Alpha 1
+The checkpointed StateGraph covers job-level orchestration; it does not yet provide automatic process-level cancellation of an in-flight model request. Cancellation is cooperative between tasks/meeting turns and after model responses. Calendar/voice meetings, automatic KPI collection, semantic retrieval, model/prompt rollback, budgets, rate limits and production observability remain future work.
+
+## API surface added in Alpha 1–3
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -200,7 +214,22 @@ Authentication, OIDC, tenant authorisation, RBAC, production approvals, durable 
 | `GET` | `/v2/companies/{id}/events` | Read durable company event history |
 | `GET` | `/v2/companies/{id}/events/verify` | Verify the company event hash chain |
 | `GET` | `/v2/companies/{id}/events/stream` | Receive Valkey-backed live graph notifications |
+| `POST` | `/v2/companies/{id}/workforce/bootstrap` | Create or reconcile the persistent starter workforce |
+| `POST` | `/v2/companies/{id}/goals/{goal_id}/plan` | Head of Agents decomposes a goal into assignments |
+| `POST` | `/v2/companies/{id}/goals/{goal_id}/execute` | Execute assignments sequentially in dependency order |
+| `POST` | `/v2/companies/{id}/work/{work_id}/execute` | Execute or explicitly retry one assignment |
+| `POST` | `/v2/companies/{id}/meetings/{meeting_id}/convene` | Convene agents and persist meeting minutes |
+| `POST` | `/v2/companies/{id}/kpis/{kpi_id}/measure` | Record a source-backed KPI measurement |
+| `POST` | `/v2/companies/{id}/artifacts` | Store a company document or deliverable in object storage |
+| `GET` | `/v2/companies/{id}/artifacts/{object_id}` | Download an object after tenant-context lookup (OIDC authorization is not implemented yet) |
+| `POST` | `/v2/companies/{id}/goals/{goal_id}/jobs` | Queue a goal-plan or goal-execution job |
+| `POST` | `/v2/companies/{id}/work/{work_id}/jobs` | Queue one assignment |
+| `POST` | `/v2/companies/{id}/meetings/{meeting_id}/jobs` | Queue a meeting |
+| `GET` | `/v2/companies/{id}/jobs` | List durable workforce jobs |
+| `GET` | `/v2/companies/{id}/jobs/{job_id}` | Read job status/result/retries |
+| `POST` | `/v2/companies/{id}/jobs/{job_id}/cancel` | Request cooperative cancellation |
+| `GET` / `PUT` | `/v2/companies/{id}/coordination` | Read/update recurring founder coordination policy |
 
 ## Security and operational caveats
 
-Alpha 1 is a development build. Tenant IDs and actor IDs are request-supplied values, not authenticated identities. The graph API must not be exposed to untrusted users until identity, authorisation and company-scoped access checks are implemented. Valkey Pub/Sub is best-effort, and the durable event history remains in PostgreSQL. The hash chain is not a WORM control. Development S3 credentials in Compose are examples only. The internal Docker network does not prove a fully air-gapped or production-secure environment.
+Alpha 3 remains a development build. Tenant IDs and actor IDs in the current APIs are request-supplied values, not authenticated identities. The graph API must not be exposed to untrusted users until identity, authorisation and company-scoped access checks are implemented. Valkey Pub/Sub is best-effort, and the durable event history remains in PostgreSQL. The hash chain is not a WORM control. Development S3 credentials in Compose are examples only. The internal Docker network does not prove a fully air-gapped or production-secure environment.

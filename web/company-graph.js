@@ -9,6 +9,10 @@
     connectSource: null,
     eventSource: null,
     pollHandle: null,
+    jobsPollHandle: null,
+    jobsLoading: false,
+    jobs: [],
+    coordination: null,
     loading: false,
   };
 
@@ -46,6 +50,10 @@
       }
       state.company = state.companies[0];
       $("#graph-company-picker").value = state.company.id;
+      await api(`/v2/companies/${state.company.id}/workforce/bootstrap`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
       await loadGraph(true);
     } catch (error) {
       setWorkspaceVisible(false);
@@ -75,7 +83,7 @@
       }),
     });
     const parent = nodeType === "agent"
-      ? state.graph.nodes.find((item) => item.type === "agent" && item.data?.role === "chief_of_staff")
+      ? state.graph.nodes.find((item) => item.type === "agent" && ["chief_of_staff", "head_of_agents"].includes(item.data?.role))
       : null;
     const selectedGoal = nodeType === "kpi"
       ? state.graph.nodes.find((item) => item.id === state.selectedId && item.type === "goal")
@@ -106,7 +114,9 @@
       state.graph = await api(`/v2/companies/${state.company.id}/graph?tenant_id=${encodeURIComponent(state.company.tenant_id)}`);
       renderGraph();
       await loadEvents();
+      await loadJobs();
       if (reconnect) connectLiveEvents();
+      startJobsPolling();
     } catch (error) {
       showError(error.message);
     } finally {
@@ -235,6 +245,130 @@
     if (state.selectedId) selectNode(state.selectedId, false);
   }
 
+  async function loadJobs() {
+    if (!state.company || state.jobsLoading) return;
+    state.jobsLoading = true;
+    try {
+      const tenant = encodeURIComponent(state.company.tenant_id);
+      const [jobsResult, coordinationResult] = await Promise.all([
+        api(`/v2/companies/${state.company.id}/jobs?tenant_id=${tenant}&limit=30`),
+        api(`/v2/companies/${state.company.id}/coordination?tenant_id=${tenant}`),
+      ]);
+      state.jobs = jobsResult.jobs || [];
+      state.coordination = coordinationResult.coordination || null;
+      renderJobs();
+      renderCoordination();
+    } catch (error) {
+      const target = $("#company-job-list");
+      if (target) target.innerHTML = `<div class="graph-error">${escapeHtml(error.message)}</div>`;
+    } finally {
+      state.jobsLoading = false;
+    }
+  }
+
+  function renderJobs() {
+    const target = $("#company-job-list");
+    if (!target) return;
+    const jobs = state.jobs || [];
+    $("#graph-job-count").textContent = `${jobs.length} jobs`;
+    target.innerHTML = jobs.slice(0, 25).map((job) => {
+      const status = String(job.status || "PENDING").toLowerCase();
+      const title = job.payload?.source === "company_coordination"
+        ? "Head of Agents · recurring coordination"
+        : `${String(job.kind || "job").replaceAll("_", " ")}`;
+      const stamp = job.created_at ? new Date(job.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      const attempts = `attempt ${job.attempts}/${job.max_attempts}`;
+      const canCancel = ["PENDING", "RUNNING"].includes(job.status);
+      return `<div class="company-job">
+        <div class="company-job-main">
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(job.target_id)} · ${escapeHtml(stamp)} · ${escapeHtml(attempts)}</small>
+        </div>
+        <span class="company-job-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
+        ${canCancel ? `<button class="graph-tool-btn" data-cancel-job="${escapeHtml(job.job_id)}">Cancel</button>` : ""}
+      </div>`;
+    }).join("") || '<div class="empty-state">No durable jobs yet. Plan or execute a goal to enqueue one.</div>';
+  }
+
+  function renderCoordination() {
+    const policy = state.coordination;
+    const stateLabel = $("#coordination-state");
+    if (!stateLabel) return;
+    stateLabel.textContent = !policy?.enabled
+      ? "Not scheduled"
+      : `${policy.mode.replaceAll("_", " ")} · every ${Math.round(policy.interval_seconds / 60)} min`;
+    $("#coordination-plan-only")?.classList.toggle("is-enabled", policy?.enabled && policy?.mode === "PLAN_ONLY");
+    $("#coordination-auto-execute")?.classList.toggle("is-enabled", policy?.enabled && policy?.mode === "AUTO_EXECUTE");
+    $("#coordination-stop")?.classList.toggle("is-enabled", !policy?.enabled);
+  }
+
+  function startJobsPolling() {
+    if (state.jobsPollHandle) return;
+    state.jobsPollHandle = window.setInterval(() => loadJobs(), 2500);
+  }
+
+  function stopJobsPolling() {
+    if (!state.jobsPollHandle) return;
+    window.clearInterval(state.jobsPollHandle);
+    state.jobsPollHandle = null;
+  }
+
+  async function configureCoordination(enabled, mode = "PLAN_ONLY") {
+    if (!state.company) return;
+    if (enabled && mode === "AUTO_EXECUTE") {
+      const approved = window.confirm(
+        "Enable continuous goal execution? The worker will run assignments for active goals without asking before each task. External financial, legal and customer-facing actions remain unavailable in this alpha."
+      );
+      if (!approved) return;
+    }
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/coordination`, {
+        method: "PUT",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          enabled,
+          mode,
+          interval_seconds: 300,
+        }),
+      });
+      state.coordination = result.coordination;
+      renderCoordination();
+      toast(!enabled ? "Head of Agents coordination paused" : `Coordination enabled · ${mode.replaceAll("_", " ")}`);
+      await loadJobs();
+    } catch (error) { toast(error.message); }
+  }
+
+  async function enqueueGoalJob(goalId, kind) {
+    if (!state.company) return;
+    const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/jobs`, {
+      method: "POST",
+      body: JSON.stringify({
+        tenant_id: state.company.tenant_id,
+        actor_id: "founder",
+        kind,
+        idempotency_key: `founder-ui:${kind}:${goalId}:${Math.floor(Date.now() / 30000)}`,
+      }),
+    });
+    await loadJobs();
+    return result;
+  }
+
+  $("#company-job-list")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-cancel-job]");
+    if (!button || !state.company) return;
+    button.disabled = true;
+    try {
+      await api(`/v2/companies/${state.company.id}/jobs/${button.dataset.cancelJob}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      toast("Cancellation requested");
+      await loadJobs();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  });
+
   function onNodeClick(nodeId) {
     if (state.connectMode) {
       if (!state.connectSource) {
@@ -310,6 +444,32 @@
       $("#graph-mode-label").textContent = "SELECT SECOND NODE";
       toast("Select another dot to connect it");
     });
+
+    const actions = [];
+    if (node.type === "goal") {
+      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
+      actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
+    }
+    if (node.type === "work" && node.status !== "COMPLETED") {
+      actions.push('<button class="primary-btn" id="inspect-execute-work">Execute this assignment</button>');
+    }
+    if (node.type === "meeting" && node.status !== "COMPLETED") {
+      actions.push('<button class="primary-btn" id="inspect-convene-meeting">Convene agent meeting</button>');
+    }
+    if (node.type === "kpi") {
+      actions.push('<button class="secondary-btn" id="inspect-record-kpi">Record KPI measurement</button>');
+    }
+    if (node.data?.download_endpoint) {
+      actions.push(`<a class="secondary-btn graph-download-link" href="${escapeHtml(node.data.download_endpoint)}" target="_blank" rel="noopener">Download stored output</a>`);
+    }
+    if (actions.length) {
+      $("#graph-inspector").insertAdjacentHTML("beforeend", `<div class="inspector-divider"></div><div class="inspector-section-title">ACTIONS</div><div class="inspector-actions">${actions.join("")}</div>`);
+    }
+    $("#inspect-plan-goal")?.addEventListener("click", () => planGoal(nodeId));
+    $("#inspect-run-goal")?.addEventListener("click", () => runGoal(nodeId));
+    $("#inspect-execute-work")?.addEventListener("click", () => executeWork(nodeId, node.status === "FAILED"));
+    $("#inspect-convene-meeting")?.addEventListener("click", () => conveneMeetingNode(nodeId));
+    $("#inspect-record-kpi")?.addEventListener("click", () => recordKpi(nodeId));
     if (rerender) renderGraph();
   }
 
@@ -374,32 +534,14 @@
       state.companies.push(company);
       renderCompanyPicker();
       setWorkspaceVisible(true);
-      const head = await api(`/v2/companies/${company.id}/nodes`, {
+      await api(`/v2/companies/${company.id}/workforce/bootstrap`, {
         method: "POST",
-        body: JSON.stringify({
-          tenant_id: company.tenant_id,
-          actor_id: "founder",
-          node_type: "agent",
-          name: "Head of Agents",
-          description: "Proposed Chief of Staff role. Runtime activation and delegated tool permissions are not configured yet.",
-          status: "PROPOSED",
-          data: { role: "chief_of_staff", runtime_status: "not_configured", authority: "coordination_only" },
-        }),
-      });
-      await api(`/v2/companies/${company.id}/edges`, {
-        method: "POST",
-        body: JSON.stringify({
-          tenant_id: company.tenant_id,
-          actor_id: "founder",
-          source_node_id: company.id,
-          target_node_id: head.id,
-          relationship: "owns",
-          data: {},
-        }),
+        body: JSON.stringify({ tenant_id: company.tenant_id, actor_id: "founder" }),
       });
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
-      toast("Your company graph has been created");
+      startJobsPolling();
+      toast("Your company graph and virtual workforce have been created");
     } catch (error) {
       toast(error.message);
     } finally {
@@ -514,6 +656,85 @@
     }
   }
 
+  async function planGoal(goalId) {
+    if (!state.company) return;
+    try {
+      const job = await enqueueGoalJob(goalId, "goal_plan");
+      selectNode(goalId);
+      toast(job.deduplicated ? "A plan job is already queued or running" : `Goal planning queued · ${job.job_id.slice(0, 8)}`);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function runGoal(goalId) {
+    if (!state.company) return;
+    const button = $("#inspect-run-goal");
+    if (button) { button.disabled = true; button.textContent = "Queueing…"; }
+    try {
+      const job = await enqueueGoalJob(goalId, "goal_execution");
+      toast(job.deduplicated ? "Goal execution is already queued or running" : `Goal execution queued · ${job.job_id.slice(0, 8)}`);
+      await loadGraph();
+      selectNode(goalId);
+    } catch (error) { toast(error.message); }
+    finally { if (button) { button.disabled = false; button.textContent = "Queue goal workflow"; } }
+  }
+
+  async function executeWork(workId) {
+    if (!state.company) return;
+    try {
+      const job = await api(`/v2/companies/${state.company.id}/work/${workId}/jobs`, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          idempotency_key: `founder-ui:work:${workId}:${Math.floor(Date.now() / 30000)}`,
+        }),
+      });
+      await loadJobs();
+      selectNode(workId);
+      toast(job.deduplicated ? "This assignment is already queued or running" : `Assignment queued · ${job.job_id.slice(0, 8)}`);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function conveneMeetingNode(meetingId) {
+    if (!state.company) return;
+    try {
+      const job = await api(`/v2/companies/${state.company.id}/meetings/${meetingId}/jobs`, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          idempotency_key: `founder-ui:meeting:${meetingId}:${Math.floor(Date.now() / 30000)}`,
+        }),
+      });
+      await loadJobs();
+      selectNode(meetingId);
+      toast(job.deduplicated ? "This meeting is already queued or running" : `Meeting queued · ${job.job_id.slice(0, 8)}`);
+    } catch (error) { toast(error.message); }
+  }
+
+  async function recordKpi(kpiId) {
+    const actual = askForName("Enter the actual KPI value", "0");
+    if (actual === null || !Number.isFinite(Number(actual))) return;
+    const source = askForName("Where did this measurement come from?", "Founder-reported measurement");
+    if (!source) return;
+    const evidence = askForName("Add a short evidence note (optional)", "") || "";
+    try {
+      await api(`/v2/companies/${state.company.id}/kpis/${kpiId}/measure`, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          actual_value: Number(actual),
+          source,
+          evidence,
+        }),
+      });
+      await loadGraph();
+      selectNode(kpiId);
+      toast("KPI measurement recorded in company history");
+    } catch (error) { toast(error.message); }
+  }
+
   function handleCommand() {
     const input = $("#company-command-input");
     const command = input.value.trim();
@@ -521,6 +742,16 @@
     const lower = command.toLowerCase();
     if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
       addGoal(command.split(":").slice(1).join(":").trim());
+    } else if (lower.startsWith("plan:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
+      if (goal) planGoal(goal.id);
+      else toast("Select a goal dot or use plan: with an existing goal name");
+    } else if (lower.startsWith("run:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
+      if (goal) runGoal(goal.id);
+      else toast("Select a goal dot or use run: with an existing goal name");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
       if (name) {
@@ -552,6 +783,7 @@
     state.company = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
+    stopJobsPolling();
     $("#company-create-form").reset();
     setWorkspaceVisible(false);
   });
@@ -570,12 +802,16 @@
     toast(state.connectMode ? "Select the first dot, then the second dot" : "Connect mode cancelled");
   });
   $("#graph-refresh")?.addEventListener("click", () => loadGraph());
+  $("#coordination-plan-only")?.addEventListener("click", () => configureCoordination(true, "PLAN_ONLY"));
+  $("#coordination-auto-execute")?.addEventListener("click", () => configureCoordination(true, "AUTO_EXECUTE"));
+  $("#coordination-stop")?.addEventListener("click", () => configureCoordination(false, "PLAN_ONLY"));
   $("#graph-company-picker")?.addEventListener("change", async (event) => {
     state.company = state.companies.find((company) => company.id === event.target.value);
     state.selectedId = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
     await loadGraph(true);
+    startJobsPolling();
   });
   $("#company-command-send")?.addEventListener("click", handleCommand);
   $("#company-command-input")?.addEventListener("keydown", (event) => {

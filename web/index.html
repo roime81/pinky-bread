@@ -79,6 +79,23 @@
               <div class="inspector-empty"><span>◎</span><strong>Select a dot</strong><p>Inspect ownership, assignments, dependencies, activity and evidence.</p></div>
             </aside>
           </div>
+          <section class="graph-runtime-panel" id="workforce-runtime-panel">
+            <div class="graph-panel-heading">
+              <div><div class="eyebrow">DURABLE WORKFORCE</div><strong>Head of Agents coordination</strong></div>
+              <span id="coordination-state">Not scheduled</span>
+            </div>
+            <div class="runtime-controls">
+              <button class="graph-tool-btn" id="coordination-plan-only">Enable planning loop</button>
+              <button class="graph-tool-btn" id="coordination-auto-execute">Enable auto-execution</button>
+              <button class="graph-tool-btn" id="coordination-stop">Pause coordination</button>
+              <span class="runtime-note">PLAN_ONLY creates work plans. AUTO_EXECUTE runs assignments; use only when you approve that level of autonomy.</span>
+            </div>
+            <div class="graph-panel-heading runtime-queue-heading">
+              <div><div class="eyebrow">POSTGRESQL JOB QUEUE</div><strong>Worker activity</strong></div>
+              <span id="graph-job-count">0 jobs</span>
+            </div>
+            <div id="company-job-list" class="company-job-list"><div class="empty-state">Durable jobs will appear here.</div></div>
+          </section>
           <div class="company-bottom-grid">
             <section class="graph-activity-panel">
               <div class="graph-panel-heading"><div><div class="eyebrow">COMPANY EVENT LOG</div><strong>What is changing</strong></div><span id="graph-event-count">0 events</span></div>
@@ -150,7 +167,7 @@
         <section class="panel"><div class="panel-head"><div><h2>Execution events</h2><p>Select a workflow from the list to inspect its audit chain.</p></div><select id="audit-workflow-select" class="audit-select"><option value="">Select workflow…</option></select></div><div id="audit-events" class="audit-events"><div class="empty-state">Choose a workflow to view its event trail.</div></div></section>
       </section>
 
-      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.1</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
+      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.2</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
     </main>
 
     <aside class="right-rail">

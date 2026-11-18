@@ -1,6 +1,6 @@
 # Pinky Bread 2.0 — Delivery Roadmap
 
-Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 lays down the persisted company graph and makes it the main UI. It does not claim that the Head of Agents, autonomous meetings or complete business operations are already implemented.
+Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 introduced the persisted company graph; Alpha 2 added the specialist workforce and goal-to-result flow; Alpha 3 adds PostgreSQL-backed jobs, LangGraph checkpoints, lease-based restart recovery, Valkey coordination, recurring founder-controlled Head-of-Agents schedules and MCP v2 for local model tools. Authenticated multi-company governance, policy enforcement and production operations remain future milestones.
 
 ## Programme principles
 
@@ -25,7 +25,7 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 - [x] Node inspector and interactive relationship creation
 - [x] Local and S3-compatible workflow artifact storage adapter
 - [x] PostgreSQL pgvector extension enabled for future semantic memory
-- [ ] CI verification of the feature branch and runtime Compose smoke test
+- [x] CI verification of Alpha 1 code branch (Compose runtime smoke test remains pending)
 
 ## Phase 2 — Identity, company boundaries and governance
 
@@ -42,49 +42,51 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 
 ## Phase 3 — Durable agent workforce
 
-- Replace the demo dispatcher with LangGraph StateGraph workflows.
-- Use PostgreSQL-backed checkpoints and tested restart/resume semantics.
-- Introduce a persistent Agent Runtime record: agent identity, role, persona, skills, model selection, memory scope, current assignments, schedule, health and version.
-- Implement the Head of Agents as an actual orchestrator with its own model policy, planning cycle and delegated authority.
-- Introduce specialist agents for Strategy, Product, Technology, Marketing, Sales, Operations, Finance and Administration.
-- Build a goal decomposition service that creates proposed work items, dependencies, owners and acceptance criteria.
-- Support an agent being assigned to multiple goals without copying or forking the agent identity.
-- Add bounded retries, cancellation, timeout, concurrency limits, budget limits and idempotent execution.
-- Add model, prompt, agent, skill and tool version pinning with rollback.
+- [x] Replace the request-driven dispatcher with LangGraph StateGraph job workflows.
+- [x] Use PostgreSQL-backed `AsyncPostgresSaver` checkpoints keyed by durable job ID and test restart/resume semantics.
+- [x] Persist reusable AI employee identities with role, persona, skills, local model selection, runtime mode, health/status and version in the company graph.
+- [x] Implement a Head of Agents planning service using a local model API (or explicit mock planner) to decompose goals into validated work.
+- [x] Bootstrap specialist agents for Strategy, Product, Technology, Marketing, Operations and Finance under the Head of Agents.
+- [x] Persist assigned work nodes, owners, acceptance criteria, dependencies and many-to-many agent-to-goal relationships.
+- [x] Add PostgreSQL queue rows with idempotency and one-active-job constraints, worker leases, heartbeats, fencing, retry/backoff and cancellation.
+- [x] Recover expired worker leases and resume job execution through the same LangGraph checkpoint thread.
+- [x] Add founder-controlled recurring `PLAN_ONLY` and explicitly enabled `AUTO_EXECUTE` coordination.
+- [x] Store replay-safe deliverables and meeting minutes in the local/S3 object-store adapter.
+- [ ] Add token/cost budgets, tenant/agent concurrency quotas, model/prompt/skill rollback and capacity-aware scheduling.
 
-**Exit criteria:** an end-to-end goal is decomposed into persisted assignments, independently executed, resumed after restart and reconciled into the graph without duplicate work.
-
+**Exit criteria:** a durable end-to-end goal is decomposed, assigned, executed, resumed after process loss, and reconciled without duplicate jobs, outputs or graph nodes.
 ## Phase 4 — Official tools and open integrations
 
-- Replace the MCP-style demo adapter with the official MCP Python SDK.
-- Support MCP stdio and Streamable HTTP transports with authenticated server identities.
-- Store tool definitions, scopes, versions, grants and execution receipts.
-- Add a tool sandbox and approval policy for external side effects.
-- Add open-source connectors for email, calendar, documents, CRM and issue/work tracking.
-- Keep commercial APIs optional behind pluggable interfaces.
-- Add integration health, credential rotation and audit trails.
+- [x] Replace the workforce demo adapter with the official MCP Python SDK v2 and Streamable HTTP server/client.
+- [x] Discover MCP tools dynamically and filter by agent role allow-list before exposing them to the local model API.
+- [x] Inject company, tenant and agent identity from the runtime rather than model-generated tool arguments.
+- [x] Require workforce:enqueue for MCP job submission; require founder-enabled AUTO_EXECUTE before MCP goal execution.
+- [ ] Replace the static internal development bearer verifier with Keycloak/OIDC JWT/JWKS or introspection validation.
+- [ ] Store tool definitions, grants, versions, approvals and execution receipts in the company database.
+- [ ] Add sandboxed external connectors for email, calendar, documents, CRM and issue/work tracking.
+- [ ] Keep commercial APIs optional behind pluggable interfaces; add integration health and credential rotation.
 
 **Exit criteria:** an agent can discover only its granted tools, call an approved tool, record evidence and recover safely from timeout or duplicate submission.
 
 ## Phase 5 — Virtual workplace and meetings
 
-- Add real meeting records with agenda, meeting type, participants, facilitator, scheduled time, attendance, minutes and outcome.
-- Implement turn-based multi-agent discussion; each contribution is linked to the meeting, speaker agent, agenda item and referenced evidence.
-- Support daily stand-up, scrum planning, review, retrospective, alignment and urgent meetings.
-- Allow the founder to join by text first; add optional local speech-to-text and text-to-speech later.
-- Convert decisions into assignments with explicit owners, due dates and acceptance criteria.
-- Support cross-department meetings and conflict escalation to the Head of Agents.
-- Add meeting summaries, action-item tracking and commitment follow-up.
+- [x] Persist meeting agenda, meeting type, selected participants, facilitator, state, turn-by-turn contributions and completion timestamps.
+- [x] Run a turn-based multi-agent text discussion and persist Markdown minutes in object storage with graph references.
+- [ ] Add calendar scheduling, recurring stand-ups, scrum planning/review/retrospective templates and reminders.
+- [ ] Allow the founder to join live by text; add optional local speech-to-text and text-to-speech later.
+- [ ] Extract proposed decisions and action items into reviewable graph nodes and assignments.
+- [ ] Add cross-department conflict escalation, commitment tracking and follow-up.
 
 **Exit criteria:** a meeting produces reviewable decisions and traceable tasks; the meeting itself does not silently execute consequential actions.
 
 ## Phase 6 — Goal, KPI and work management
 
 - Add goal hierarchy and alignment across company, department and team objectives.
-- Add KPI definitions: formula, unit, target, threshold, reporting period, source and accountable owner.
-- Store time-series KPI snapshots and explain changes from source events.
-- Implement task states, dependencies, blocker propagation, due dates and recurrence.
-- Add workload and capacity views for agents.
+- [x] Record KPI measurements with numeric value, target comparison, source, evidence, timestamp and a bounded measurement history.
+- [x] Derive goal work-completion percentage from persisted assignment states.
+- [ ] Add validated KPI definitions: formula, unit, target, threshold, reporting period, source and accountable owner.
+- [ ] Add automated KPI collectors and time-series snapshots explainable from source events.
+- [ ] Add due dates, recurrence, automatic blocker propagation, workload and agent capacity views.
 - Support project plans, milestones, release gates and deliverable acceptance.
 - Trace every result to its goal and the work and agents that produced it.
 - Add planned-vs-actual budget and operational cost tracking.
@@ -109,9 +111,12 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 l
 - Add alerts, dashboards, service-level objectives and runbooks.
 - Add database migration management, backup/restore tests and disaster-recovery procedures.
 - Add SeaweedFS lifecycle, replication and recovery policy for retained deliverables.
-- Add Valkey persistence/HA configuration where needed; PostgreSQL remains the durable event source.
-- Add load testing, security tests, SBOM, dependency scanning and signed images.
-- Support worker pools and scale-out agent execution.
+- [x] Add a separate workforce worker service with PostgreSQL-backed job state and Valkey wake-up coordination.
+- [x] Configure Compose for horizontally scalable workers; PostgreSQL leases coordinate replicas.
+- [ ] Add OpenTelemetry traces for job, graph, model and MCP calls; Prometheus metrics and Grafana dashboards.
+- [ ] Add alerts, runbooks, backup/restore tests and disaster-recovery procedures.
+- [ ] Add Valkey HA/persistence and SeaweedFS replication/retention policy where required.
+- [ ] Add load testing, security tests, SBOM, dependency scanning and signed images.
 
 **Exit criteria:** recovery and observability are tested under service, queue, model and storage failures.
 
@@ -134,4 +139,4 @@ Pinky Bread 2.0 should not be called complete until:
 
 ## Suggested next engineering slice
 
-After Alpha 1 CI is green, implement **Phase 2 identity and company boundaries** before giving the Head of Agents broad autonomy. Then add durable LangGraph orchestration and official MCP tools. This avoids building a large autonomous workforce on top of unauthenticated development endpoints.
+Alpha 3 adds durable job execution and a standards-based internal MCP boundary. The next priority is **Phase 2 identity and company boundaries**: replace caller-supplied tenant/actor IDs and static MCP tokens with Keycloak/OIDC, membership checks, RBAC and per-agent grants before exposing Pinky Bread to untrusted users or enabling consequential external tools. Then add budget/policy enforcement, operational telemetry and the first sandboxed MCP connectors.

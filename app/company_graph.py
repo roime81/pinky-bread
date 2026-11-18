@@ -451,3 +451,50 @@ def verify_event_chain(*, company_id: str, tenant_id: str) -> dict[str, Any] | N
             return {"valid": False, "checked_events": index, "failed_event_no": item["event_no"]}
         previous = item["entry_hash"]
     return {"valid": True, "checked_events": len(events), "latest_hash": previous}
+
+
+def update_node(
+    *,
+    company_id: str,
+    tenant_id: str,
+    actor_id: str,
+    node_id: str,
+    status: str | None = None,
+    data_patch: dict[str, Any] | None = None,
+    description: str | None = None,
+) -> dict[str, Any] | None:
+    """Update a graph node and append the change to the company event chain."""
+    with SessionLocal() as db:
+        node = db.query(CompanyGraphNode).filter(
+            CompanyGraphNode.node_id == node_id,
+            CompanyGraphNode.company_id == company_id,
+            CompanyGraphNode.tenant_id == tenant_id,
+        ).first()
+        if node is None:
+            return None
+        if status is not None:
+            node.status = status
+        if description is not None:
+            node.description = description
+        patch = data_patch or {}
+        if patch:
+            node.data = {**(node.data or {}), **patch}
+        node.updated_at = utcnow()
+        event = _append_event(
+            db,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            event_type=f"{node.node_type}.updated",
+            payload={
+                "node_id": node_id,
+                "node_type": node.node_type,
+                "status": node.status,
+                "changed_data": patch,
+            },
+        )
+        db.commit()
+        result = _node_dict(node)
+        event_data = _event_dict(event)
+    _notify(event_data)
+    return result

@@ -186,20 +186,20 @@ async def stream_company_events(
         pubsub = client.pubsub()
         try:
             await pubsub.subscribe(f"pinky-bread:company:{company_id}")
-            yield "event: connected\\ndata: {}\\n\\n"
+            yield "event: connected\ndata: {}\n\n"
             while True:
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
                 if message and message.get("type") == "message":
                     payload = message.get("data", "{}")
-                    yield f"event: graph_event\\ndata: {payload}\\n\\n"
+                    yield f"event: graph_event\ndata: {payload}\n\n"
                 else:
-                    yield ": keep-alive\\n\\n"
+                    yield ": keep-alive\n\n"
                 await asyncio.sleep(0.05)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception:
             # PostgreSQL event history remains available through the REST endpoint.
-            yield f"event: broker_unavailable\\ndata: {{\\"message\\":\\"{str(exc)[:180]}\\"}}\\n\\n"
+            yield "event: broker_unavailable\ndata: notification service unavailable\n\n"
         finally:
             try:
                 await pubsub.aclose()

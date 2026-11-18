@@ -404,6 +404,13 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 | `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
 | `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/convene` | Convene a turn-based agent meeting and store minutes |
 | `POST` | `/v2/companies/{company_id}/kpis/{kpi_id}/measure` | Record a KPI measurement and provenance |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/jobs` | Queue a durable goal-plan or execution job |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/jobs` | Queue one durable assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/jobs` | Queue a meeting job |
+| `GET` | `/v2/companies/{company_id}/jobs` | List durable jobs |
+| `GET` | `/v2/companies/{company_id}/jobs/{job_id}` | Read a job's state/result/retries |
+| `POST` | `/v2/companies/{company_id}/jobs/{job_id}/cancel` | Request cooperative cancellation |
+| `GET` / `PUT` | `/v2/companies/{company_id}/coordination` | Read/configure recurring Head-of-Agents coordination |
 | `GET` | `/v2/companies/{company_id}/events` | Read company event history |
 | `GET` | `/v2/companies/{company_id}/events/verify` | Verify the company event hash chain |
 | `POST` | `/v2/companies/{company_id}/artifacts` | Store a company document or deliverable |
@@ -520,6 +527,14 @@ The application reads environment variables from the environment and `.env` file
 
 Do not commit a real `.env` file, API key, password, certificate, or private model credential.
 
+## Connect the local model to MCP
+
+The Compose stack starts an internal MCP v2 Streamable HTTP server. The local model client discovers its tools dynamically and then filters those tools by the active agent role. The model cannot choose its own company, tenant or agent ID; those values are injected by the runtime.
+
+Before using non-mock inference, set `MCP_ENABLED=true` and replace `MCP_API_TOKEN` and `MCP_READ_TOKEN` in `.env` with separate long random values. The MCP port is internal to Compose and is not published to the host. The current verifier is for private development, not production OIDC; see [the durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) before exposing it.
+
+From the Company Graph workspace, **Enable planning loop** lets the Head of Agents create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
+
 ## Run tests
 
 Create and activate the virtual environment, install requirements, then run:
@@ -535,7 +550,7 @@ make install
 make test
 ```
 
-The test suite covers agent listing, existing workflow hand-offs and approval behavior, privacy masking, company graph persistence, tenant and cross-company relationship checks, graph event-chain verification, many-to-many agent-to-goal links, idempotent workforce bootstrap/planning, dependency-aware goal execution, deliverable storage/download, meeting persistence, KPI measurement history and local object-store safety.
+The test suite covers the original workflow and company graph, workforce planning/execution, artifact storage, meetings, KPI measurements, PostgreSQL job de-duplication and leases, lease-expiry recovery, recurring coordination, LangGraph PostgreSQL checkpoint replay and MCP SDK v2 tool discovery/identity scoping.
 
 ## Project structure
 
@@ -545,6 +560,10 @@ pinky-bread/
 │   ├── database.py       # SQLAlchemy models and persistence helpers
 │   ├── engine.py         # Legacy workflow routing, execution and approval flow
 │   ├── workforce.py      # Head of Agents, goal planning, task execution, meetings and KPIs
+│   ├── durable_runtime.py # PostgreSQL jobs, LangGraph checkpoints, worker leases and coordination
+│   ├── worker.py          # Durable workforce worker entrypoint
+│   ├── mcp_server.py      # Internal MCP v2 server with scoped tools
+│   ├── mcp_client.py      # Role-scoped MCP client for local model tool calls
 │   ├── company_graph.py  # Company graph nodes, edges, updates and hash-linked events
 │   ├── company_api.py    # Versioned /v2 company and workforce endpoints
 │   ├── object_store.py   # Local and S3-compatible object storage adapter
@@ -564,6 +583,7 @@ pinky-bread/
 │   ├── OPEN_SOURCE_STACK_2.0.md  # Open-source components and status
 │   ├── ROADMAP_2.0.md            # Phased delivery programme
 │   ├── WORKFORCE_RUNTIME_2.0.md  # Goal-to-result workforce runtime guide
+│   ├── DURABLE_WORKFORCE_RUNTIME_2.0.md # Durable jobs, checkpoints, MCP and local models
 │   └── ARCHITECTURE.md           # Legacy MVP architecture
 ├── tests/
 │   ├── test_engine.py            # Legacy API/workflow behavior tests
@@ -589,8 +609,8 @@ Pinky Bread is a prototype. Before any enterprise or regulated deployment, addre
 - **Identity and access:** implement OIDC/JWT validation, user and tenant authorization, role-based tool scopes, and authenticated approver identity. The current `approver_id` is user-supplied and is not verified.
 - **Tenant isolation:** enforce tenant ownership on every workflow, artifact and approval request. The `tenant_id` field is stored but is not an authorization boundary.
 - **Privacy:** replace regex-only masking with tested local PII/PHI detection, controlled tokenization, secure re-identification policy, encrypted sensitive state, retention controls and data minimization. Original prompts are persisted in workflow records.
-- **MCP:** implement the official MCP SDK transport and authenticated tool servers. The included gateway is an in-process simulation, not a production MCP client/server.
-- **Workflow durability:** migrate the custom dispatcher to LangGraph or another durable workflow engine with checkpointing, recovery, retry and idempotency controls.
+- **MCP identity:** replace the internal static bearer verifier with Keycloak/OIDC JWT/JWKS or token introspection, company membership checks and per-agent tool grants. The current MCP v2 server is internal-development only.
+- **Workflow durability:** LangGraph + PostgreSQL checkpoints, lease recovery and bounded retries are implemented in Alpha 3. Add budget enforcement, richer concurrency controls, prompt/model rollback and backup/restore drills.
 - **Audit integrity:** add WORM or independently protected storage, signed records, external anchoring, controlled access, and audit-chain verification tooling. Hash-linked database rows alone are not immutable.
 - **Network security:** enforce egress control, ingress restrictions, mTLS, DNS policy, registry controls and host firewall rules outside this application. A Compose `internal` network is only one deployment control.
 - **Secrets and supply chain:** use a secrets manager, trusted internal registries, image scanning, dependency pinning/SBOM, vulnerability scanning and signed artifacts.
@@ -601,7 +621,7 @@ No regulatory certification, security assurance, production air-gap verification
 
 ## Roadmap
 
-See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the implemented goal-to-result workflow. Remaining roadmap increments:
+See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
 
 1. **Durable orchestration:** LangGraph `StateGraph`, PostgreSQL checkpoints, restart recovery, bounded retries and idempotent workflow resume.
 2. **Real MCP integration:** MCP SDK server/client transport, structured tool schemas, authenticated tool identities and tool-level policy checks.

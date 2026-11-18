@@ -243,7 +243,7 @@ def create_company(
         )
         db.commit()
         result = _node_dict(node)
-            event_data = _event_dict(event)
+        event_data = _event_dict(event)
     _notify(event_data)
     return result
 

@@ -277,6 +277,9 @@ def claim_next_job(worker_id: str, lease_seconds: int = 90) -> dict[str, Any] | 
             db.rollback()
             return None
         db.commit()
+        # SessionLocal uses expire_on_commit=False; expire the pre-update ORM
+        # instance so the returned lease state is reloaded from PostgreSQL.
+        db.expire_all()
         job = db.query(WorkforceJob).filter(WorkforceJob.job_id == job.job_id).first()
         return _job_dict(job) if job else None
 

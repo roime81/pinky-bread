@@ -526,7 +526,7 @@ def _assert_coordinator_available(db, company_id: str, tenant_id: str, authority
     ).all()
     if any(
         row.node_id != except_id
-        and row.status not in {"ARCHIVED", "DISABLED"}
+        and row.status not in {"ARCHIVED", "DISABLED", "PAUSED"}
         and _agent_authority(row.data) == "COORDINATOR"
         for row in rows
     ):

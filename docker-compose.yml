@@ -51,7 +51,6 @@ services:
 
   worker:
     build: .
-    container_name: pinky-bread-worker
     command: ["python", "-m", "app.worker"]
     environment:
       APP_ENV: docker

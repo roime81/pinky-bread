@@ -220,3 +220,53 @@ class ObjectStore:
             # This development identity needs bucket administration on first run.
             # In production, pre-create the bucket and remove the Admin capability.
             client.create_bucket(Bucket=self.settings.s3_bucket)
+
+    def persist_object_idempotent(
+        self,
+        *,
+        key: str,
+        content: bytes,
+        content_type: str,
+        tenant_id: str,
+        company_id: str,
+        owner_type: str,
+        owner_id: str,
+        filename: str,
+        created_by: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Persist/reuse one object key safely when a checkpointed job is replayed."""
+        safe_key = self._safe_key(key)
+        with SessionLocal() as db:
+            existing = db.query(StoredObjectRecord).filter(
+                StoredObjectRecord.object_key == safe_key,
+                StoredObjectRecord.tenant_id == tenant_id,
+                StoredObjectRecord.company_id == company_id,
+                StoredObjectRecord.owner_type == owner_type,
+                StoredObjectRecord.owner_id == owner_id,
+            ).first()
+            if existing:
+                storage_uri = self.put_bytes(safe_key, content, content_type)
+                existing.storage_uri = storage_uri
+                existing.storage_backend = self.settings.storage_backend
+                existing.filename = Path(filename).name[:255]
+                existing.content_type = (content_type or "application/octet-stream")[:200]
+                existing.size_bytes = len(content)
+                existing.sha256 = hashlib.sha256(content).hexdigest()
+                existing.created_by = created_by
+                existing.metadata_json = metadata or {}
+                db.commit()
+                db.refresh(existing)
+                return _object_dict(existing)
+        return self.persist_object(
+            key=safe_key,
+            content=content,
+            content_type=content_type,
+            tenant_id=tenant_id,
+            company_id=company_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            filename=filename,
+            created_by=created_by,
+            metadata=metadata,
+        )

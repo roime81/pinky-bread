@@ -15,7 +15,7 @@ The founder defines the company charter:
 - Budget and approval limits
 - Desired outcomes and time horizons
 
-The founder should not have to manually coordinate every task. A future **Head of Agents** (Chief of Staff role) will translate goals into workstreams, coordinate specialist agents, convene meetings, track commitments and report exceptions. The founder remains accountable for strategic decisions and any action requiring human approval.
+The founder should not have to manually coordinate every task. The founder creates the company's agents and assigns one active agent **Coordinator** authority. That user-defined agent translates goals into workstreams, coordinates the configured team, convenes meetings, tracks commitments and reports exceptions. There is no mandatory Head of Agents persona or pre-defined department roster. The founder remains accountable for strategic decisions and any action requiring human approval.
 
 An agent is a persistent organisational identity, not a disposable chat session. The same agent may contribute to multiple goals, and a goal may be served by multiple agents. The graph therefore supports many-to-many relationships.
 
@@ -183,7 +183,8 @@ The current feature branch implements:
 
 - Company creation with vision, mission and values; persistent graph nodes, typed edges and hash-linked company event history.
 - Valkey-backed graph updates, plus PostgreSQL-backed job submission and worker wake-up notifications.
-- Idempotent Head of Agents and six-specialist workforce bootstrap, goal decomposition, assignments and dependencies.
+- Founder-defined agent lifecycle: create, edit, promote/demote, change authority and reporting lines, and archive while retaining history.
+- Dynamic coordinator planning: the selected company coordinator delegates only to the active agent IDs configured by the founder.
 - LangGraph StateGraph job execution with PostgreSQL `AsyncPostgresSaver` checkpoints keyed by durable job ID.
 - PostgreSQL job leases, worker heartbeats, fencing, bounded retries/backoff, expired-lease recovery and cooperative cancellation.
 - Founder-controlled recurring company coordination in PLAN_ONLY or explicitly enabled AUTO_EXECUTE mode.
@@ -214,7 +215,13 @@ The checkpointed StateGraph covers job-level orchestration; it does not yet prov
 | `GET` | `/v2/companies/{id}/events` | Read durable company event history |
 | `GET` | `/v2/companies/{id}/events/verify` | Verify the company event hash chain |
 | `GET` | `/v2/companies/{id}/events/stream` | Receive Valkey-backed live graph notifications |
-| `POST` | `/v2/companies/{id}/workforce/bootstrap` | Create or reconcile the persistent starter workforce |
+| `GET` | `/v2/companies/{id}/agents` | List the user-defined company workforce |
+| `POST` | `/v2/companies/{id}/agents` | Create a custom agent profile and reporting line |
+| `PATCH` | `/v2/companies/{id}/agents/{agent_id}` | Edit profile, instructions, seniority, authority or manager |
+| `POST` | `/v2/companies/{id}/agents/{agent_id}/promote` | Increase seniority |
+| `POST` | `/v2/companies/{id}/agents/{agent_id}/demote` | Decrease seniority |
+| `DELETE` | `/v2/companies/{id}/agents/{agent_id}` | Archive an agent while preserving history |
+| `POST` | `/v2/companies/{id}/workforce/bootstrap` | Legacy-compatible roster discovery; creates no predefined agents |
 | `POST` | `/v2/companies/{id}/goals/{goal_id}/plan` | Head of Agents decomposes a goal into assignments |
 | `POST` | `/v2/companies/{id}/goals/{goal_id}/execute` | Execute assignments sequentially in dependency order |
 | `POST` | `/v2/companies/{id}/work/{work_id}/execute` | Execute or explicitly retry one assignment |

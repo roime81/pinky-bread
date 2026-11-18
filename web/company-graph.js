@@ -413,6 +413,46 @@
     }
   }
 
+  async function updateAgent(node, payload) {
+    await api(`/v2/companies/${state.company.id}/nodes/${node.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder", ...payload }),
+    });
+    await loadGraph();
+    selectNode(node.id);
+  }
+
+  async function editAgent(node) {
+    const name = askForName("Agent name", node.name);
+    if (!name) return;
+    const description = askForName("Agent responsibility", node.description || node.data?.role || "");
+    if (description === null) return;
+    const provider = askForName("LLM provider", node.data?.model_configuration?.provider || "ollama");
+    if (!provider) return;
+    const model = askForName("Model identifier", node.data?.model_configuration?.model_name || "llama3.1:8b");
+    if (!model) return;
+    await updateAgent(node, {
+      name, description,
+      data_patch: { role: description, model_configuration: { provider, model_name: model } },
+    });
+    toast("Agent profile and model updated");
+  }
+
+  async function changeAgentRank(node, promote) {
+    const ranks = ["specialist", "lead", "executive"];
+    const current = ranks.indexOf(node.data?.rank || "specialist");
+    const next = ranks[Math.max(0, Math.min(ranks.length - 1, current + (promote ? 1 : -1)))];
+    const title = next === "executive" ? "Head of Agents" : next === "lead" ? "Team Lead" : "Specialist";
+    await updateAgent(node, { data_patch: { rank: next, title, role: next === "executive" ? "head_of_agents" : next } });
+    toast(`${node.name} is now ${title}`);
+  }
+
+  async function archiveAgent(node) {
+    if (!window.confirm(`Archive ${node.name}? This keeps its history but marks it inactive.`)) return;
+    await updateAgent(node, { status: "ARCHIVED", data_patch: { archived: true } });
+    toast("Agent archived");
+  }
+
   function selectNode(nodeId, rerender = true) {
     state.selectedId = nodeId;
     const node = state.graph.nodes.find((item) => item.id === nodeId);
@@ -448,6 +488,12 @@
     });
 
     const actions = [];
+    if (node.type === "agent") {
+      actions.push('<button class="secondary-btn" id="inspect-edit-agent">Edit agent & model</button>');
+      actions.push('<button class="secondary-btn" id="inspect-promote-agent">Promote agent</button>');
+      actions.push('<button class="secondary-btn" id="inspect-demote-agent">Demote agent</button>');
+      if (node.status !== "ARCHIVED") actions.push('<button class="secondary-btn" id="inspect-archive-agent">Archive agent</button>');
+    }
     if (node.type === "goal") {
       actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
       actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
@@ -467,6 +513,10 @@
     if (actions.length) {
       $("#graph-inspector").insertAdjacentHTML("beforeend", `<div class="inspector-divider"></div><div class="inspector-section-title">ACTIONS</div><div class="inspector-actions">${actions.join("")}</div>`);
     }
+    $("#inspect-edit-agent")?.addEventListener("click", () => editAgent(node).catch((error) => toast(error.message)));
+    $("#inspect-promote-agent")?.addEventListener("click", () => changeAgentRank(node, true).catch((error) => toast(error.message)));
+    $("#inspect-demote-agent")?.addEventListener("click", () => changeAgentRank(node, false).catch((error) => toast(error.message)));
+    $("#inspect-archive-agent")?.addEventListener("click", () => archiveAgent(node).catch((error) => toast(error.message)));
     $("#inspect-plan-goal")?.addEventListener("click", () => planGoal(nodeId));
     $("#inspect-run-goal")?.addEventListener("click", () => runGoal(nodeId));
     $("#inspect-execute-work")?.addEventListener("click", () => executeWork(nodeId, node.status === "FAILED"));

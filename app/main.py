@@ -12,6 +12,7 @@ from .engine import WorkflowEngine, WorkflowNotFound, WorkflowConflict
 from .registry import AgentRegistry
 from .schemas import WorkflowInvokeRequest, ApprovalRequest, ArtifactInput
 from .settings import get_settings
+from .company_api import router as company_graph_router
 
 settings = get_settings()
 registry = AgentRegistry(settings.agent_config_dir)
@@ -22,11 +23,12 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", description="Air-gapped multimodal multi-agent platform MVP", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="2.0.0-alpha.3", description="Local-first AI company and multi-agent operating system", lifespan=lifespan)
 
 
 web_dir = Path(__file__).resolve().parent.parent / "web"
 app.mount("/static", StaticFiles(directory=web_dir), name="static")
+app.include_router(company_graph_router)
 
 
 @app.get("/", response_class=HTMLResponse)

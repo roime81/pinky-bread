@@ -15,6 +15,7 @@ from .privacy import scrub_text
 from .registry import AgentRegistry
 from .schemas import WorkflowInvokeRequest, ArtifactInput
 from .settings import get_settings
+from .object_store import ObjectStore
 
 
 class WorkflowNotFound(Exception):
@@ -31,6 +32,7 @@ class WorkflowEngine:
         self.registry = registry
         self.inference = LocalInference()
         self.mcp = MCPGateway()
+        self.object_store = ObjectStore()
 
     async def invoke(self, request: WorkflowInvokeRequest) -> dict[str, Any]:
         thread_id = request.thread_id or str(uuid.uuid4())
@@ -220,8 +222,6 @@ class WorkflowEngine:
         records: list[dict] = []
         extracted: list[str] = []
         images: list[tuple[str, bytes]] = []
-        folder = self.settings.upload_dir / thread_id
-        folder.mkdir(parents=True, exist_ok=True)
         for item in artifacts:
             try:
                 raw = base64.b64decode(item.base64_data, validate=True)
@@ -231,9 +231,28 @@ class WorkflowEngine:
                 raise ValueError(f"{item.filename} exceeds the {self.settings.max_upload_mb} MB upload limit")
             artifact_id = re.sub(r"[^A-Za-z0-9_-]", "_", item.artifact_id or str(uuid.uuid4()))[:80]
             safe_name = Path(item.filename).name.replace("..", "_")
-            path = folder / f"{artifact_id}_{safe_name}"
-            path.write_bytes(raw)
-            record = {"artifact_id": artifact_id, "filename": safe_name, "mime_type": item.mime_type, "size_bytes": len(raw), "stored_path": str(path)}
+            object_key = f"workflows/{thread_id}/{artifact_id}_{safe_name}"
+            object_record = self.object_store.persist_object(
+                key=object_key,
+                content=raw,
+                content_type=item.mime_type,
+                tenant_id="workflow-default",
+                owner_type="workflow",
+                owner_id=thread_id,
+                filename=safe_name,
+                created_by="system",
+            )
+            record = {
+                "artifact_id": artifact_id,
+                "object_id": object_record["object_id"],
+                "filename": safe_name,
+                "mime_type": item.mime_type,
+                "size_bytes": len(raw),
+                "sha256": object_record["sha256"],
+                "object_key": object_key,
+                "storage_uri": object_record["storage_uri"],
+                "storage_backend": object_record["storage_backend"],
+            }
             records.append(record)
             if item.mime_type == "application/pdf":
                 try:

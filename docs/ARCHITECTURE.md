@@ -65,3 +65,12 @@ The current engine implements the demonstration journey: aviation disruption →
 - Audit chain is hash-linked but not WORM, signed, externally anchored or protected from a privileged database administrator.
 - No OIDC, mTLS, vector search, RAG, model/prompt registry, WORM audit, or enterprise telemetry integration exists yet.
 - Docker's `internal` network limits container egress; it does not replace host firewall, ingress, identity, or infrastructure security controls.
+
+
+---
+
+## Pinky Bread 2.0
+
+The original architecture above describes the request-oriented workflow MVP. The v2.0 Alpha 1 feature branch adds the company graph as a separate bounded context and makes it the primary UI workspace.
+
+See [ARCHITECTURE_2.0.md](ARCHITECTURE_2.0.md) for the company data model, node and relationship semantics, event history, open-source services, API surface and explicit Alpha 1 limitations. The original workflow engine remains in place during the transition; it has not yet been replaced by LangGraph.

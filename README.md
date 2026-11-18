@@ -1,18 +1,21 @@
 # Pinky Bread
 
-**Local-first multimodal multi-agent workflow platform**
+**Pinky Bread 2.0 — Local-first AI Company Operating System**
 
-Pinky Bread is an early-stage enterprise AI platform prototype for defining specialist AI agents, routing work between them, processing document and image artifacts, and placing sensitive downstream actions behind a human approval step. It is designed to run locally and can be configured to use OpenAI-compatible local inference endpoints such as vLLM.
+Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led virtual company. A founder defines the company vision, mission, goals and KPIs; a persistent company graph connects AI employees, assignments, meetings, decisions, deliverables and business outcomes. The graph is the primary workspace and a live projection of database records and company events.
 
-The repository contains a runnable MVP: a FastAPI service, a browser-based operations console, YAML agent manifests, a deterministic workflow engine, local persistence, a simulated MCP-style tool gateway, and hash-linked audit events.
+Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce platform. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
+
+> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 3 upgrade is being developed on [feature/pinky-bread-v2-durable-runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-durable-runtime), stacked on [Alpha 2 workforce runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-workforce-runtime) and the initial [company graph foundation](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
 
 > [!IMPORTANT]
-> **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, production MCP transport, LangGraph checkpoints, production-grade PII detection, and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
+> **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production RBAC/tenant isolation, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
 
 ---
 
 ## Contents
 
+- [Pinky Bread 2.0 Alpha 3](#pinky-bread-20-alpha-3)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -20,7 +23,7 @@ The repository contains a runnable MVP: a FastAPI service, a browser-based opera
 - [Requirements](#requirements)
 - [Install and run locally](#install-and-run-locally)
 - [Run with Docker Compose](#run-with-docker-compose)
-- [Configure local vLLM inference](#configure-local-vllm-inference)
+- [Configure a self-hosted local model](#configure-a-self-hosted-local-model)
 - [Try the demo workflow](#try-the-demo-workflow)
 - [API reference](#api-reference)
 - [Configure specialist agents](#configure-specialist-agents)
@@ -29,6 +32,42 @@ The repository contains a runnable MVP: a FastAPI service, a browser-based opera
 - [Security and operational boundaries](#security-and-operational-boundaries)
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
+
+## Pinky Bread 2.0 Alpha 3
+
+### What is new
+
+- **Living Company Graph:** the default workspace visualises the company, goals, KPI nodes, agent identities, work, meetings, decisions and deliverables as connected dots.
+- **Persistent company data model:** PostgreSQL-backed node, relationship and event records. A single agent identity can connect to multiple goals and assignments.
+- **Founder-first onboarding:** create a company with its vision and mission; the persistent Head of Agents and six reusable specialist identities are provisioned in the graph.
+- **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships. Upload company documents and deliverables, link them to goals/work and download them through company-scoped artifact endpoints.
+- **Company event history:** append-only hash-linked records, paginated history and a hash-chain verification endpoint.
+- **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
+- **Open object storage path:** workflow attachments and company documents/deliverables use a local or S3-compatible adapter. PostgreSQL catalogs ownership, company/tenant scope, checksum, type, size and object key; SeaweedFS stores the bytes in Compose.
+- **Open-source Compose stack:** PostgreSQL 16 with pgvector, Valkey and SeaweedFS.
+- **Working AI workforce:** idempotent bootstrap of Head of Agents and six specialist roles; role identities are reused across goals.
+- **Goal-to-work execution:** Head of Agents creates validated, dependency-aware assignments. Specialists run sequentially through the configured local model endpoint, or through an explicitly labelled development simulation.
+- **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
+- **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
+- **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
+- **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
+- **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.
+- **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
+- **Continuous Head of Agents:** founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE company schedule; disabled by default.
+- **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity.
+- **Self-hosted local models:** Ollama (optional Compose profile) or vLLM-compatible OpenAI chat-completions endpoints. No hosted LLM is required.
+- **Durable worker service:** separate worker process that can be scaled horizontally.
+
+### What still needs to be built
+
+Alpha 3 is a durable workforce increment, not yet a production-ready company. Job execution is checkpointed and recovers expired leases, but cancellation is cooperative at safe boundaries rather than interrupting an in-flight model generation. Meetings remain text-based; calendar scheduling and voice/video are not implemented. KPI measurements remain manual. No external MCP side-effect tools are enabled.
+
+Keycloak/OIDC JWT validation, company-scoped RBAC, OpenBao secrets, OPA policy enforcement, pgvector retrieval, model/prompt rollback, token/cost budgets, OpenTelemetry/Prometheus/Grafana and production backup/restore remain future work. Tenant and actor identifiers in current APIs are caller-supplied and are not an authorization boundary. The MCP static bearer verifier is for private development only. Do not expose this alpha to untrusted users.
+
+See:
+- [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)
+- [Pinky Bread 2.0 open-source stack](docs/OPEN_SOURCE_STACK_2.0.md)
+- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)
 
 ## Overview
 
@@ -46,7 +85,11 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 
 | Capability | MVP implementation | Current boundary |
 |---|---|---|
-| Web operations console | Overview, workflow submission, approval panel, recent runs, agent registry, audit view | Single-user demo UI; no login |
+| Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views | Development UI; no login or authenticated tenant boundary |
+| Company graph and workforce | Company, goals, KPIs, reusable agents, assignments, meetings and deliverables with typed edges | Durable PostgreSQL job queue, LangGraph checkpoints and worker recovery; authenticated tenant boundary remains future work |
+| Company event history | PostgreSQL append-only company events with SHA-256 chaining and verification API | Tamper-evident, not independently immutable or WORM protected |
+| Live graph updates | Valkey Pub/Sub notifications and SSE | Database event history is authoritative; Valkey notifications are best-effort |
+| Object storage | Local filesystem or S3-compatible SeaweedFS for source documents, generated deliverables and meeting minutes | PostgreSQL catalogues owner, company/tenant, checksum and object key; auth/retention policies remain planned |
 | Declarative agent registry | YAML manifests, Pydantic validation, reload endpoint | Registry reload is local configuration, not a governed deployment pipeline |
 | Deterministic routing | Router plus explicit specialist hand-off logic | Lightweight Python state machine, not LangGraph |
 | Local LLM integration | OpenAI-compatible chat completions adapter | Endpoint compatibility depends on the selected model/server |
@@ -56,7 +99,7 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 | Tool access control | Agent manifest allow-list checked before simulated refund tool execution | Local MCP-style adapter only; no MCP protocol transport |
 | Audit trail | SHA-256 input hashes and previous-event hash links | Tamper-evident linkage, not WORM/immutable storage or signed audit |
 | Persistence | SQLAlchemy workflow state stored in SQLite or PostgreSQL | No LangGraph checkpointing or migration framework |
-| Container deployment | Dockerfile and Compose with PostgreSQL and Redis | Redis is provisioned but not used by the workflow engine |
+| Container deployment | Dockerfile and Compose with PostgreSQL/pgvector, Valkey and SeaweedFS | Development credentials are in the sample Compose file; replace them before shared deployment |
 
 ## Architecture
 
@@ -129,14 +172,17 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | Language | Python 3.11+ | Application runtime |
 | API | FastAPI, Uvicorn | REST API, OpenAPI docs, SSE response endpoint |
 | Data validation/configuration | Pydantic v2, pydantic-settings, PyYAML | Request validation, environment settings, agent manifests |
-| Workflow orchestration | Custom Python state machine | Deterministic routing, specialist hand-offs and approval control |
-| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Calls local reasoning or vision model endpoints |
-| Inference server (optional) | vLLM-compatible endpoint | Local model serving; deployment managed separately |
-| Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state and audit event persistence |
-| Vector extension image | pgvector PostgreSQL image | Available in Docker stack; vector retrieval is not yet implemented |
-| Cache/event service | Redis 7.2 | Provisioned in Docker stack; not yet wired into the application |
+| Workflow orchestration | LangGraph StateGraph + PostgreSQL AsyncPostgresSaver | Durable job execution and checkpointed recovery |
+| Job coordination | PostgreSQL queue/leases + Valkey Pub/Sub | Idempotent jobs, worker leases, retry/backoff and worker wake-up |
+| Model adapter | HTTPX, OpenAI-compatible chat completions contract | Goal planning, specialist work, meetings and MCP function calls |
+| Inference server (optional) | Ollama 0.40.16 or vLLM-compatible endpoint | Self-hosted open-weight model serving; weights supplied separately |
+| Tool protocol | MCP Python SDK v2, Streamable HTTP | Official MCP server/client with role-scoped tools and trusted identity injection |
+| Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state plus company graph nodes, typed edges and event history |
+| Vector extension image | pgvector PostgreSQL image | Extension enabled; embeddings and semantic retrieval are not yet implemented |
+| Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
 | PDF processing | PyMuPDF | Text extraction from text-based PDFs |
 | Frontend | HTML, CSS, vanilla JavaScript | Browser-based console without a frontend build toolchain |
+| Object storage | SeaweedFS S3 API + boto3 | S3-compatible company documents, deliverables, meeting minutes and workflow artifacts |
 | Containers | Docker, Docker Compose | Local container deployment |
 | Tests | pytest, FastAPI TestClient | API and workflow behavior tests |
 
@@ -154,7 +200,7 @@ No GPU is required when `MOCK_INFERENCE=true` (the default).
 ### For Docker Compose
 
 - Docker Engine or Docker Desktop with Compose v2
-- Sufficient memory and disk for the API, PostgreSQL and Redis containers
+- Sufficient memory and disk for API, PostgreSQL, Valkey, SeaweedFS and the worker; local models require additional RAM/VRAM and model storage
 
 ### For local model inference (optional)
 
@@ -215,7 +261,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 - OpenAPI JSON: <http://127.0.0.1:8080/openapi.json>
 - Health endpoint: <http://127.0.0.1:8080/api/healthz>
 
-The default configuration uses SQLite and mock inference. PostgreSQL, Redis and a GPU are not needed for this first local run.
+The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker and internal MCP; Ollama is an optional profile. A GPU is not required for mock mode.
 
 ## Run with Docker Compose
 
@@ -236,6 +282,12 @@ docker compose logs -f api
 # Show service state
 docker compose ps
 
+# Scale durable job workers (PostgreSQL coordinates the replicas)
+docker compose up -d --scale worker=3
+
+# Scale durable job workers (PostgreSQL coordinates the replicas)
+docker compose up -d --scale worker=3
+
 # Stop containers and preserve named volumes
 docker compose down
 
@@ -245,17 +297,21 @@ docker compose down --volumes
 
 The Compose stack contains:
 
-- `api`: Pinky Bread FastAPI application
-- `postgres`: PostgreSQL 16 using the pgvector image
-- `redis`: Redis 7.2 with append-only persistence enabled
+- `api`: FastAPI web console and company/workforce API
+- `worker`: LangGraph worker process; scale by adding replicas
+- `mcp`: internal MCP v2 Streamable HTTP server (port 8090 is not published to the host)
+- `postgres`: PostgreSQL 16 using the pgvector image; durable queue and checkpoints
+- `valkey`: Valkey with append-only persistence enabled; worker wake-up only
+- `seaweedfs`: SeaweedFS S3-compatible object storage
+- `ollama`: optional `local-llm` profile for self-hosted models
 
-The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Redis is currently provisioned but not connected to the application workflow.
+The default application network is configured as `internal: true`, which restricts container egress. The optional Ollama profile is attached to a separate model-download network so it can pull the model explicitly; remove that egress path after preloading models for an air-gapped deployment. **Compose is not proof of a fully air-gapped deployment.** Host firewall rules, ingress, routing, DNS, secrets, image sources and infrastructure controls must be reviewed independently. PostgreSQL owns durable job/checkpoint state; Valkey only wakes workers and publishes live graph notifications. SeaweedFS stores documents and outputs while PostgreSQL keeps object metadata and checksums. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
 
-The Compose database password is a development-only value. Replace it with managed secrets before any shared or non-development deployment.
+The PostgreSQL password and SeaweedFS S3 keys are development-only values. Replace them with managed secrets and restrict the S3 identity before any shared or non-development deployment.
 
-## Configure local vLLM inference
+## Configure a self-hosted local model
 
-Mock mode is enabled by default. To use a local OpenAI-compatible endpoint, edit `.env`:
+Mock mode is enabled by default. To use a local OpenAI-compatible endpoint, edit `.env`. vLLM and Ollama can both be used when configured with the compatible chat-completions API:
 
 ```dotenv
 MOCK_INFERENCE=false
@@ -265,6 +321,24 @@ MULTIMODAL_API_URL=http://127.0.0.1:8002/v1
 MULTIMODAL_MODEL=your-vision-model
 VLLM_API_KEY=local-development-key
 ```
+
+For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+
+```bash
+docker compose --profile local-llm up -d
+docker compose exec ollama ollama pull <model-name>
+```
+
+Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
+
+For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+
+```bash
+docker compose --profile local-llm up -d
+docker compose exec ollama ollama pull <model-name>
+```
+
+Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
 
 Then restart the application. The adapter sends requests to:
 
@@ -318,7 +392,7 @@ The simple routing and disruption checks are illustrative keyword logic. They do
 
 ## API reference
 
-The service publishes an interactive OpenAPI document at `/docs` when running.
+The service publishes an interactive OpenAPI document at `/docs` when running. The company/workforce API is versioned under `/v2`.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -332,6 +406,34 @@ The service publishes an interactive OpenAPI document at `/docs` when running.
 | `GET` | `/v1/workflows/{thread_id}` | Retrieve workflow state and result |
 | `POST` | `/v1/workflows/{thread_id}/approve` | Approve or reject a pending workflow action |
 | `GET` | `/v1/audit/{thread_id}` | Retrieve the workflow audit trail |
+| `GET` | `/v2/capabilities` | Discover graph and workforce capabilities |
+| `POST` | `/v2/companies` | Create a company charter |
+| `GET` | `/v2/companies` | List companies in a tenant context |
+| `GET` | `/v2/companies/{company_id}/graph` | Read the persisted company graph |
+| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Provision or reconcile the starter AI workforce |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/plan` | Ask Head of Agents to decompose a goal into assignments |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/execute` | Execute goal assignments in dependency order |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/convene` | Convene a turn-based agent meeting and store minutes |
+| `POST` | `/v2/companies/{company_id}/kpis/{kpi_id}/measure` | Record a KPI measurement and provenance |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/jobs` | Queue a durable goal-plan or execution job |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/jobs` | Queue one durable assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/jobs` | Queue a meeting job |
+| `GET` | `/v2/companies/{company_id}/jobs` | List durable jobs |
+| `GET` | `/v2/companies/{company_id}/jobs/{job_id}` | Read a job's state/result/retries |
+| `POST` | `/v2/companies/{company_id}/jobs/{job_id}/cancel` | Request cooperative cancellation |
+| `GET` / `PUT` | `/v2/companies/{company_id}/coordination` | Read/configure recurring Head-of-Agents coordination |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/jobs` | Queue a durable goal-plan or execution job |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/jobs` | Queue one durable assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/jobs` | Queue a meeting job |
+| `GET` | `/v2/companies/{company_id}/jobs` | List durable jobs |
+| `GET` | `/v2/companies/{company_id}/jobs/{job_id}` | Read a job's state/result/retries |
+| `POST` | `/v2/companies/{company_id}/jobs/{job_id}/cancel` | Request cooperative cancellation |
+| `GET` / `PUT` | `/v2/companies/{company_id}/coordination` | Read/configure recurring Head-of-Agents coordination |
+| `GET` | `/v2/companies/{company_id}/events` | Read company event history |
+| `GET` | `/v2/companies/{company_id}/events/verify` | Verify the company event hash chain |
+| `POST` | `/v2/companies/{company_id}/artifacts` | Store a company document or deliverable |
+| `GET` | `/v2/companies/{company_id}/artifacts/{object_id}` | Download a company artifact |
 
 ### Invoke a workflow with curl
 
@@ -426,10 +528,16 @@ The application reads environment variables from the environment and `.env` file
 | `DEV_MODE` | `true` | Development setting; does not enable authentication |
 | `MOCK_INFERENCE` | `true` | Use GPU-free mock responses instead of HTTP model calls |
 | `DATABASE_URL` | `sqlite:///./data/pinky_bread.db` | SQLAlchemy database connection URL |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis URL placeholder; Redis is not yet used by the workflow engine |
+| `REDIS_URL` | `redis://localhost:6379/0` | Valkey/Redis-compatible URL used for best-effort company graph notifications |
 | `AGENT_CONFIG_DIR` | `./config/agents` | Directory containing YAML agent manifests |
-| `UPLOAD_DIR` | `./data/uploads` | Local artifact storage directory |
+| `UPLOAD_DIR` | `./data/uploads` | Local object and upload storage directory |
 | `MAX_UPLOAD_MB` | `12` | Maximum size per artifact |
+| `STORAGE_BACKEND` | `local` | `local` filesystem or `s3` compatible object storage |
+| `S3_ENDPOINT_URL` | `http://localhost:8333` | S3 endpoint, such as SeaweedFS |
+| `S3_REGION` | `us-east-1` | S3 signing region |
+| `S3_BUCKET` | `pinky-bread` | Bucket for workflow artifacts |
+| `S3_ACCESS_KEY` | development value | S3-compatible access key; replace before shared deployment |
+| `S3_SECRET_KEY` | development value | S3-compatible secret; replace before shared deployment |
 | `REASONING_API_URL` | `http://localhost:8001/v1` | OpenAI-compatible local reasoning endpoint base URL |
 | `REASONING_MODEL` | `local-reasoner` | Default reasoning model setting; agent manifest `model_name` is used for reasoning calls |
 | `MULTIMODAL_API_URL` | `http://localhost:8002/v1` | OpenAI-compatible local vision endpoint base URL |
@@ -437,6 +545,14 @@ The application reads environment variables from the environment and `.env` file
 | `VLLM_API_KEY` | `local-dev-key` | Bearer token passed to local inference endpoint |
 
 Do not commit a real `.env` file, API key, password, certificate, or private model credential.
+
+## Connect the local model to MCP
+
+The Compose stack starts an internal MCP v2 Streamable HTTP server. The local model client discovers its tools dynamically and then filters those tools by the active agent role. The model cannot choose its own company, tenant or agent ID; those values are injected by the runtime.
+
+Before using non-mock inference, set `MCP_ENABLED=true` and replace `MCP_API_TOKEN` and `MCP_READ_TOKEN` in `.env` with separate long random values. The MCP port is internal to Compose and is not published to the host. The current verifier is for private development, not production OIDC; see [the durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) before exposing it.
+
+From the Company Graph workspace, **Enable planning loop** lets the Head of Agents create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
 
 ## Run tests
 
@@ -453,7 +569,7 @@ make install
 make test
 ```
 
-The existing test suite covers agent listing, the aviation-to-banking hand-off, the pending-approval flow, simulated tool execution after approval, rejection without tool execution, general-agent completion, and basic NRIC/email masking.
+The test suite covers the original workflow and company graph, workforce planning/execution, artifact storage, meetings, KPI measurements, PostgreSQL job de-duplication and leases, lease-expiry recovery, recurring coordination, LangGraph PostgreSQL checkpoint replay and MCP SDK v2 tool discovery/identity scoping.
 
 ## Project structure
 
@@ -461,7 +577,15 @@ The existing test suite covers agent listing, the aviation-to-banking hand-off, 
 pinky-bread/
 ├── app/
 │   ├── database.py       # SQLAlchemy models and persistence helpers
-│   ├── engine.py         # Workflow routing, agent execution and approval flow
+│   ├── engine.py         # Legacy workflow routing, execution and approval flow
+│   ├── workforce.py      # Head of Agents, goal planning, task execution, meetings and KPIs
+│   ├── durable_runtime.py # PostgreSQL jobs, LangGraph checkpoints, worker leases and coordination
+│   ├── worker.py          # Durable workforce worker entrypoint
+│   ├── mcp_server.py      # Internal MCP v2 server with scoped tools
+│   ├── mcp_client.py      # Role-scoped MCP client for local model tool calls
+│   ├── company_graph.py  # Company graph nodes, edges, updates and hash-linked events
+│   ├── company_api.py    # Versioned /v2 company and workforce endpoints
+│   ├── object_store.py   # Local and S3-compatible object storage adapter
 │   ├── inference.py      # Mock and OpenAI-compatible local inference adapter
 │   ├── main.py           # FastAPI application and REST endpoints
 │   ├── mcp_gateway.py    # Allow-listed simulated tool gateway
@@ -474,9 +598,16 @@ pinky-bread/
 ├── data/
 │   └── uploads/          # Runtime artifact storage (not committed)
 ├── docs/
-│   └── ARCHITECTURE.md   # Architecture, flow and trust boundaries
+│   ├── ARCHITECTURE_2.0.md       # Company OS architecture
+│   ├── OPEN_SOURCE_STACK_2.0.md  # Open-source components and status
+│   ├── ROADMAP_2.0.md            # Phased delivery programme
+│   ├── WORKFORCE_RUNTIME_2.0.md  # Goal-to-result workforce runtime guide
+│   ├── DURABLE_WORKFORCE_RUNTIME_2.0.md # Durable jobs, checkpoints, MCP and local models
+│   └── ARCHITECTURE.md           # Legacy MVP architecture
 ├── tests/
-│   └── test_engine.py    # API/workflow behavior tests
+│   ├── test_engine.py            # Legacy API/workflow behavior tests
+│   ├── test_company_graph.py     # Company graph and storage tests
+│   └── test_workforce.py         # Planning, execution, meetings and KPI tests
 ├── web/
 │   ├── app.js            # Dashboard behavior
 │   ├── index.html        # Dashboard markup
@@ -497,8 +628,8 @@ Pinky Bread is a prototype. Before any enterprise or regulated deployment, addre
 - **Identity and access:** implement OIDC/JWT validation, user and tenant authorization, role-based tool scopes, and authenticated approver identity. The current `approver_id` is user-supplied and is not verified.
 - **Tenant isolation:** enforce tenant ownership on every workflow, artifact and approval request. The `tenant_id` field is stored but is not an authorization boundary.
 - **Privacy:** replace regex-only masking with tested local PII/PHI detection, controlled tokenization, secure re-identification policy, encrypted sensitive state, retention controls and data minimization. Original prompts are persisted in workflow records.
-- **MCP:** implement the official MCP SDK transport and authenticated tool servers. The included gateway is an in-process simulation, not a production MCP client/server.
-- **Workflow durability:** migrate the custom dispatcher to LangGraph or another durable workflow engine with checkpointing, recovery, retry and idempotency controls.
+- **MCP identity:** replace the internal static bearer verifier with Keycloak/OIDC JWT/JWKS or token introspection, company membership checks and per-agent tool grants. The current MCP v2 server is internal-development only.
+- **Workflow durability:** LangGraph + PostgreSQL checkpoints, lease recovery and bounded retries are implemented in Alpha 3. Add budget enforcement, richer concurrency controls, prompt/model rollback and backup/restore drills.
 - **Audit integrity:** add WORM or independently protected storage, signed records, external anchoring, controlled access, and audit-chain verification tooling. Hash-linked database rows alone are not immutable.
 - **Network security:** enforce egress control, ingress restrictions, mTLS, DNS policy, registry controls and host firewall rules outside this application. A Compose `internal` network is only one deployment control.
 - **Secrets and supply chain:** use a secrets manager, trusted internal registries, image scanning, dependency pinning/SBOM, vulnerability scanning and signed artifacts.
@@ -509,14 +640,14 @@ No regulatory certification, security assurance, production air-gap verification
 
 ## Roadmap
 
-Suggested increments:
+See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
 
 1. **Durable orchestration:** LangGraph `StateGraph`, PostgreSQL checkpoints, restart recovery, bounded retries and idempotent workflow resume.
 2. **Real MCP integration:** MCP SDK server/client transport, structured tool schemas, authenticated tool identities and tool-level policy checks.
 3. **Approval security:** authenticated approvers, role/tenant checks, separation of duties and replay protection.
 4. **Multimodal processing:** local OCR for scanned PDFs, image validation, vision-model integration tests and safer artifact lifecycle controls.
 5. **Privacy and governance:** local NER/Presidio, secure token vault, prompt/model manifest versioning, audit export and retention policy.
-6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Redis eventing/queueing, policy enforcement, deployment hardening and security/load testing.
+6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Valkey-backed coordination, policy enforcement, deployment hardening and security/load testing.
 
 ## Troubleshooting
 

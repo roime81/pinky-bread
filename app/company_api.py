@@ -107,7 +107,7 @@ class TargetJobRequest(WorkforceAction):
 @router.get("/capabilities")
 def company_graph_capabilities() -> dict[str, Any]:
     return {
-        "version": "2.0.0-alpha.2",
+        "version": "2.0.0-alpha.3",
         "node_types": sorted(NODE_TYPES | {"company"}),
         "relationships": sorted(RELATIONSHIPS),
         "persistence": "PostgreSQL/SQLAlchemy graph records and event history",
@@ -115,7 +115,11 @@ def company_graph_capabilities() -> dict[str, Any]:
         "object_storage": "Local filesystem or S3-compatible SeaweedFS with PostgreSQL metadata",
         "workforce": ["idempotent team bootstrap", "goal decomposition", "assigned work execution", "meeting facilitation", "KPI measurement history"],
         "inference": "Local OpenAI-compatible model endpoint or explicitly labelled mock mode",
-        "source_of_truth": "database",
+        "orchestration": "LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints",
+        "durable_jobs": "PostgreSQL job records, worker leases, retries, cancellation and recovery",
+        "coordination": "Founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE schedules",
+        "mcp": "Official MCP Python SDK v2 Streamable HTTP; bearer scopes for development/internal use",
+        "source_of_truth": "PostgreSQL; Valkey is only a best-effort coordination signal",
     }
 
 

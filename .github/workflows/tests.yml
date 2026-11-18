@@ -7,6 +7,35 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_test@localhost:5432/pinky_bread
+      REDIS_URL: redis://localhost:6379/0
+      STORAGE_BACKEND: local
+      MOCK_INFERENCE: "true"
+      LANGGRAPH_STRICT_MSGPACK: "true"
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: pinky_bread
+          POSTGRES_USER: pinky_bread
+          POSTGRES_PASSWORD: pinky_bread_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pinky_bread -d pinky_bread"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      valkey:
+        image: valkey/valkey:9.1.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - name: Check out source
         uses: actions/checkout@v4

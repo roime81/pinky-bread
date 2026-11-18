@@ -39,7 +39,7 @@ Pinky Bread 2.0 Alpha 2 builds on that graph foundation with a working request-d
 
 - **Living Company Graph:** the default workspace visualises the company, goals, KPI nodes, agent identities, work, meetings, decisions and deliverables as connected dots.
 - **Persistent company data model:** PostgreSQL-backed node, relationship and event records. A single agent identity can connect to multiple goals and assignments.
-- **Founder-first onboarding:** create a company with its vision and mission; a proposed Head of Agents role is created as the initial management node.
+- **Founder-first onboarding:** create a company with its vision and mission; the persistent Head of Agents and six reusable specialist identities are provisioned in the graph.
 - **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships. Upload company documents and deliverables, link them to goals/work and download them through company-scoped artifact endpoints.
 - **Company event history:** append-only hash-linked records, paginated history and a hash-chain verification endpoint.
 - **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
@@ -368,6 +368,20 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 | `GET` | `/v1/workflows/{thread_id}` | Retrieve workflow state and result |
 | `POST` | `/v1/workflows/{thread_id}/approve` | Approve or reject a pending workflow action |
 | `GET` | `/v1/audit/{thread_id}` | Retrieve the workflow audit trail |
+| `GET` | `/v2/capabilities` | Discover graph and workforce capabilities |
+| `POST` | `/v2/companies` | Create a company charter |
+| `GET` | `/v2/companies` | List companies in a tenant context |
+| `GET` | `/v2/companies/{company_id}/graph` | Read the persisted company graph |
+| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Provision or reconcile the starter AI workforce |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/plan` | Ask Head of Agents to decompose a goal into assignments |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/execute` | Execute goal assignments in dependency order |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/convene` | Convene a turn-based agent meeting and store minutes |
+| `POST` | `/v2/companies/{company_id}/kpis/{kpi_id}/measure` | Record a KPI measurement and provenance |
+| `GET` | `/v2/companies/{company_id}/events` | Read company event history |
+| `GET` | `/v2/companies/{company_id}/events/verify` | Verify the company event hash chain |
+| `POST` | `/v2/companies/{company_id}/artifacts` | Store a company document or deliverable |
+| `GET` | `/v2/companies/{company_id}/artifacts/{object_id}` | Download a company artifact |
 
 ### Invoke a workflow with curl
 
@@ -495,7 +509,7 @@ make install
 make test
 ```
 
-The test suite covers agent listing, existing workflow hand-offs and approval behavior, privacy masking, company graph persistence, tenant and cross-company relationship checks, graph event-chain verification, many-to-many agent-to-goal links, KPI-to-goal measurement edges, and local object-store safety.
+The test suite covers agent listing, existing workflow hand-offs and approval behavior, privacy masking, company graph persistence, tenant and cross-company relationship checks, graph event-chain verification, many-to-many agent-to-goal links, idempotent workforce bootstrap/planning, dependency-aware goal execution, deliverable storage/download, meeting persistence, KPI measurement history and local object-store safety.
 
 ## Project structure
 
@@ -503,7 +517,11 @@ The test suite covers agent listing, existing workflow hand-offs and approval be
 pinky-bread/
 ├── app/
 │   ├── database.py       # SQLAlchemy models and persistence helpers
-│   ├── engine.py         # Workflow routing, agent execution and approval flow
+│   ├── engine.py         # Legacy workflow routing, execution and approval flow
+│   ├── workforce.py      # Head of Agents, goal planning, task execution, meetings and KPIs
+│   ├── company_graph.py  # Company graph nodes, edges, updates and hash-linked events
+│   ├── company_api.py    # Versioned /v2 company and workforce endpoints
+│   ├── object_store.py   # Local and S3-compatible object storage adapter
 │   ├── inference.py      # Mock and OpenAI-compatible local inference adapter
 │   ├── main.py           # FastAPI application and REST endpoints
 │   ├── mcp_gateway.py    # Allow-listed simulated tool gateway
@@ -516,9 +534,15 @@ pinky-bread/
 ├── data/
 │   └── uploads/          # Runtime artifact storage (not committed)
 ├── docs/
-│   └── ARCHITECTURE.md   # Architecture, flow and trust boundaries
+│   ├── ARCHITECTURE_2.0.md       # Company OS architecture
+│   ├── OPEN_SOURCE_STACK_2.0.md  # Open-source components and status
+│   ├── ROADMAP_2.0.md            # Phased delivery programme
+│   ├── WORKFORCE_RUNTIME_2.0.md  # Goal-to-result workforce runtime guide
+│   └── ARCHITECTURE.md           # Legacy MVP architecture
 ├── tests/
-│   └── test_engine.py    # API/workflow behavior tests
+│   ├── test_engine.py            # Legacy API/workflow behavior tests
+│   ├── test_company_graph.py     # Company graph and storage tests
+│   └── test_workforce.py         # Planning, execution, meetings and KPI tests
 ├── web/
 │   ├── app.js            # Dashboard behavior
 │   ├── index.html        # Dashboard markup

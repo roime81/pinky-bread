@@ -46,7 +46,7 @@
       }
       state.company = state.companies[0];
       $("#graph-company-picker").value = state.company.id;
-      await loadGraph();
+      await loadGraph(true);
     } catch (error) {
       setWorkspaceVisible(false);
       showError(`Company graph API unavailable: ${error.message}`);
@@ -190,7 +190,7 @@
       const y2 = target.y - (dy / length) * 15;
       const midX = (x1 + x2) / 2;
       const midY = (y1 + y2) / 2;
-      return `<g><line class="graph-edge ${active ? "is-active" : state.selectedId ? "is-muted" : ""}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" /><text class="graph-edge-label" x="${midX.toFixed(1)}" y="${(midY - 5).toFixed(1)}" text-anchor="middle" opacity="${active ? "1" : "0"}">${escapeHtml(edge.relationship.replaceAll("_", " "))}</text></g>`;
+      return `<g><line class="graph-edge ${active ? "is-active" : state.selectedId ? "is-muted" : ""}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" /><text class="graph-edge-label" x="${midX.toFixed(1)}" y="${(midY - 5).toFixed(1)}" text-anchor="middle" opacity="${active ? "1" : "0"}">${escapeHtml(edge.relationship.replaceAll("_", " "))}</text></g>`;
     }).join("");
 
     const nodeMarkup = nodes.map((node) => {
@@ -485,6 +485,9 @@
   $("#company-create-form")?.addEventListener("submit", createCompany);
   $("#graph-create-company-shortcut")?.addEventListener("click", () => {
     state.company = null;
+    if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+    if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
+    $("#company-create-form").reset();
     setWorkspaceVisible(false);
   });
   $("#graph-add-goal")?.addEventListener("click", () => addGoal());

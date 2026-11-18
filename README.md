@@ -40,10 +40,10 @@ The v2.0 Alpha 1 branch introduces a PostgreSQL-backed company graph, typed rela
 - **Living Company Graph:** the default workspace visualises the company, goals, KPI nodes, agent identities, work, meetings, decisions and deliverables as connected dots.
 - **Persistent company data model:** PostgreSQL-backed node, relationship and event records. A single agent identity can connect to multiple goals and assignments.
 - **Founder-first onboarding:** create a company with its vision and mission; a proposed Head of Agents role is created as the initial management node.
-- **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships.
+- **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships. Upload company documents and deliverables, link them to goals/work and download them through company-scoped artifact endpoints.
 - **Company event history:** append-only hash-linked records, paginated history and a hash-chain verification endpoint.
 - **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
-- **Open object storage path:** existing workflow attachments use a local or S3-compatible storage adapter; Docker Compose is configured for SeaweedFS.
+- **Open object storage path:** workflow attachments and company documents/deliverables use a local or S3-compatible adapter. PostgreSQL catalogs ownership, company/tenant scope, checksum, type, size and object key; SeaweedFS stores the bytes in Compose.
 - **Open-source Compose stack:** PostgreSQL 16 with pgvector, Valkey and SeaweedFS.
 
 ### What is not yet autonomous

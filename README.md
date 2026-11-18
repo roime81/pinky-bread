@@ -73,7 +73,11 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 
 | Capability | MVP implementation | Current boundary |
 |---|---|---|
-| Web operations console | Overview, workflow submission, approval panel, recent runs, agent registry, audit view | Single-user demo UI; no login |
+| Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views | Development UI; no login or authenticated tenant boundary |
+| Company graph | Company, goal, KPI, agent, work and meeting nodes with typed edges | Goal/KPI values are records; autonomous workforce execution and KPI calculation remain planned |
+| Company event history | PostgreSQL append-only company events with SHA-256 chaining and verification API | Tamper-evident, not independently immutable or WORM protected |
+| Live graph updates | Valkey Pub/Sub notifications and SSE | Database event history is authoritative; Valkey notifications are best-effort |
+| Object storage | Local filesystem or S3-compatible SeaweedFS adapter for workflow attachments | Company-wide document lifecycle, retention and authenticated download APIs remain planned |
 | Declarative agent registry | YAML manifests, Pydantic validation, reload endpoint | Registry reload is local configuration, not a governed deployment pipeline |
 | Deterministic routing | Router plus explicit specialist hand-off logic | Lightweight Python state machine, not LangGraph |
 | Local LLM integration | OpenAI-compatible chat completions adapter | Endpoint compatibility depends on the selected model/server |
@@ -83,7 +87,7 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 | Tool access control | Agent manifest allow-list checked before simulated refund tool execution | Local MCP-style adapter only; no MCP protocol transport |
 | Audit trail | SHA-256 input hashes and previous-event hash links | Tamper-evident linkage, not WORM/immutable storage or signed audit |
 | Persistence | SQLAlchemy workflow state stored in SQLite or PostgreSQL | No LangGraph checkpointing or migration framework |
-| Container deployment | Dockerfile and Compose with PostgreSQL and Redis | Redis is provisioned but not used by the workflow engine |
+| Container deployment | Dockerfile and Compose with PostgreSQL/pgvector, Valkey and SeaweedFS | Development credentials are in the sample Compose file; replace them before shared deployment |
 
 ## Architecture
 
@@ -159,12 +163,12 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | Workflow orchestration | Custom Python state machine | Deterministic routing, specialist hand-offs and approval control |
 | Model adapter | HTTPX, OpenAI-compatible chat completions contract | Calls local reasoning or vision model endpoints |
 | Inference server (optional) | vLLM-compatible endpoint | Local model serving; deployment managed separately |
-| Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state and audit event persistence |
-| Vector extension image | pgvector PostgreSQL image | Available in Docker stack; vector retrieval is not yet implemented |
-| Cache/event service | Redis 7.2 | Provisioned in Docker stack; not yet wired into the application |
+| Persistence | SQLAlchemy 2, SQLite / PostgreSQL | Workflow state plus company graph nodes, typed edges and event history |
+| Vector extension image | pgvector PostgreSQL image | Extension enabled; embeddings and semantic retrieval are not yet implemented |
+| Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
 | PDF processing | PyMuPDF | Text extraction from text-based PDFs |
 | Frontend | HTML, CSS, vanilla JavaScript | Browser-based console without a frontend build toolchain |
-| Containers | Docker, Docker Compose | Local container deployment |
+| Object storage | SeaweedFS S3 API + boto3 | S3-compatible workflow artifact storage in the v2.0 Compose profile |\n| Containers | Docker, Docker Compose | Local container deployment |
 | Tests | pytest, FastAPI TestClient | API and workflow behavior tests |
 
 ## Requirements
@@ -274,11 +278,11 @@ The Compose stack contains:
 
 - `api`: Pinky Bread FastAPI application
 - `postgres`: PostgreSQL 16 using the pgvector image
-- `redis`: Redis 7.2 with append-only persistence enabled
+- `valkey`: Valkey with append-only persistence enabled\n- `seaweedfs`: SeaweedFS S3-compatible object storage
 
-The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Valkey is used for best-effort graph event notifications; durable event history is read from PostgreSQL.
+The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Valkey is used for best-effort graph event notifications; durable event history is read from PostgreSQL. SeaweedFS stores workflow attachment bytes via its S3 API; PostgreSQL workflow state contains object key, URI and checksum metadata. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
 
-The Compose database password is a development-only value. Replace it with managed secrets before any shared or non-development deployment.
+The PostgreSQL password and SeaweedFS S3 keys are development-only values. Replace them with managed secrets and restrict the S3 identity before any shared or non-development deployment.
 
 ## Configure local vLLM inference
 
@@ -549,7 +553,7 @@ Suggested increments:
 3. **Approval security:** authenticated approvers, role/tenant checks, separation of duties and replay protection.
 4. **Multimodal processing:** local OCR for scanned PDFs, image validation, vision-model integration tests and safer artifact lifecycle controls.
 5. **Privacy and governance:** local NER/Presidio, secure token vault, prompt/model manifest versioning, audit export and retention policy.
-6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Redis eventing/queueing, policy enforcement, deployment hardening and security/load testing.
+6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Valkey-backed coordination, policy enforcement, deployment hardening and security/load testing.
 
 ## Troubleshooting
 

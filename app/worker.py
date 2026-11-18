@@ -6,7 +6,7 @@ import os
 
 os.environ.setdefault('LANGGRAPH_STRICT_MSGPACK', 'true')
 
-from .database import init_db
+from .database import check_db_connection
 from .durable_runtime import run_worker
 
 
@@ -15,7 +15,7 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    init_db()
+    check_db_connection()
     asyncio.run(run_worker())
 
 

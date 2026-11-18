@@ -636,8 +636,11 @@ async def _wait_for_signal(redis_url: str, timeout: float) -> None:
 async def run_worker() -> None:
     """Run one durable worker process. Scale by running additional replicas."""
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
     settings = get_settings()
+    # Do not deserialize arbitrary msgpack classes embedded in checkpoint data.
+    strict_serde = JsonPlusSerializer(allowed_msgpack_modules=None)
     worker_id = f"pinky-worker-{uuid.uuid4()}"
     lease_seconds = max(settings.worker_lease_seconds, 30)
     heartbeat_interval = max(settings.worker_heartbeat_seconds, 5)
@@ -648,7 +651,7 @@ async def run_worker() -> None:
         try:
             recover_expired_jobs()
             run_coordination_tick()
-            async with AsyncPostgresSaver.from_conn_string(dsn) as checkpointer:
+            async with AsyncPostgresSaver.from_conn_string(dsn, serde=strict_serde) as checkpointer:
                 await checkpointer.setup()
                 graph = build_job_graph(checkpointer, worker_id)
                 while True:

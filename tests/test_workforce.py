@@ -290,7 +290,7 @@ def test_agent_management_supports_custom_profiles_seniority_archive_and_reporti
         assert demoted.status_code == 200, demoted.text
         assert demoted.json()["data"]["seniority_level"] == 7
 
-        removed = client.delete(
+        removed = client.request("DELETE",
             f"/v2/companies/{company_id}/agents/{architect['id']}",
             json={"tenant_id": "agent-management-tenant", "actor_id": "founder"},
         )
@@ -370,7 +370,7 @@ def test_agent_cannot_be_removed_while_assigned_work_is_running():
             node_id=work["id"],
             status="RUNNING",
         )
-        removed = client.delete(
+        removed = client.request("DELETE",
             f"/v2/companies/{company['id']}/agents/{specialist['id']}",
             json={"tenant_id": "agent-running-tenant", "actor_id": "founder"},
         )

@@ -4,18 +4,18 @@
 
 Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led virtual company. A founder defines the company vision, mission, goals and KPIs; a persistent company graph connects AI employees, assignments, meetings, decisions, deliverables and business outcomes. The graph is the primary workspace and a live projection of database records and company events.
 
-Pinky Bread 2.0 Alpha 2 builds on that graph foundation with a working request-driven virtual workforce: the Head of Agents decomposes goals, reusable specialist agents receive graph-linked assignments, tasks execute through a local OpenAI-compatible model endpoint (or clearly labelled mock mode), and generated deliverables are stored through the local/S3-compatible object adapter. It also adds turn-based multi-agent meetings with stored minutes and provenance-backed KPI measurements.
+Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce platform. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
 
-> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 2 upgrade is being developed on [feature/pinky-bread-v2-workforce-runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-workforce-runtime), stacked on the initial [company graph foundation](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
+> **Versioning:** the current default branch remains the original MVP. The v2.0 Alpha 3 upgrade is being developed on [feature/pinky-bread-v2-durable-runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-durable-runtime), stacked on [Alpha 2 workforce runtime](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-workforce-runtime) and the initial [company graph foundation](https://github.com/roime81/pinky-bread/tree/feature/pinky-bread-v2-company-os). Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and planned work.
 
 > [!IMPORTANT]
-> **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, production MCP transport, LangGraph checkpoints, production-grade PII detection, and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
+> **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production RBAC/tenant isolation, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
 
 ---
 
 ## Contents
 
-- [Pinky Bread 2.0 Alpha 2](#pinky-bread-20-alpha-2)
+- [Pinky Bread 2.0 Alpha 3](#pinky-bread-20-alpha-2)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -33,7 +33,7 @@ Pinky Bread 2.0 Alpha 2 builds on that graph foundation with a working request-d
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 
-## Pinky Bread 2.0 Alpha 2
+## Pinky Bread 2.0 Alpha 3
 
 ### What is new
 
@@ -50,12 +50,19 @@ Pinky Bread 2.0 Alpha 2 builds on that graph foundation with a working request-d
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
+- **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
+- **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.
+- **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
+- **Continuous Head of Agents:** founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE company schedule; disabled by default.
+- **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity.
+- **Self-hosted local models:** Ollama (optional Compose profile) or vLLM-compatible OpenAI chat-completions endpoints. No hosted LLM is required.
+- **Durable worker service:** separate worker process that can be scaled horizontally.
 
 ### What still needs to be built
 
-Alpha 2 is a functional workforce vertical slice, not yet a fully autonomous or production-ready company. Goal execution is request-driven and sequential; there are no LangGraph PostgreSQL checkpoints, background worker pool or restart recovery yet. Meetings are text-based turn-taking, not voice/video or calendar-scheduled sessions. KPI measurements are recorded manually; automated integrations and metric collection are not implemented. MCP tools are not connected to this workforce runtime, so it does not execute external side effects.
+Alpha 3 is a durable workforce increment, not yet a production-ready company. Job execution is checkpointed and recovers expired leases, but cancellation is cooperative at safe boundaries rather than interrupting an in-flight model generation. Meetings remain text-based; calendar scheduling and voice/video are not implemented. KPI measurements remain manual. No external MCP side-effect tools are enabled.
 
-Keycloak/OIDC authentication, company-scoped RBAC, OpenBao secrets, OPA policies, durable LangGraph orchestration, official MCP transport, pgvector semantic retrieval and production observability remain future work. Tenant and actor identifiers in the current Alpha 2 APIs are caller-supplied and are not an authorization boundary. Do not expose this alpha to untrusted users.
+Keycloak/OIDC JWT validation, company-scoped RBAC, OpenBao secrets, OPA policy enforcement, pgvector retrieval, model/prompt rollback, token/cost budgets, OpenTelemetry/Prometheus/Grafana and production backup/restore remain future work. Tenant and actor identifiers in current APIs are caller-supplied and are not an authorization boundary. The MCP static bearer verifier is for private development only. Do not expose this alpha to untrusted users.
 
 See:
 - [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)

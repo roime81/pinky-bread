@@ -159,3 +159,31 @@ def test_one_agent_can_contribute_to_multiple_goals_and_kpi_measures_goal():
         ]
         assert len(measures) == 1
         assert measures[0]["relationship"] == "measures"
+
+
+def test_object_store_rejects_traversal_and_round_trips_local_bytes(tmp_path, monkeypatch):
+    from app.object_store import ObjectStore
+    from app.settings import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "storage_backend", "local")
+    monkeypatch.setattr(settings, "upload_dir", tmp_path)
+    store = ObjectStore()
+
+    key = "companies/example/documents/brief.txt"
+    uri = store.put_bytes(key, b"company plan", "text/plain")
+    assert uri.startswith("file://")
+    assert store.get_bytes(key) == b"company plan"
+    store.delete(key)
+    try:
+        store.get_bytes(key)
+        assert False, "deleted object should not be readable"
+    except FileNotFoundError:
+        pass
+
+    for unsafe in ("../secret.txt", "companies/../../secret.txt", "/absolute/path"):
+        try:
+            store.put_bytes(unsafe, b"bad", "text/plain")
+            assert False, f"unsafe object key should be rejected: {unsafe}"
+        except ValueError:
+            pass

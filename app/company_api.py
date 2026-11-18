@@ -375,7 +375,7 @@ def download_company_artifact(
     if record is None:
         raise HTTPException(404, "Artifact not found")
     try:
-        content = ObjectStore().get_bytes(record["object_key"])
+        content = ObjectStore().get_bytes(record["object_key"], backend=record["storage_backend"])
     except FileNotFoundError as exc:
         raise HTTPException(404, "Artifact bytes are unavailable") from exc
     return Response(

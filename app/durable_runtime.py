@@ -182,6 +182,11 @@ def get_job(*, job_id: str, company_id: str | None = None, tenant_id: str | None
         return _job_dict(job) if job else None
 
 
+def job_cancel_requested(job_id: str) -> bool:
+    job = get_job(job_id=job_id)
+    return bool(job and (job["cancel_requested"] or job["status"] == "CANCELLED"))
+
+
 def list_jobs(*, company_id: str, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
     with SessionLocal() as db:
         jobs = (
@@ -429,7 +434,7 @@ def run_coordination_tick(limit: int = 50) -> int:
             ]
             if not works:
                 kind = "goal_plan"
-            elif mode == "AUTO_EXECUTE" and any(node["status"] not in {"COMPLETED", "CANCELLED"} for node in works):
+            elif mode == "AUTO_EXECUTE" and any(node["status"] in {"READY", "BACKLOG", "PLANNED"} for node in works):
                 kind = "goal_execution"
             else:
                 continue
@@ -482,24 +487,46 @@ def build_job_graph(checkpointer):
     async def execute_job(state: DurableJobState) -> dict[str, Any]:
         if state.get("cancelled"):
             return {"result": {"status": "CANCELLED"}}
-        from .workforce import plan_goal, execute_goal, execute_task, convene_meeting
+        from .workforce import (
+            WorkforceExecutionCancelled,
+            plan_goal,
+            execute_goal,
+            execute_task,
+            convene_meeting,
+        )
 
         args = {
             "company_id": state["company_id"],
             "tenant_id": state["tenant_id"],
             "actor_id": state["actor_id"],
         }
-        if state["kind"] == "goal_plan":
-            result = await plan_goal(goal_id=state["target_id"], **args)
-        elif state["kind"] == "goal_execution":
-            result = await execute_goal(goal_id=state["target_id"], retry_failed=True, raise_on_error=True, **args)
-        elif state["kind"] == "work_execution":
-            result = await execute_task(work_id=state["target_id"], retry=True, **args)
-        elif state["kind"] == "meeting":
-            result = await convene_meeting(meeting_id=state["target_id"], **args)
-        else:
-            raise ValueError(f"Unsupported durable job kind: {state['kind']}")
-        return {"result": result}
+        cancel_check = lambda: job_cancel_requested(state["job_id"])
+        try:
+            if cancel_check():
+                return {"result": {"status": "CANCELLED"}}
+            if state["kind"] == "goal_plan":
+                result = await plan_goal(goal_id=state["target_id"], **args)
+            elif state["kind"] == "goal_execution":
+                result = await execute_goal(
+                    goal_id=state["target_id"],
+                    retry_failed=True,
+                    raise_on_error=True,
+                    cancel_check=cancel_check,
+                    **args,
+                )
+            elif state["kind"] == "work_execution":
+                result = await execute_task(
+                    work_id=state["target_id"], retry=True, cancel_check=cancel_check, **args
+                )
+            elif state["kind"] == "meeting":
+                result = await convene_meeting(
+                    meeting_id=state["target_id"], cancel_check=cancel_check, **args
+                )
+            else:
+                raise ValueError(f"Unsupported durable job kind: {state['kind']}")
+            return {"result": result}
+        except WorkforceExecutionCancelled as exc:
+            return {"result": {"status": "CANCELLED", "reason": str(exc)}}
 
     async def persist_result(state: DurableJobState) -> dict[str, Any]:
         if state.get("cancelled"):

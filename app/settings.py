@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8090
     mcp_api_token: str = ""
+    mcp_read_token: str = ""
     mcp_resource_url: str = "http://localhost:8090/mcp"
     mcp_issuer_url: str = "http://localhost:8080/issuer"
     mcp_max_tool_rounds: int = 4

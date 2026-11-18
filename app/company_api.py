@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 import asyncio
+import re
+import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 
 from .settings import get_settings
+from .object_store import ObjectStore
 from .company_graph import (
     NODE_TYPES,
     RELATIONSHIPS,
@@ -211,4 +215,171 @@ async def stream_company_events(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/companies/{company_id}/artifacts", status_code=201)
+async def upload_company_artifact(
+    company_id: str,
+    file: UploadFile = File(...),
+    tenant_id: str = Form(default="demo-tenant", min_length=2, max_length=120),
+    actor_id: str = Form(default="demo-user", min_length=2, max_length=120),
+    kind: str = Form(default="document"),
+    title: str = Form(default="", max_length=240),
+    related_node_id: str | None = Form(default=None),
+):
+    if kind not in {"document", "deliverable"}:
+        raise HTTPException(422, "Artifact kind must be document or deliverable")
+
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    if related_node_id and related_node_id not in {node["id"] for node in graph["nodes"]}:
+        raise HTTPException(404, "Related graph node not found in this company")
+
+    settings = get_settings()
+    raw = await file.read(settings.max_upload_bytes + 1)
+    await file.close()
+    if not raw:
+        raise HTTPException(400, "Uploaded file is empty")
+    if len(raw) > settings.max_upload_bytes:
+        raise HTTPException(413, f"File exceeds the {settings.max_upload_mb} MB upload limit")
+
+    filename = Path(file.filename or "upload.bin").name
+    safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename).strip("._")[:255] or "upload.bin"
+    content_type = (file.content_type or "application/octet-stream")[:200]
+    object_key = f"companies/{company_id}/{uuid.uuid4()}/{safe_filename}"
+
+    try:
+        stored = ObjectStore().persist_object(
+            key=object_key,
+            content=raw,
+            content_type=content_type,
+            tenant_id=tenant_id,
+            company_id=company_id,
+            owner_type="company",
+            owner_id=company_id,
+            filename=safe_filename,
+            created_by=actor_id,
+            metadata={"kind": kind},
+        )
+        node = create_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            node_type=kind,
+            name=title.strip() or safe_filename,
+            description=f"Stored {kind} · {len(raw)} bytes",
+            status="STORED",
+            data={
+                "object_id": stored["object_id"],
+                "filename": safe_filename,
+                "content_type": content_type,
+                "size_bytes": len(raw),
+                "sha256": stored["sha256"],
+                "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
+            },
+        )
+        if node is None:
+            raise HTTPException(404, "Company not found")
+        if kind == "deliverable" and related_node_id:
+            create_edge(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                source_node_id=related_node_id,
+                target_node_id=node["id"],
+                relationship="produces",
+                data={"object_id": stored["object_id"]},
+            )
+        elif kind == "document" and related_node_id:
+            create_edge(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                source_node_id=node["id"],
+                target_node_id=related_node_id,
+                relationship="informs",
+                data={"object_id": stored["object_id"]},
+            )
+        else:
+            create_edge(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                source_node_id=company_id,
+                target_node_id=node["id"],
+                relationship="owns",
+                data={"object_id": stored["object_id"]},
+            )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, "Unable to persist company artifact") from exc
+
+    return {
+        "artifact": {
+            "object_id": stored["object_id"],
+            "node_id": node["id"],
+            "kind": kind,
+            "filename": safe_filename,
+            "content_type": content_type,
+            "size_bytes": stored["size_bytes"],
+            "sha256": stored["sha256"],
+            "storage_backend": stored["storage_backend"],
+            "created_at": stored["created_at"],
+        }
+    }
+
+
+@router.get("/companies/{company_id}/artifacts")
+def list_company_artifacts(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    records = ObjectStore().list_records(tenant_id=tenant_id, company_id=company_id, limit=limit)
+    return {
+        "artifacts": [
+            {
+                "object_id": record["object_id"],
+                "filename": record["filename"],
+                "content_type": record["content_type"],
+                "size_bytes": record["size_bytes"],
+                "sha256": record["sha256"],
+                "storage_backend": record["storage_backend"],
+                "created_by": record["created_by"],
+                "created_at": record["created_at"],
+            }
+            for record in records
+        ]
+    }
+
+
+@router.get("/companies/{company_id}/artifacts/{object_id}")
+def download_company_artifact(
+    company_id: str,
+    object_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+):
+    record = ObjectStore().get_record(
+        object_id=object_id,
+        tenant_id=tenant_id,
+        company_id=company_id,
+    )
+    if record is None:
+        raise HTTPException(404, "Artifact not found")
+    try:
+        content = ObjectStore().get_bytes(record["object_key"])
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "Artifact bytes are unavailable") from exc
+    return Response(
+        content=content,
+        media_type=record["content_type"],
+        headers={"Content-Disposition": f'attachment; filename="{record["filename"]}"'},
     )

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     worker_max_attempts: int = 5
     mcp_enabled: bool = False
     mcp_server_url: str = "http://localhost:8090/mcp"
+    mcp_host: str = "0.0.0.0"
+    mcp_port: int = 8090
     mcp_api_token: str = ""
     mcp_resource_url: str = "http://localhost:8090/mcp"
     mcp_issuer_url: str = "http://localhost:8080/issuer"

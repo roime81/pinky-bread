@@ -5,7 +5,8 @@ from typing import Any
 
 import uvicorn
 from pydantic import AnyHttpUrl
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -39,7 +40,7 @@ class StaticBearerVerifier(TokenVerifier):
         )
 
 
-mcp = FastMCP(
+mcp = MCPServer(
     "Pinky Bread Workforce",
     instructions=(
         "Read company context and submit controlled workforce jobs. "
@@ -171,8 +172,16 @@ def main() -> None:
     init_db()
     if not settings.mcp_api_token:
         raise RuntimeError("MCP_API_TOKEN is required before the MCP server can start")
+    transport_security = TransportSecuritySettings(
+        allowed_hosts=[
+            f"mcp:{settings.mcp_port}",
+            f"localhost:{settings.mcp_port}",
+            f"127.0.0.1:{settings.mcp_port}",
+        ],
+        allowed_origins=[],
+    )
     uvicorn.run(
-        mcp.streamable_http_app(),
+        mcp.streamable_http_app(transport_security=transport_security),
         host=settings.mcp_host,
         port=settings.mcp_port,
         log_level="info",

@@ -173,7 +173,8 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
 | PDF processing | PyMuPDF | Text extraction from text-based PDFs |
 | Frontend | HTML, CSS, vanilla JavaScript | Browser-based console without a frontend build toolchain |
-| Object storage | SeaweedFS S3 API + boto3 | S3-compatible company documents, deliverables, meeting minutes and workflow artifacts |\n| Containers | Docker, Docker Compose | Local container deployment |
+| Object storage | SeaweedFS S3 API + boto3 | S3-compatible company documents, deliverables, meeting minutes and workflow artifacts |
+| Containers | Docker, Docker Compose | Local container deployment |
 | Tests | pytest, FastAPI TestClient | API and workflow behavior tests |
 
 ## Requirements
@@ -283,7 +284,8 @@ The Compose stack contains:
 
 - `api`: Pinky Bread FastAPI application
 - `postgres`: PostgreSQL 16 using the pgvector image
-- `valkey`: Valkey with append-only persistence enabled\n- `seaweedfs`: SeaweedFS S3-compatible object storage
+- `valkey`: Valkey with append-only persistence enabled
+- `seaweedfs`: SeaweedFS S3-compatible object storage
 
 The Compose network is configured as `internal: true`, which restricts container egress. **This is not proof of a fully air-gapped deployment.** Image pulls and package installation generally happen before deployment; host firewall rules, ingress, routing, DNS, secrets, and infrastructure controls must be reviewed independently. Valkey is used for best-effort graph event notifications; durable event history is read from PostgreSQL. SeaweedFS stores workflow attachment bytes via its S3 API; PostgreSQL workflow state contains object key, URI and checksum metadata. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
 

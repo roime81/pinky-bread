@@ -50,10 +50,6 @@
       }
       state.company = state.companies[0];
       $("#graph-company-picker").value = state.company.id;
-      await api(`/v2/companies/${state.company.id}/workforce/bootstrap`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
-      });
       await loadGraph(true);
     } catch (error) {
       setWorkspaceVisible(false);
@@ -185,8 +181,16 @@
   function renderGraph() {
     const svg = $("#company-graph-svg");
     if (!svg) return;
-    const nodes = state.graph.nodes || [];
-    const edges = state.graph.edges || [];
+    // Archived identities remain in PostgreSQL and the audit trail, but leave
+    // the active company canvas so "Remove agent" really removes the person from
+    // the live organisation view.
+    const nodes = (state.graph.nodes || []).filter((node) =>
+      !(node.type === "agent" && node.status === "ARCHIVED")
+    );
+    const visibleNodeIds = new Set(nodes.map((node) => node.id));
+    const edges = (state.graph.edges || []).filter((edge) =>
+      visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
+    );
     const positions = layoutNodes(nodes, edges);
     const activeIds = new Set();
     if (state.selectedId) {
@@ -240,8 +244,9 @@
 
     $("#graph-node-count").textContent = `${nodes.length} NODES`;
     $("#graph-goal-count").textContent = nodes.filter((node) => node.type === "goal").length;
-    $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent").length;
+    $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent" && node.status !== "ARCHIVED").length;
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
+    renderAgentDirectory();
     $("#graph-company-name").textContent = state.company.name;
     $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
@@ -317,6 +322,10 @@
 
   async function configureCoordination(enabled, mode = "PLAN_ONLY") {
     if (!state.company) return;
+    if (enabled && !activeAgents().some(_isCoordinatorForUi)) {
+      toast("Create an agent with Coordinator authority before enabling recurring coordination.");
+      return;
+    }
     if (enabled && mode === "AUTO_EXECUTE") {
       const approved = window.confirm(
         "Enable continuous goal execution? The worker will run assignments for active goals without asking before each task. External financial, legal and customer-facing actions remain unavailable in this alpha."
@@ -495,7 +504,7 @@
       if (node.status !== "ARCHIVED") actions.push('<button class="secondary-btn" id="inspect-archive-agent">Archive agent</button>');
     }
     if (node.type === "goal") {
-      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with Head of Agents</button>');
+      actions.push('<button class="secondary-btn" id="inspect-plan-goal">Plan with company coordinator</button>');
       actions.push('<button class="primary-btn" id="inspect-run-goal">Execute goal workflow</button>');
     }
     if (node.type === "work" && node.status !== "COMPLETED") {
@@ -586,14 +595,10 @@
       state.companies.push(company);
       renderCompanyPicker();
       setWorkspaceVisible(true);
-      await api(`/v2/companies/${company.id}/workforce/bootstrap`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: company.tenant_id, actor_id: "founder" }),
-      });
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
       startJobsPolling();
-      toast("Your company graph and virtual workforce have been created");
+      toast("Company created. Build the virtual team you want by adding your own agents.");
     } catch (error) {
       toast(error.message);
     } finally {
@@ -659,6 +664,10 @@
       }, "PROPOSED");
       toast(`${name} added · reports to ${manager?.name || "Founder"} · ${provider}/${model}`);
     } catch (error) { toast(error.message); }
+  }
+
+  async function addAgent() {
+    openAgentEditor();
   }
 
   async function addWork() {
@@ -862,6 +871,27 @@
   $("#graph-add-goal")?.addEventListener("click", () => addGoal());
   $("#graph-add-kpi")?.addEventListener("click", addKpi);
   $("#graph-add-agent")?.addEventListener("click", addAgent);
+  $("#graph-add-agent-directory")?.addEventListener("click", addAgent);
+  $("#agent-editor-form")?.addEventListener("submit", saveAgent);
+  $("#agent-editor-close")?.addEventListener("click", () => $("#agent-editor-dialog").close());
+  $("#agent-editor-cancel")?.addEventListener("click", () => $("#agent-editor-dialog").close());
+  const handleAgentDirectoryClick = (event) => {
+    const edit = event.target.closest("[data-edit-agent]");
+    const select = event.target.closest("[data-select-agent]");
+    const agentId = edit?.dataset.editAgent || select?.dataset.selectAgent;
+    if (!agentId) return;
+    const agent = (state.graph.nodes || []).find((node) => node.id === agentId);
+    if (!agent) return;
+    if (edit) openAgentEditor(agent);
+    else {
+      state.selectedId = agentId;
+      if ($("#view-company-graph")?.classList.contains("active")) selectNode(agentId);
+      else toast(`Selected ${agent.name}. Open Company graph to inspect its relationships.`);
+    }
+  };
+  $("#company-agent-list")?.addEventListener("click", handleAgentDirectoryClick);
+  $("#workspace-agent-list")?.addEventListener("click", handleAgentDirectoryClick);
+  $("#workspace-add-agent")?.addEventListener("click", addAgent);
   $("#graph-add-work")?.addEventListener("click", addWork);
   $("#graph-add-meeting")?.addEventListener("click", addMeeting);
   $("#graph-upload-file")?.addEventListener("click", () => $("#company-artifact-file")?.click());
@@ -893,6 +923,11 @@
   window.loadCompanyGraph = () => {
     if (!state.company) initialise();
     else loadGraph();
+  };
+  window.loadCompanyAgents = () => {
+    if (!state.company) initialise();
+    else if (!state.graph.nodes?.length) loadGraph(true);
+    else renderAgentDirectory();
   };
 
   initialise();

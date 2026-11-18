@@ -22,50 +22,28 @@ class WorkforceExecutionCancelled(RuntimeError):
     """Cooperative cancellation at safe agent/task boundaries."""
 
 
-ROLE_SPECS: dict[str, dict[str, Any]] = {
-    "head_of_agents": {
-        "name": "Head of Agents",
-        "description": "Chief of Staff for the virtual company. Coordinates goals, work allocation, meetings and escalation.",
-        "skills": ["goal_planning", "delegation", "facilitation", "risk_escalation", "progress_reporting"],
-        "system_prompt": "You are the Head of Agents, the Chief of Staff of a founder-led virtual company. Translate the company vision and goals into clear work. Coordinate specialists, make dependencies explicit, challenge unsupported assumptions, keep the founder informed, and request approval for consequential actions. You may plan and recommend; do not claim to have performed work that has not been executed.",
-    },
-    "strategy": {
-        "name": "Strategy & Growth Agent",
-        "description": "Market research, business strategy, customer discovery and growth planning.",
-        "skills": ["market_research", "customer_discovery", "business_strategy", "growth"],
-        "system_prompt": "You are the company's Strategy and Growth specialist. Produce evidence-aware market analysis, state assumptions, identify customer problems and recommend practical experiments. Never invent research or customer evidence.",
-    },
-    "product": {
-        "name": "Product Agent",
-        "description": "Product definition, customer journeys, prioritisation and acceptance criteria.",
-        "skills": ["product_discovery", "roadmapping", "requirements", "acceptance_criteria"],
-        "system_prompt": "You are the company's Product specialist. Turn customer and business needs into a focused product scope, user journeys, priorities and testable acceptance criteria. Distinguish assumptions from validated facts.",
-    },
-    "technology": {
-        "name": "Technology Agent",
-        "description": "Software architecture, engineering plans, implementation and technical quality.",
-        "skills": ["architecture", "software_engineering", "testing", "delivery"],
-        "system_prompt": "You are the company's Technology specialist. Produce implementable technical designs and engineering work, prefer maintained open-source components, explain trade-offs and include verification steps. Do not claim code was changed unless a connected tool actually changed it.",
-    },
-    "marketing": {
-        "name": "Marketing Agent",
-        "description": "Positioning, content, launch campaigns and customer acquisition.",
-        "skills": ["positioning", "content", "campaigns", "customer_acquisition"],
-        "system_prompt": "You are the company's Marketing specialist. Develop clear positioning, ethical campaigns and measurable customer acquisition experiments. Do not invent campaign results or customer testimonials.",
-    },
-    "operations": {
-        "name": "Operations Agent",
-        "description": "Operating procedures, service delivery, customer support and process improvement.",
-        "skills": ["service_operations", "process_design", "customer_support", "quality"],
-        "system_prompt": "You are the company's Operations specialist. Design repeatable, lightweight operating procedures, service delivery and support processes. Identify operational risks and owners.",
-    },
-    "finance": {
-        "name": "Finance & Governance Agent",
-        "description": "Budgeting, cost control, unit economics and financial governance.",
-        "skills": ["budgeting", "unit_economics", "cost_control", "financial_planning"],
-        "system_prompt": "You are the company's Finance and Governance specialist. Prepare transparent estimates, budgets and unit economics, state assumptions, highlight cash and compliance risks, and never initiate payments or financial commitments.",
-    },
-}
+def _agent_role(agent: dict[str, Any]) -> str:
+    data = agent.get("data") or {}
+    return str(data.get("role") or data.get("title") or "Generalist")
+
+
+def _agent_title(agent: dict[str, Any]) -> str:
+    data = agent.get("data") or {}
+    return str(data.get("title") or data.get("role") or "AI Employee")
+
+
+def _is_coordinator(agent: dict[str, Any]) -> bool:
+    data = agent.get("data") or {}
+    authority = str(data.get("authority") or "").upper()
+    legacy_role = str(data.get("role") or "").lower()
+    return authority == "COORDINATOR" or legacy_role in {"head_of_agents", "chief_of_staff", "chief-of-staff"}
+
+
+def _is_active_agent(agent: dict[str, Any]) -> bool:
+    return agent.get("type") == "agent" and agent.get("status") not in {"ARCHIVED", "DISABLED", "PAUSED"}
+
+
+
 
 
 def _edges(graph: dict[str, Any]) -> list[dict[str, Any]]:
@@ -104,135 +82,47 @@ def _ensure_edge(
 
 
 def bootstrap_workforce(*, company_id: str, tenant_id: str, actor_id: str) -> dict[str, Any]:
-    """Create a reusable starter team. Repeated calls are safe and do not duplicate roles."""
+    """Legacy-compatible discovery endpoint. It deliberately creates no predefined agents."""
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
-    company = next(node for node in _nodes(graph) if node["type"] == "company")
-    settings = get_settings()
     agents = [node for node in _nodes(graph) if node["type"] == "agent"]
-    role_to_agent: dict[str, dict[str, Any]] = {}
-    for agent in agents:
-        role = str((agent.get("data") or {}).get("role", "")).lower()
-        if role in {"chief_of_staff", "chief-of-staff"}:
-            role = "head_of_agents"
-        if role in ROLE_SPECS and role not in role_to_agent:
-            role_to_agent[role] = agent
-
-    for role, spec in ROLE_SPECS.items():
-        agent = role_to_agent.get(role)
-        runtime_mode = "MOCK" if settings.mock_inference else "LOCAL_MODEL"
-        agent_data = {
-            "role": role,
-            "skills": spec["skills"],
-            "system_prompt": spec["system_prompt"],
-            "runtime_status": "READY",
-            "runtime_mode": runtime_mode,
-            "model": settings.reasoning_model,
-            "version": "1.0.0",
-            "authority": "coordination_only" if role == "head_of_agents" else "assigned_work_only",
-        }
-        if agent is None:
-            agent = create_node(
-                company_id=company_id,
-                tenant_id=tenant_id,
-                actor_id=actor_id,
-                node_type="agent",
-                name=spec["name"],
-                description=spec["description"],
-                status="READY",
-                data=agent_data,
-            )
-            role_to_agent[role] = agent
-            graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-        else:
-            existing_data = agent.get("data") or {}
-            needs_update = (
-                agent.get("status") != "READY"
-                or any(existing_data.get(key) != value for key, value in agent_data.items())
-            )
-            if needs_update:
-                merged = {**existing_data, **agent_data}
-                agent = update_node(
-                    company_id=company_id,
-                    tenant_id=tenant_id,
-                    actor_id=actor_id,
-                    node_id=agent["id"],
-                    status="READY",
-                    data_patch=merged,
-                ) or agent
-            role_to_agent[role] = agent
-        if role == "head_of_agents":
-            _ensure_edge(company_id, tenant_id, actor_id, graph, company_id, agent["id"], "owns")
-        else:
-            head = role_to_agent.get("head_of_agents")
-            if head:
-                graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-                _ensure_edge(company_id, tenant_id, actor_id, graph, agent["id"], head["id"], "reports_to")
-        graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-
-    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
     return {
         "company_id": company_id,
-        "agents": [node for node in _nodes(graph) if node["type"] == "agent"],
-        "count": len([node for node in _nodes(graph) if node["type"] == "agent"]),
-        "runtime_mode": "MOCK" if settings.mock_inference else "LOCAL_MODEL",
+        "agents": agents,
+        "count": len(agents),
+        "created": 0,
+        "message": "No default roster is installed. Create and configure the agents your company needs.",
     }
 
 
-def _mock_plan() -> dict[str, Any]:
-    return {
-        "tasks": [
-            {
-                "key": "market_validation",
-                "title": "Validate the customer problem and market",
-                "role": "strategy",
-                "description": "Identify target customers, the problem to solve, existing alternatives and the riskiest business assumptions.",
-                "acceptance_criteria": ["Target customer segment is described", "Key assumptions and risks are listed", "At least three validation experiments are proposed"],
-                "depends_on": [],
-            },
-            {
-                "key": "product_scope",
-                "title": "Define the first product release",
-                "role": "product",
-                "description": "Turn the company goal into a small first-release scope, user journey and testable acceptance criteria.",
-                "acceptance_criteria": ["MVP scope is prioritised", "Primary user journey is documented", "Acceptance criteria are testable"],
-                "depends_on": ["market_validation"],
-            },
-            {
-                "key": "technical_plan",
-                "title": "Prepare the technical delivery plan",
-                "role": "technology",
-                "description": "Propose an implementation architecture, milestones, quality checks and the smallest viable technical release.",
-                "acceptance_criteria": ["Architecture and components are described", "Implementation milestones are listed", "Testing and security checks are identified"],
-                "depends_on": ["product_scope"],
-            },
-            {
-                "key": "go_to_market",
-                "title": "Prepare customer discovery and launch",
-                "role": "marketing",
-                "description": "Define positioning, launch messaging, customer discovery channels and a measurable first campaign.",
-                "acceptance_criteria": ["Positioning statement is drafted", "Initial channels are prioritised", "Campaign success measures are defined"],
-                "depends_on": ["product_scope"],
-            },
-            {
-                "key": "financial_model",
-                "title": "Establish the budget and unit economics",
-                "role": "finance",
-                "description": "Estimate operating costs, pricing assumptions, cash requirements and a founder approval budget.",
-                "acceptance_criteria": ["Cost assumptions are visible", "Pricing and unit economics are estimated", "Spending controls are recommended"],
-                "depends_on": ["market_validation"],
-            },
-            {
-                "key": "operating_model",
-                "title": "Design the operating and customer support model",
-                "role": "operations",
-                "description": "Define how the product or service will be delivered, supported and measured after launch.",
-                "acceptance_criteria": ["Core operating process is documented", "Support responsibilities are clear", "Operational risks and controls are listed"],
-                "depends_on": ["product_scope"],
-            },
-        ]
-    }
+def _mock_plan(agents: list[dict[str, Any]], goal: dict[str, Any]) -> dict[str, Any]:
+    """Create transparent placeholder assignments from the agents a founder actually defined."""
+    candidates = [agent for agent in agents if not _is_coordinator(agent)] or agents
+    tasks = []
+    previous_key: str | None = None
+    for index, agent in enumerate(candidates[:8], start=1):
+        title = _agent_title(agent)
+        task_key = f"agent_contribution_{index}"
+        tasks.append({
+            "key": task_key,
+            "title": f"{agent['name']}: {goal['name']}",
+            "agent_id": agent["id"],
+            "description": (
+                f"Prepare a practical contribution to the company goal from the perspective of "
+                f"{agent['name']} ({title}). Use the agent's configured responsibilities and capabilities, "
+                "identify assumptions and risks, and propose concrete next steps."
+            ),
+            "acceptance_criteria": [
+                "A self-contained contribution is recorded",
+                "Assumptions and material risks are identified",
+                "Concrete next steps are recommended",
+            ],
+            "depends_on": [previous_key] if previous_key else [],
+        })
+        previous_key = task_key
+    return {"tasks": tasks}
+
 
 
 async def _chat_completion(
@@ -273,33 +163,32 @@ async def _chat_completion(
     return content.strip()
 
 
-def _parse_plan(content: str) -> list[dict[str, Any]]:
+def _parse_plan(content: str, allowed_agent_ids: set[str]) -> list[dict[str, Any]]:
     start, end = content.find("{"), content.rfind("}")
     if start < 0 or end <= start:
-        raise ValueError("Head of Agents did not return a JSON task plan")
+        raise ValueError("Coordinator did not return a JSON task plan")
     try:
         parsed = json.loads(content[start : end + 1])
     except json.JSONDecodeError as exc:
-        raise ValueError("Head of Agents returned invalid JSON; no work was created") from exc
+        raise ValueError("Coordinator returned invalid JSON; no work was created") from exc
     tasks = parsed.get("tasks") if isinstance(parsed, dict) else None
     if not isinstance(tasks, list) or not 1 <= len(tasks) <= 10:
         raise ValueError("A plan must contain between 1 and 10 tasks")
-    allowed_roles = set(ROLE_SPECS) - {"head_of_agents"}
     result: list[dict[str, Any]] = []
     keys: set[str] = set()
     for index, item in enumerate(tasks):
         if not isinstance(item, dict):
             raise ValueError("Every task in the plan must be an object")
         key = str(item.get("key") or f"task_{index + 1}").strip()[:80]
-        role = str(item.get("role") or "").strip().lower()
+        agent_id = str(item.get("agent_id") or "").strip()
         title = str(item.get("title") or "").strip()[:160]
         description = str(item.get("description") or "").strip()[:3000]
         criteria = item.get("acceptance_criteria", [])
         dependencies = item.get("depends_on", [])
         if not key or key in keys:
             raise ValueError("Task keys must be non-empty and unique")
-        if role not in allowed_roles:
-            raise ValueError(f"Unsupported specialist role in plan: {role}")
+        if agent_id not in allowed_agent_ids:
+            raise ValueError(f"Task {key} refers to an agent that is not available in this company")
         if not title or not description:
             raise ValueError("Every task needs a title and description")
         if not isinstance(criteria, list) or not all(isinstance(value, str) for value in criteria):
@@ -310,7 +199,7 @@ def _parse_plan(content: str) -> list[dict[str, Any]]:
         result.append({
             "key": key,
             "title": title,
-            "role": role,
+            "agent_id": agent_id,
             "description": description,
             "acceptance_criteria": [value[:500] for value in criteria[:8]],
             "depends_on": dependencies[:10],
@@ -339,29 +228,48 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
     if existing:
         return {"goal_id": goal_id, "created": False, "tasks": existing, "count": len(existing), "message": "An active plan already exists; no duplicate work was created."}
 
-    team = bootstrap_workforce(company_id=company_id, tenant_id=tenant_id, actor_id=actor_id)
-    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
+    active_agents = [node for node in _nodes(graph) if _is_active_agent(node)]
+    coordinator = next((agent for agent in active_agents if _is_coordinator(agent)), None)
+    if coordinator is None:
+        raise RuntimeError("No coordinator is assigned. Create an agent and set its authority to COORDINATOR before planning.")
+    if not active_agents:
+        raise RuntimeError("This company has no active agents. Create the team members needed for this goal.")
+
+    specialists = [agent for agent in active_agents if agent["id"] != coordinator["id"]] or [coordinator]
     company = next(node for node in _nodes(graph) if node["type"] == "company")
-    agents = {str((node.get("data") or {}).get("role")): node for node in _nodes(graph) if node["type"] == "agent"}
-    head = agents.get("head_of_agents")
-    if not head:
-        raise RuntimeError("Head of Agents is not available")
     settings = get_settings()
     if settings.mock_inference:
-        tasks = _mock_plan()["tasks"]
-        planner_mode = "mock-template"
+        tasks = _mock_plan(specialists, goal)["tasks"]
+        planner_mode = "mock-template-from-company-agents"
     else:
-        system = str((head.get("data") or {}).get("system_prompt") or ROLE_SPECS["head_of_agents"]["system_prompt"])
+        agent_catalog = [
+            {
+                "id": agent["id"],
+                "name": agent["name"],
+                "title": _agent_title(agent),
+                "role": _agent_role(agent),
+                "description": agent.get("description", ""),
+                "skills": (agent.get("data") or {}).get("skills", []),
+                "responsibilities": (agent.get("data") or {}).get("responsibilities", []),
+            }
+            for agent in specialists
+        ]
+        coordinator_data = coordinator.get("data") or {}
+        system = str(coordinator_data.get("system_prompt") or (
+            f"You are {coordinator['name']}, the company's coordinator. "
+            "Turn company goals into clear, delegated work using only the available agents."
+        ))
         prompt = (
             "Create a practical execution plan for this company goal. Return JSON only in this schema: "
-            '{"tasks":[{"key":"short_unique_key","title":"...","role":"strategy|product|technology|marketing|operations|finance",'
-            '"description":"...","acceptance_criteria":["..."],"depends_on":["earlier_or_other_task_key"]}]}. '
-            "Create 3 to 8 tasks, use only the listed roles, make work concrete and measurable, express dependencies, "
-            "and do not include external financial actions.\n\n"
+            '{"tasks":[{"key":"short_unique_key","title":"...","agent_id":"exact-agent-id",'
+            '"description":"...","acceptance_criteria":["..."],"depends_on":["earlier_task_key"]}]}. '
+            "Create 1 to 10 tasks. Assign each task to an exact agent id from the available-agent catalogue. "
+            "Do not invent agent ids, roles, staff or capabilities. Use the configured agent responsibilities and skills. "
+            "Make work concrete and measurable, express dependencies, and do not include external financial actions.\n\n"
             f"Company: {company['name']}\nVision: {(company.get('data') or {}).get('vision', '')}\n"
             f"Mission: {(company.get('data') or {}).get('mission', '')}\n"
             f"Goal: {goal['name']}\nDescription: {goal.get('description', '')}\n"
-            f"Available specialists: {', '.join(sorted(set(ROLE_SPECS) - {'head_of_agents'}))}"
+            f"Available agents: {json.dumps(agent_catalog, ensure_ascii=False)}"
         )
         if settings.mcp_enabled:
             from .mcp_client import complete_with_mcp
@@ -372,30 +280,31 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 role="head_of_agents",
                 company_id=company_id,
                 tenant_id=tenant_id,
-                agent_id=head["id"],
-                max_tokens=2400,
+                agent_id=coordinator["id"],
+                max_tokens=3000,
             )
         else:
             plan_response = await _chat_completion(
                 system_prompt=system,
                 user_prompt=prompt,
                 temperature=0.15,
-                max_tokens=2400,
+                max_tokens=3000,
             )
-        tasks = _parse_plan(plan_response)
+        tasks = _parse_plan(plan_response, {agent["id"] for agent in specialists})
         planner_mode = "local-model+mcp" if settings.mcp_enabled else "local-model"
-    missing = sorted({task["role"] for task in tasks} - set(agents))
-    if missing:
-        raise RuntimeError(f"Workforce is missing specialist roles: {', '.join(missing)}")
 
+    agents_by_id = {agent["id"]: agent for agent in active_agents}
     created: dict[str, dict[str, Any]] = {}
     result_tasks: list[dict[str, Any]] = []
     for index, task in enumerate(tasks, start=1):
-        agent = agents[task["role"]]
+        agent = agents_by_id.get(task["agent_id"])
+        if agent is None or not _is_active_agent(agent):
+            raise ValueError(f"Task {task['key']} is assigned to an unavailable agent")
+        role_label = _agent_role(agent)
         work = create_node(
             company_id=company_id,
             tenant_id=tenant_id,
-            actor_id=head["id"],
+            actor_id=coordinator["id"],
             node_type="work",
             name=task["title"],
             description=task["description"],
@@ -405,10 +314,10 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 "task_key": task["key"],
                 "sequence": index,
                 "assigned_agent_id": agent["id"],
-                "assigned_role": task["role"],
+                "assigned_role": role_label,
                 "acceptance_criteria": task["acceptance_criteria"],
                 "depends_on_keys": task["depends_on"],
-                "planner_agent_id": head["id"],
+                "planner_agent_id": coordinator["id"],
                 "planner_mode": planner_mode,
                 "progress": 0,
                 "attempt": 0,
@@ -417,11 +326,11 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
         created[task["key"]] = work
         result_tasks.append(work)
         current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-        _ensure_edge(company_id, tenant_id, head["id"], current, work["id"], agent["id"], "assigned_to")
+        _ensure_edge(company_id, tenant_id, coordinator["id"], current, work["id"], agent["id"], "assigned_to")
         current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or current
-        _ensure_edge(company_id, tenant_id, head["id"], current, work["id"], goal_id, "contributes_to")
+        _ensure_edge(company_id, tenant_id, coordinator["id"], current, work["id"], goal_id, "contributes_to")
         current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or current
-        _ensure_edge(company_id, tenant_id, head["id"], current, agent["id"], goal_id, "contributes_to")
+        _ensure_edge(company_id, tenant_id, coordinator["id"], current, agent["id"], goal_id, "contributes_to")
     for task in tasks:
         source = created[task["key"]]
         for dependency_key in task["depends_on"]:
@@ -429,16 +338,18 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
             if dependency is None:
                 raise ValueError(f"Unknown dependency: {dependency_key}")
             current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-            _ensure_edge(company_id, tenant_id, head["id"], current, source["id"], dependency["id"], "depends_on")
+            _ensure_edge(company_id, tenant_id, coordinator["id"], current, source["id"], dependency["id"], "depends_on")
     return {
         "goal_id": goal_id,
         "created": True,
-        "planner_agent_id": head["id"],
+        "planner_agent_id": coordinator["id"],
         "planner_mode": planner_mode,
         "tasks": result_tasks,
         "count": len(result_tasks),
-        "message": "The Head of Agents created persisted assignments. Work has not run yet.",
+        "message": f"{coordinator['name']} created assignments using your company's configured agents. Work has not run yet.",
     }
+
+
 
 
 async def _execute_prompt(
@@ -446,30 +357,39 @@ async def _execute_prompt(
 ) -> str:
     settings = get_settings()
     data = agent.get("data") or {}
+    display_role = _agent_title(agent)
     if settings.mock_inference:
-        role = str(data.get("role", "specialist")).replace("_", " ").title()
         return (
-            f"# {role} — Development simulation\n\n"
+            f"# {agent['name']} — {display_role} · Development simulation\n\n"
             "This assignment ran in MOCK_INFERENCE mode. No LLM inference or external tool was used.\n\n"
             f"## Assignment context\n{prompt[:1800]}\n\n"
             "## Suggested work product\n"
-            "The specialist has acknowledged the assignment and produced this traceable development placeholder. "
-            "Configure a reachable local OpenAI-compatible model endpoint and set MOCK_INFERENCE=false for model-generated work.\n"
+            "This is a traceable development placeholder, not model-generated work. "
+            "Configure a self-hosted OpenAI-compatible model endpoint and set MOCK_INFERENCE=false for real inference.\n"
         )
-    system = str(data.get("system_prompt") or "You are a specialist AI employee. Complete the assigned work, state assumptions and provide a practical deliverable.")
+    responsibilities = data.get("responsibilities") or []
+    skills = data.get("skills") or []
+    system = str(data.get("system_prompt") or (
+        f"You are {agent['name']}, working as {display_role}. Your function is {_agent_role(agent)}. "
+        f"Responsibilities: {responsibilities}. Capabilities: {skills}. "
+        "Complete the assignment, state assumptions, explain risks and provide a practical deliverable. "
+        "Never claim external actions were performed unless an approved tool actually performed them."
+    ))
     if settings.mcp_enabled:
         from .mcp_client import complete_with_mcp
 
         return await complete_with_mcp(
             system_prompt=system,
             user_prompt=prompt,
-            role=str(data.get("role") or "specialist"),
+            role="head_of_agents" if _is_coordinator(agent) else "specialist",
             company_id=company_id,
             tenant_id=tenant_id,
             agent_id=agent["id"],
             max_tokens=2400,
         )
     return await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.25, max_tokens=2400)
+
+
 
 
 def _goal_progress(company_id: str, tenant_id: str, goal_id: str, actor_id: str) -> dict[str, Any]:
@@ -543,8 +463,8 @@ async def execute_task(
     if assignment is None:
         raise RuntimeError("Work item has no assigned agent")
     agent = next((node for node in _nodes(graph) if node["id"] == assignment["target"] and node["type"] == "agent"), None)
-    if agent is None:
-        raise RuntimeError("Assigned agent is not available")
+    if agent is None or not _is_active_agent(agent):
+        raise RuntimeError("Assigned agent is archived, disabled or unavailable. Reassign this work item before retrying.")
     goal = next((node for node in _nodes(graph) if node["id"] == data.get("goal_id")), None)
     company = next(node for node in _nodes(graph) if node["type"] == "company")
     attempt = int(data.get("attempt", 0)) if recovering else int(data.get("attempt", 0)) + 1
@@ -753,16 +673,18 @@ async def convene_meeting(
     if meeting_data.get("meeting_state") == "COMPLETED" and meeting_data.get("minutes_object_id"):
         return {"meeting": meeting, "idempotent": True, "message": "Meeting already has persisted minutes."}
 
-    team = bootstrap_workforce(company_id=company_id, tenant_id=tenant_id, actor_id=actor_id)
-    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
-    agents = [node for node in _nodes(graph) if node["type"] == "agent" and node["status"] != "DISABLED"]
+    agents = [node for node in _nodes(graph) if _is_active_agent(node)]
     requested = meeting_data.get("participant_agent_ids") or []
     if requested:
         agents = [node for node in agents if node["id"] in requested]
     else:
-        priority = ["head_of_agents", "strategy", "product", "operations", "finance"]
-        by_role = {str((node.get("data") or {}).get("role")): node for node in agents}
-        agents = [by_role[role] for role in priority if role in by_role]
+        agents.sort(
+            key=lambda item: (
+                0 if _is_coordinator(item) else 1,
+                -int((item.get("data") or {}).get("seniority_level", 3)),
+                item["name"].lower(),
+            )
+        )
     agents = agents[:8]
     if not agents:
         raise RuntimeError("No available meeting participants")
@@ -794,7 +716,7 @@ async def convene_meeting(
         prior = "\n".join(f"{item['agent_name']}: {item['contribution']}" for item in discussion)
         prompt = (
             f"Company meeting: {meeting['name']}\nAgenda: {agenda}\n"
-            f"Your role: {(agent.get('data') or {}).get('role')}\n"
+            f"Your position: {_agent_title(agent)}\nYour function: {_agent_role(agent)}\n"
             f"Company mission: {(next(node for node in _nodes(graph) if node['type'] == 'company').get('data') or {}).get('mission', '')}\n"
             f"Previous discussion:\n{prior or 'You are the first speaker.'}\n\n"
             "Contribute one concise, practical perspective. Identify one risk or disagreement when relevant and suggest a concrete next step. "
@@ -815,7 +737,8 @@ async def convene_meeting(
             "sequence": index,
             "agent_id": agent["id"],
             "agent_name": agent["name"],
-            "role": (agent.get("data") or {}).get("role"),
+            "role": _agent_role(agent),
+            "title": _agent_title(agent),
             "contribution": contribution[:3000],
             "occurred_at": _now(),
         })
@@ -827,7 +750,7 @@ async def convene_meeting(
             data_patch={"discussion": discussion, "current_speaker_id": agent["id"]},
         )
 
-    head = next((agent for agent in agents if (agent.get("data") or {}).get("role") == "head_of_agents"), agents[0])
+    head = next((agent for agent in agents if _is_coordinator(agent)), agents[0])
     transcript = "\n\n".join(f"## {item['agent_name']} ({item['role']})\n{item['contribution']}" for item in discussion)
     if get_settings().mock_inference:
         summary = f"Development simulation of {len(discussion)} agent contributions for agenda: {agenda}.\n\n" + "\n\n".join(

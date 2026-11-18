@@ -514,6 +514,7 @@ def update_node(
     status: str | None = None,
     data_patch: dict[str, Any] | None = None,
     description: str | None = None,
+    name: str | None = None,
 ) -> dict[str, Any] | None:
     """Update a graph node and append the change to the company event chain."""
     with SessionLocal() as db:
@@ -528,6 +529,8 @@ def update_node(
             node.status = status
         if description is not None:
             node.description = description
+        if name is not None:
+            node.name = name
         patch = data_patch or {}
         if patch:
             node.data = {**(node.data or {}), **patch}
@@ -542,8 +545,328 @@ def update_node(
                 "node_id": node_id,
                 "node_type": node.node_type,
                 "status": node.status,
+                "name": node.name,
+                "description": node.description,
                 "changed_data": patch,
             },
+        )
+        db.commit()
+        result = _node_dict(node)
+        event_data = _event_dict(event)
+    _notify(event_data)
+    return result
+
+
+
+def _agent_authority(data: dict[str, Any] | None) -> str:
+    """Normalise user-defined agent authority while retaining legacy Head-of-Agents records."""
+    values = data or {}
+    authority = str(values.get("authority") or "").strip().upper()
+    role = str(values.get("role") or "").strip().lower()
+    if authority == "COORDINATOR" or role in {"head_of_agents", "chief_of_staff", "chief-of-staff"}:
+        return "COORDINATOR"
+    return "SPECIALIST"
+
+
+def _assert_coordinator_available(db, company_id: str, tenant_id: str, authority: str, except_id: str | None = None) -> None:
+    if authority != "COORDINATOR":
+        return
+    rows = db.query(CompanyGraphNode).filter(
+        CompanyGraphNode.company_id == company_id,
+        CompanyGraphNode.tenant_id == tenant_id,
+        CompanyGraphNode.node_type == "agent",
+    ).all()
+    if any(
+        row.node_id != except_id
+        and row.status not in {"ARCHIVED", "DISABLED", "PAUSED"}
+        and _agent_authority(row.data) == "COORDINATOR"
+        for row in rows
+    ):
+        raise ValueError("This company already has an active coordinator. Demote the current coordinator before promoting another agent.")
+
+
+def _validate_agent_manager(db, company_id: str, tenant_id: str, agent_id: str, manager_id: str | None) -> CompanyGraphNode | None:
+    if not manager_id:
+        return None
+    if manager_id == agent_id:
+        raise ValueError("An agent cannot report to itself")
+    manager = db.query(CompanyGraphNode).filter(
+        CompanyGraphNode.node_id == manager_id,
+        CompanyGraphNode.company_id == company_id,
+        CompanyGraphNode.tenant_id == tenant_id,
+        CompanyGraphNode.node_type == "agent",
+    ).first()
+    if manager is None:
+        raise ValueError("Manager must be an agent in the same company")
+    if manager.status in {"ARCHIVED", "DISABLED"}:
+        raise ValueError("An agent cannot report to an archived or disabled manager")
+
+    # Reporting lines form a forest. Walk upwards from the proposed manager
+    # and reject any change that would introduce a cycle.
+    visited: set[str] = set()
+    current_id: str | None = manager_id
+    while current_id and current_id not in visited:
+        if current_id == agent_id:
+            raise ValueError("Reporting-line changes cannot create a management cycle")
+        visited.add(current_id)
+        parent = db.query(CompanyGraphEdge.target_node_id).filter(
+            CompanyGraphEdge.company_id == company_id,
+            CompanyGraphEdge.tenant_id == tenant_id,
+            CompanyGraphEdge.source_node_id == current_id,
+            CompanyGraphEdge.relationship == "reports_to",
+        ).first()
+        current_id = parent[0] if parent else None
+    return manager
+
+
+def create_agent_node(
+    *,
+    company_id: str,
+    tenant_id: str,
+    actor_id: str,
+    name: str,
+    description: str,
+    data: dict[str, Any],
+    manager_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Create a founder-defined agent and its company/reporting relationships in one transaction."""
+    node_id = str(uuid.uuid4())
+    payload = {**data, "manager_id": manager_id}
+    with SessionLocal() as db:
+        if not _company_exists(db, company_id, tenant_id):
+            return None
+        _validate_agent_manager(db, company_id, tenant_id, node_id, manager_id)
+        _assert_coordinator_available(db, company_id, tenant_id, _agent_authority(payload))
+        node = CompanyGraphNode(
+            node_id=node_id,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            node_type="agent",
+            name=name,
+            description=description,
+            status="ACTIVE",
+            data=payload,
+            created_by=actor_id,
+        )
+        db.add(node)
+        db.add(CompanyGraphEdge(
+            edge_id=str(uuid.uuid4()),
+            company_id=company_id,
+            tenant_id=tenant_id,
+            source_node_id=company_id,
+            target_node_id=node_id,
+            relationship="owns",
+            data={"managed_by": "agent_management"},
+            created_by=actor_id,
+        ))
+        if manager_id:
+            db.add(CompanyGraphEdge(
+                edge_id=str(uuid.uuid4()),
+                company_id=company_id,
+                tenant_id=tenant_id,
+                source_node_id=node_id,
+                target_node_id=manager_id,
+                relationship="reports_to",
+                data={"managed_by": "agent_management"},
+                created_by=actor_id,
+            ))
+        event = _append_event(
+            db,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            event_type="agent.created",
+            payload={"node_id": node_id, "name": name, "authority": _agent_authority(payload), "manager_id": manager_id, "data": payload},
+        )
+        db.commit()
+        result = _node_dict(node)
+        event_data = _event_dict(event)
+    _notify(event_data)
+    return result
+
+
+def update_agent_node(
+    *,
+    company_id: str,
+    tenant_id: str,
+    actor_id: str,
+    node_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    data_patch: dict[str, Any] | None = None,
+    status: str | None = None,
+    manager_id: str | None = None,
+    update_manager: bool = False,
+) -> dict[str, Any] | None:
+    """Update an agent's user-defined identity, seniority, authority or reporting line."""
+    patch = data_patch or {}
+    with SessionLocal() as db:
+        node = db.query(CompanyGraphNode).filter(
+            CompanyGraphNode.node_id == node_id,
+            CompanyGraphNode.company_id == company_id,
+            CompanyGraphNode.tenant_id == tenant_id,
+            CompanyGraphNode.node_type == "agent",
+        ).first()
+        if node is None:
+            return None
+        merged_data = {**(node.data or {}), **patch}
+        if update_manager:
+            _validate_agent_manager(db, company_id, tenant_id, node_id, manager_id)
+            merged_data["manager_id"] = manager_id
+        _assert_coordinator_available(db, company_id, tenant_id, _agent_authority(merged_data), except_id=node_id)
+        if name is not None:
+            node.name = name
+        if description is not None:
+            node.description = description
+        if status is not None:
+            if status in {"ARCHIVED", "DISABLED"}:
+                raise ValueError("Use the remove-agent action to archive an agent")
+            node.status = status
+        node.data = merged_data
+        changed_manager = False
+        if update_manager:
+            previous = db.query(CompanyGraphEdge).filter(
+                CompanyGraphEdge.company_id == company_id,
+                CompanyGraphEdge.tenant_id == tenant_id,
+                CompanyGraphEdge.source_node_id == node_id,
+                CompanyGraphEdge.relationship == "reports_to",
+            ).all()
+            previous_manager_ids = {edge.target_node_id for edge in previous}
+            if previous_manager_ids != ({manager_id} if manager_id else set()):
+                for edge in previous:
+                    db.delete(edge)
+                # Delete the old unique (source, target, relationship) row before
+                # inserting a replacement row, including when the previous
+                # reporting line is being restored to the same manager later.
+                db.flush()
+                if manager_id:
+                    db.add(CompanyGraphEdge(
+                        edge_id=str(uuid.uuid4()),
+                        company_id=company_id,
+                        tenant_id=tenant_id,
+                        source_node_id=node_id,
+                        target_node_id=manager_id,
+                        relationship="reports_to",
+                        data={"managed_by": "agent_management"},
+                        created_by=actor_id,
+                    ))
+                changed_manager = True
+        node.updated_at = utcnow()
+        event = _append_event(
+            db,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            event_type="agent.updated",
+            payload={
+                "node_id": node_id,
+                "name": node.name,
+                "status": node.status,
+                "authority": _agent_authority(merged_data),
+                "manager_id": manager_id if changed_manager else merged_data.get("manager_id"),
+                "changed_data": patch,
+                "manager_changed": changed_manager,
+            },
+        )
+        db.commit()
+        result = _node_dict(node)
+        event_data = _event_dict(event)
+    _notify(event_data)
+    return result
+
+
+def archive_agent_node(
+    *, company_id: str, tenant_id: str, actor_id: str, node_id: str
+) -> dict[str, Any] | None:
+    """Soft-remove an agent while preserving assignments, deliverables and audit history."""
+    with SessionLocal() as db:
+        node = db.query(CompanyGraphNode).filter(
+            CompanyGraphNode.node_id == node_id,
+            CompanyGraphNode.company_id == company_id,
+            CompanyGraphNode.tenant_id == tenant_id,
+            CompanyGraphNode.node_type == "agent",
+        ).first()
+        if node is None:
+            return None
+        if node.status == "ARCHIVED":
+            return _node_dict(node)
+        work_nodes = db.query(CompanyGraphNode).filter(
+            CompanyGraphNode.company_id == company_id,
+            CompanyGraphNode.tenant_id == tenant_id,
+            CompanyGraphNode.node_type == "work",
+            CompanyGraphNode.status == "RUNNING",
+        ).all()
+        if any((item.data or {}).get("assigned_agent_id") == node_id for item in work_nodes):
+            raise ValueError("This agent has work running. Wait for it to finish before removing the agent.")
+
+        own_manager = db.query(CompanyGraphEdge.target_node_id).filter(
+            CompanyGraphEdge.company_id == company_id,
+            CompanyGraphEdge.tenant_id == tenant_id,
+            CompanyGraphEdge.source_node_id == node_id,
+            CompanyGraphEdge.relationship == "reports_to",
+        ).first()
+        manager_id = own_manager[0] if own_manager else None
+        own_edges = db.query(CompanyGraphEdge).filter(
+            CompanyGraphEdge.company_id == company_id,
+            CompanyGraphEdge.tenant_id == tenant_id,
+            CompanyGraphEdge.source_node_id == node_id,
+            CompanyGraphEdge.relationship == "reports_to",
+        ).all()
+        for edge in own_edges:
+            db.delete(edge)
+
+        direct_reports = db.query(CompanyGraphEdge).filter(
+            CompanyGraphEdge.company_id == company_id,
+            CompanyGraphEdge.tenant_id == tenant_id,
+            CompanyGraphEdge.target_node_id == node_id,
+            CompanyGraphEdge.relationship == "reports_to",
+        ).all()
+        reassigned: list[str] = []
+        for edge in direct_reports:
+            child_id = edge.source_node_id
+            db.delete(edge)
+            if manager_id and child_id != manager_id:
+                db.add(CompanyGraphEdge(
+                    edge_id=str(uuid.uuid4()),
+                    company_id=company_id,
+                    tenant_id=tenant_id,
+                    source_node_id=child_id,
+                    target_node_id=manager_id,
+                    relationship="reports_to",
+                    data={"managed_by": "agent_management", "reassigned_after_manager_archive": node_id},
+                    created_by=actor_id,
+                ))
+                child = db.query(CompanyGraphNode).filter(
+                    CompanyGraphNode.node_id == child_id,
+                    CompanyGraphNode.company_id == company_id,
+                    CompanyGraphNode.tenant_id == tenant_id,
+                    CompanyGraphNode.node_type == "agent",
+                ).first()
+                if child:
+                    child.data = {**(child.data or {}), "manager_id": manager_id}
+                    child.updated_at = utcnow()
+                    reassigned.append(child_id)
+            else:
+                child = db.query(CompanyGraphNode).filter(
+                    CompanyGraphNode.node_id == child_id,
+                    CompanyGraphNode.company_id == company_id,
+                    CompanyGraphNode.tenant_id == tenant_id,
+                    CompanyGraphNode.node_type == "agent",
+                ).first()
+                if child:
+                    child.data = {**(child.data or {}), "manager_id": None}
+                    child.updated_at = utcnow()
+
+        node.status = "ARCHIVED"
+        node.data = {**(node.data or {}), "manager_id": None, "archived_at": utcnow().isoformat()}
+        node.updated_at = utcnow()
+        event = _append_event(
+            db,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            event_type="agent.archived",
+            payload={"node_id": node_id, "name": node.name, "previous_manager_id": manager_id, "reassigned_reports": reassigned},
         )
         db.commit()
         result = _node_dict(node)

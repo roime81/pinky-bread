@@ -39,21 +39,21 @@ Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce pl
 
 - **Living Company Graph:** the default workspace visualises the company, goals, KPI nodes, agent identities, work, meetings, decisions and deliverables as connected dots.
 - **Persistent company data model:** PostgreSQL-backed node, relationship and event records. A single agent identity can connect to multiple goals and assignments.
-- **Founder-first onboarding:** create a company with its vision and mission; the persistent Head of Agents and six reusable specialist identities are provisioned in the graph.
+- **Founder-defined workforce:** companies start with an empty agent roster. Create any agent you need with a custom role, title, skills, responsibilities, system instructions, seniority, authority and reporting line.
 - **Interactive graph:** add goal, KPI, agent, work and meeting records; connect dots; select any node to inspect its data and relationships. Upload company documents and deliverables, link them to goals/work and download them through company-scoped artifact endpoints.
 - **Company event history:** append-only hash-linked records, paginated history and a hash-chain verification endpoint.
 - **Live graph notifications:** Valkey Pub/Sub pushes committed graph events to connected clients; PostgreSQL remains the durable source of truth.
 - **Open object storage path:** workflow attachments and company documents/deliverables use a local or S3-compatible adapter. PostgreSQL catalogs ownership, company/tenant scope, checksum, type, size and object key; SeaweedFS stores the bytes in Compose.
 - **Open-source Compose stack:** PostgreSQL 16 with pgvector, Valkey and SeaweedFS.
-- **Working AI workforce:** idempotent bootstrap of Head of Agents and six specialist roles; role identities are reused across goals.
-- **Goal-to-work execution:** Head of Agents creates validated, dependency-aware assignments. Specialists run sequentially through the configured local model endpoint, or through an explicitly labelled development simulation.
+- **Agent lifecycle management:** create, edit, promote, demote and remove custom agents. Agent removal archives the identity while preserving previous assignments, deliverables and audit history.
+- **Dynamic goal-to-work execution:** the founder-selected coordinator delegates to the active agents defined in that company. The planner can only assign work to real agent IDs from the company's roster.
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
 - **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.
 - **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
-- **Continuous Head of Agents:** founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE company schedule; disabled by default.
+- **Continuous coordination:** the founder-selected coordinator can run recurring PLAN_ONLY or AUTO_EXECUTE schedules; disabled by default.
 - **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity.
 - **Self-hosted local models:** Ollama (optional Compose profile) or vLLM-compatible OpenAI chat-completions endpoints. No hosted LLM is required.
 - **Durable worker service:** separate worker process that can be scaled horizontally.
@@ -407,7 +407,7 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 | `POST` | `/v2/companies` | Create a company charter |
 | `GET` | `/v2/companies` | List companies in a tenant context |
 | `GET` | `/v2/companies/{company_id}/graph` | Read the persisted company graph |
-| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Provision or reconcile the starter AI workforce |
+| `GET` | `/v2/companies/{company_id}/agents` | List the company's user-defined agent roster |\n| `POST` | `/v2/companies/{company_id}/agents` | Create an agent with a custom role, persona, seniority and reporting line |\n| `PATCH` | `/v2/companies/{company_id}/agents/{agent_id}` | Edit identity, instructions, seniority, authority or manager |\n| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/promote` | Increase seniority by one level |\n| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/demote` | Decrease seniority by one level |\n| `DELETE` | `/v2/companies/{company_id}/agents/{agent_id}` | Archive an agent while preserving company history |\n| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Legacy-compatible roster discovery; does not create default agents |
 | `POST` | `/v2/companies/{company_id}/goals/{goal_id}/plan` | Ask Head of Agents to decompose a goal into assignments |
 | `POST` | `/v2/companies/{company_id}/goals/{goal_id}/execute` | Execute goal assignments in dependency order |
 | `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
@@ -549,7 +549,7 @@ The Compose stack starts an internal MCP v2 Streamable HTTP server. The local mo
 
 Before using non-mock inference, set `MCP_ENABLED=true` and replace `MCP_API_TOKEN` and `MCP_READ_TOKEN` in `.env` with separate long random values. The MCP port is internal to Compose and is not published to the host. The current verifier is for private development, not production OIDC; see [the durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) before exposing it.
 
-From the Company Graph workspace, **Enable planning loop** lets the Head of Agents create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
+Create at least one agent with **Coordinator** authority before planning goals. Add as many user-defined specialists as the company needs. From the Company Graph workspace, **Enable planning loop** lets the coordinator create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
 
 ## Run tests
 
@@ -575,7 +575,7 @@ pinky-bread/
 ├── app/
 │   ├── database.py       # SQLAlchemy models and persistence helpers
 │   ├── engine.py         # Legacy workflow routing, execution and approval flow
-│   ├── workforce.py      # Head of Agents, goal planning, task execution, meetings and KPIs
+│   ├── workforce.py      # User-defined coordinator, agent delegation, task execution, meetings and KPIs
 │   ├── durable_runtime.py # PostgreSQL jobs, LangGraph checkpoints, worker leases and coordination
 │   ├── worker.py          # Durable workforce worker entrypoint
 │   ├── mcp_server.py      # Internal MCP v2 server with scoped tools

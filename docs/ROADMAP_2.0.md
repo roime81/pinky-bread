@@ -46,7 +46,7 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 i
 - [x] Use PostgreSQL-backed `AsyncPostgresSaver` checkpoints keyed by durable job ID and test restart/resume semantics.
 - [x] Persist reusable AI employee identities with role, persona, skills, local model selection, runtime mode, health/status and version in the company graph.
 - [x] Implement a Head of Agents planning service using a local model API (or explicit mock planner) to decompose goals into validated work.
-- [x] Bootstrap specialist agents for Strategy, Product, Technology, Marketing, Operations and Finance under the Head of Agents.
+- [x] Replace the fixed starter roster with founder-defined agent creation, editing, promotion/demotion, archive, seniority, authority and reporting-line management.
 - [x] Persist assigned work nodes, owners, acceptance criteria, dependencies and many-to-many agent-to-goal relationships.
 - [x] Add PostgreSQL queue rows with idempotency and one-active-job constraints, worker leases, heartbeats, fencing, retry/backoff and cancellation.
 - [x] Recover expired worker leases and resume job execution through the same LangGraph checkpoint thread.

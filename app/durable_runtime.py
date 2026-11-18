@@ -472,6 +472,19 @@ def run_coordination_tick(limit: int = 50) -> int:
         graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
         if graph is None:
             continue
+        agents = [
+            node for node in graph.get("nodes", [])
+            if node["type"] == "agent" and node["status"] not in {"ARCHIVED", "DISABLED", "PAUSED"}
+        ]
+        coordinator = next((
+            agent for agent in agents
+            if str((agent.get("data") or {}).get("authority", "")).upper() == "COORDINATOR"
+            or str((agent.get("data") or {}).get("role", "")).lower() in {"head_of_agents", "chief_of_staff", "chief-of-staff"}
+        ), None)
+        # A recurring schedule must never invent a Head of Agents identity.
+        # The founder must assign coordinator authority to a real company agent.
+        if coordinator is None:
+            continue
         goals = [
             node for node in graph.get("nodes", [])
             if node["type"] == "goal" and node["status"] not in {"COMPLETED", "CANCELLED", "ARCHIVED"}
@@ -493,7 +506,7 @@ def run_coordination_tick(limit: int = 50) -> int:
                 tenant_id=tenant_id,
                 kind=kind,
                 target_id=goal["id"],
-                actor_id="head_of_agents",
+                actor_id=coordinator["id"],
                 idempotency_key=f"coordination:{goal['id']}:{kind}:{bucket}",
                 payload={"source": "company_coordination", "mode": mode},
             )

@@ -17,9 +17,10 @@
       <div class="workspace-label">WORKSPACE</div>
       <nav class="nav-list">
         <button class="nav-item active" data-view="company-graph"><span class="nav-icon">◎</span> Company graph</button>
+        <button class="nav-item" data-view="company-agents"><span class="nav-icon">◇</span> AI workforce</button>
         <button class="nav-item" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
         <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflows <span class="nav-count" id="nav-workflow-count">0</span></button>
-        <button class="nav-item" data-view="agents"><span class="nav-icon">◇</span> Agent registry</button>
+        <button class="nav-item" data-view="agents"><span class="nav-icon">▧</span> Workflow templates</button>
         <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit trail</button>
       </nav>
       <div class="sidebar-bottom">
@@ -81,20 +82,28 @@
           </div>
           <section class="graph-runtime-panel" id="workforce-runtime-panel">
             <div class="graph-panel-heading">
-              <div><div class="eyebrow">DURABLE WORKFORCE</div><strong>Head of Agents coordination</strong></div>
+              <div><div class="eyebrow">DURABLE WORKFORCE</div><strong>Company coordinator</strong></div>
               <span id="coordination-state">Not scheduled</span>
             </div>
             <div class="runtime-controls">
               <button class="graph-tool-btn" id="coordination-plan-only">Enable planning loop</button>
               <button class="graph-tool-btn" id="coordination-auto-execute">Enable auto-execution</button>
               <button class="graph-tool-btn" id="coordination-stop">Pause coordination</button>
-              <span class="runtime-note">PLAN_ONLY creates work plans. AUTO_EXECUTE runs assignments; use only when you approve that level of autonomy.</span>
+              <span class="runtime-note">Assign COORDINATOR authority to one of your own agents to plan work. PLAN_ONLY creates plans; AUTO_EXECUTE runs assignments.</span>
             </div>
             <div class="graph-panel-heading runtime-queue-heading">
               <div><div class="eyebrow">POSTGRESQL JOB QUEUE</div><strong>Worker activity</strong></div>
               <span id="graph-job-count">0 jobs</span>
             </div>
             <div id="company-job-list" class="company-job-list"><div class="empty-state">Durable jobs will appear here.</div></div>
+          </section>
+          <section class="agent-management-panel">
+            <div class="graph-panel-heading">
+              <div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Agent directory</strong></div>
+              <button class="graph-tool-btn" id="graph-add-agent-directory">＋ Create agent</button>
+            </div>
+            <p class="agent-directory-intro">Create the roles your company needs. Set each agent's responsibilities, capabilities, seniority and reporting line. Nothing is preloaded.</p>
+            <div id="company-agent-list" class="company-agent-list"><div class="empty-state">Your team is empty. Create your first agent to get started.</div></div>
           </section>
           <div class="company-bottom-grid">
             <section class="graph-activity-panel">
@@ -113,6 +122,17 @@
             <button id="company-command-send" class="primary-btn">Send instruction ↗</button>
           </div>
         </div>
+      </section>
+
+      <section class="view" id="view-company-agents">
+        <div class="page-heading">
+          <div><div class="eyebrow">COMPANY WORKFORCE / MANAGEMENT</div><h1>AI workforce</h1><p>Design the virtual team your company needs. Create agents with custom responsibilities, skills, seniority and reporting lines. No pre-defined roster is installed.</p></div>
+          <button class="primary-btn" id="workspace-add-agent">＋ Create agent</button>
+        </div>
+        <section class="agent-management-panel">
+          <div class="graph-panel-heading"><div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Company agents</strong></div><span id="workspace-agent-count">0 agents</span></div>
+          <div id="workspace-agent-list" class="company-agent-list"><div class="empty-state">Select or create a company to start building your team.</div></div>
+        </section>
       </section>
 
       <section class="view" id="view-overview">
@@ -157,9 +177,9 @@
       </section>
 
       <section class="view" id="view-agents">
-        <div class="page-heading"><div><div class="eyebrow">DECLARATIVE CONFIGURATION / 003</div><h1>Agent registry</h1><p>Specialists are defined by YAML manifests and validated on reload.</p></div><button class="secondary-btn" id="reload-agents">↻ Reload manifests</button></div>
+        <div class="page-heading"><div><div class="eyebrow">LEGACY WORKFLOW ROUTING / 003</div><h1>Workflow templates</h1><p>These YAML manifests configure the legacy workflow router. Your company's virtual employees are managed separately in AI workforce.</p></div><button class="secondary-btn" id="reload-agents">↻ Reload templates</button></div>
         <div id="agents-grid" class="agents-grid"></div>
-        <div class="config-note"><strong>Configuration source</strong><span>./config/agents/*.yaml</span><p>Changes are loaded without restarting the API. Invalid manifests are rejected and the last known-good registry remains active.</p></div>
+        <div class="config-note"><strong>Configuration source</strong><span>./config/agents/*.yaml</span><p>These manifests are static routing templates for the legacy workflow API. They are not the agents in your company graph.</p></div>
       </section>
 
       <section class="view" id="view-audit">
@@ -167,7 +187,7 @@
         <section class="panel"><div class="panel-head"><div><h2>Execution events</h2><p>Select a workflow from the list to inspect its audit chain.</p></div><select id="audit-workflow-select" class="audit-select"><option value="">Select workflow…</option></select></div><div id="audit-events" class="audit-events"><div class="empty-state">Choose a workflow to view its event trail.</div></div></section>
       </section>
 
-      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.2</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
+      <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.3</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
     </main>
 
     <aside class="right-rail">
@@ -177,6 +197,28 @@
     </aside>
   </div>
   <div id="toast" class="toast"></div>
+  <dialog class="agent-editor-dialog" id="agent-editor-dialog" aria-labelledby="agent-editor-heading">
+    <form id="agent-editor-form" class="agent-editor-form">
+      <header class="agent-editor-heading">
+        <div><div class="eyebrow">COMPANY WORKFORCE</div><h2 id="agent-editor-heading">Create an agent</h2><p>Define a reusable AI employee. Its identity and instructions belong to your company.</p></div>
+        <button type="button" class="icon-btn" id="agent-editor-close" aria-label="Close agent editor">×</button>
+      </header>
+      <input type="hidden" id="agent-editor-id" />
+      <div class="agent-editor-grid">
+        <label>Agent name<input id="agent-editor-name" required maxlength="120" placeholder="e.g. Mira" /></label>
+        <label>Role / function<input id="agent-editor-role" required maxlength="160" placeholder="e.g. Customer research and insights" /></label>
+        <label>Position title<input id="agent-editor-title" required maxlength="160" placeholder="e.g. Senior Customer Researcher" /></label>
+        <label>Seniority level <span class="agent-field-hint">1 = entry · 10 = highest</span><input id="agent-editor-level" type="number" min="1" max="10" value="3" required /></label>
+        <label>Authority<select id="agent-editor-authority"><option value="SPECIALIST">Specialist · assigned work</option><option value="COORDINATOR">Coordinator · plans and delegates</option></select></label>
+        <label>Reports to<select id="agent-editor-manager"><option value="">No manager / direct to company</option></select></label>
+        <label class="agent-editor-wide">Scope and description<textarea id="agent-editor-description" rows="2" maxlength="4000" placeholder="What is this agent accountable for?"></textarea></label>
+        <label class="agent-editor-wide">Skills and capabilities <span class="agent-field-hint">Separate with commas</span><input id="agent-editor-skills" placeholder="research, analysis, writing, customer interviews" /></label>
+        <label class="agent-editor-wide">Responsibilities <span class="agent-field-hint">One per line</span><textarea id="agent-editor-responsibilities" rows="3" placeholder="Research target customers&#10;Summarise user feedback&#10;Recommend experiments"></textarea></label>
+        <label class="agent-editor-wide">System instructions <span class="agent-field-hint">Optional · custom persona and operating rules</span><textarea id="agent-editor-prompt" rows="4" maxlength="8000" placeholder="Describe how this agent should think, communicate and perform its work."></textarea></label>
+      </div>
+      <div class="agent-editor-footer"><span id="agent-editor-feedback" role="status"></span><button type="button" class="secondary-btn" id="agent-editor-cancel">Cancel</button><button type="submit" class="primary-btn" id="agent-editor-save">Save agent</button></div>
+    </form>
+  </dialog>
   <script src="/static/app.js"></script>
   <script src="/static/company-graph.js"></script>
 </body>

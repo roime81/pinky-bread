@@ -22,25 +22,37 @@ The same graph also supports a turn-based agent meeting and auditable KPI measur
 
 Commercial hosted LLMs are not required. The inference contract remains OpenAI-compatible so a local vLLM-compatible service can be used. No model weights are bundled or downloaded by Pinky Bread.
 
-## Workforce model
+## Founder-defined agent model
 
-The idempotent bootstrap endpoint creates seven persistent role identities:
+A new company starts with **zero preloaded agents**. The founder designs the workforce to fit the company instead of choosing from a fixed set of roles.
 
-- Head of Agents — planning, delegation, facilitation and escalation
-- Strategy & Growth
-- Product
-- Technology
-- Marketing
-- Operations
-- Finance & Governance
+Each agent is a persistent company graph node with a user-authored profile:
 
-These are company graph agent nodes, not ephemeral chat sessions. Their role, skills, system prompt, model selection, runtime mode and status are persisted in the node data. Re-running bootstrap does not duplicate roles.
+- Name and position title
+- Free-form role / business function
+- Description and scope
+- Skills and capabilities
+- Responsibilities
+- Optional custom system instructions
+- Seniority level from 1 to 10
+- Authority: `SPECIALIST` or `COORDINATOR`
+- Optional reporting manager
 
-Specialist identities are reusable. Planning a second goal creates new work assignments connected to the existing agent node; it does not clone the agent.
+The founder may create, edit, promote, demote and remove agents in the Agent Directory. Promotion and demotion change seniority by one level; the title and responsibilities remain editable independently. A company may have only one active `COORDINATOR`. The first agent created in the workspace is suggested as the coordinator, but the founder can choose a different person before saving.
+
+Reporting lines are graph edges (`reports_to`) and are validated to prevent self-management, cross-company managers and circular hierarchies. Agent removal is a soft archive: old assignments, deliverables and event history remain available. Direct reports are reassigned to the removed agent's manager when possible. An agent cannot be archived while it has a running assignment.
+
+The old `/workforce/bootstrap` endpoint remains for compatibility but is now a read-only discovery operation; it does not create default staff.
+
+### Coordinator and specialist execution
+
+The agent selected with `COORDINATOR` authority plans goals and delegates assignments. All other active agents are available for delegation. When only the coordinator exists, it can receive a self-assignment so a founder can still validate the workflow while building the team.
+
+The planner receives a catalogue of the company's actual agent IDs, titles, functions, skills and responsibilities. It must assign each task to one of those IDs. The server validates every assignment against the active roster before creating work. No predefined Strategy, Product, Technology, Marketing, Operations or Finance roles are required.
 
 ## Goal planning
 
-The Head of Agents receives company vision, mission and goal context. In local-model mode it asks the configured local reasoning endpoint to return a bounded JSON task plan. The response is validated before any task is written. Unsupported roles, duplicate keys, malformed data and invalid dependencies are rejected.
+The Head of Agents receives company vision, mission and goal context. In local-model mode it asks the configured local reasoning endpoint to return a bounded JSON task plan. The response is validated before any task is written. Unknown agent IDs, duplicate task keys, malformed data and invalid dependencies are rejected.
 
 In mock mode, Pinky Bread uses a clearly labelled deterministic planning template. This lets the graph and workflow be tested without a GPU, inference server or external SaaS model.
 
@@ -98,7 +110,7 @@ All paths are under `/v2`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/companies/{company_id}/workforce/bootstrap` | Create or reconcile the starter AI team |
+| GET | `/companies/{company_id}/agents` | List user-defined agents |\n| POST | `/companies/{company_id}/agents` | Create a custom agent profile |\n| PATCH | `/companies/{company_id}/agents/{agent_id}` | Edit profile, authority, seniority and manager |\n| POST | `/companies/{company_id}/agents/{agent_id}/promote` | Promote one seniority level |\n| POST | `/companies/{company_id}/agents/{agent_id}/demote` | Demote one seniority level |\n| DELETE | `/companies/{company_id}/agents/{agent_id}` | Archive an agent and preserve history |\n| POST | `/companies/{company_id}/workforce/bootstrap` | Legacy-compatible discovery only; no predefined roster is created |
 | POST | `/companies/{company_id}/goals/{goal_id}/plan` | Decompose a goal into persisted assignments |
 | POST | `/companies/{company_id}/goals/{goal_id}/execute` | Execute assignments in dependency order |
 | POST | `/companies/{company_id}/work/{work_id}/execute` | Execute or explicitly retry one assignment |
@@ -139,4 +151,4 @@ Alpha 2 materially improves the runtime but is not a production multi-tenant sys
 
 ## Verification
 
-The Alpha 2 test suite exercises team bootstrap idempotency, goal decomposition, assignment relationships, dependency handling, mock execution, object storage download, meeting persistence, KPI measurement history and event-chain verification. The precise CI result is recorded on the associated GitHub Actions run; do not treat a pushed commit as verified until the run is green.
+The test suite exercises the no-predefined-roster behaviour, custom agent CRUD, promotion/demotion, coordinator uniqueness, reporting-line cycle prevention, archive and direct-report reassignment, dynamic goal delegation, mock execution, object storage download, meeting persistence, KPI measurement history and event-chain verification. The precise CI result is recorded on the associated GitHub Actions run; do not treat a pushed commit as verified until the run is green.

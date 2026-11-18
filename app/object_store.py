@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -122,7 +123,7 @@ class ObjectStore:
             filename=Path(filename).name[:255],
             content_type=(content_type or "application/octet-stream")[:200],
             size_bytes=len(content),
-            sha256=__import__("hashlib").sha256(content).hexdigest(),
+            sha256=hashlib.sha256(content).hexdigest(),
             created_by=created_by,
             metadata_json=metadata or {},
         )
@@ -160,11 +161,14 @@ class ObjectStore:
             )
             return [_object_dict(record) for record in records]
 
-    def get_bytes(self, key: str) -> bytes:
+    def get_bytes(self, key: str, backend: str | None = None) -> bytes:
         safe_key = self._safe_key(key)
-        if self.settings.storage_backend == "s3":
+        selected_backend = backend or self.settings.storage_backend
+        if selected_backend == "s3":
             response = self._s3_client().get_object(Bucket=self.settings.s3_bucket, Key=safe_key)
             return response["Body"].read()
+        if selected_backend != "local":
+            raise ValueError(f"Unsupported storage backend: {selected_backend}")
 
         root = (self.settings.upload_dir / "objects").resolve()
         source = (root / safe_key).resolve()
@@ -172,11 +176,14 @@ class ObjectStore:
             raise FileNotFoundError(safe_key)
         return source.read_bytes()
 
-    def delete(self, key: str) -> None:
+    def delete(self, key: str, backend: str | None = None) -> None:
         safe_key = self._safe_key(key)
-        if self.settings.storage_backend == "s3":
+        selected_backend = backend or self.settings.storage_backend
+        if selected_backend == "s3":
             self._s3_client().delete_object(Bucket=self.settings.s3_bucket, Key=safe_key)
             return
+        if selected_backend != "local":
+            raise ValueError(f"Unsupported storage backend: {selected_backend}")
         root = (self.settings.upload_dir / "objects").resolve()
         source = (root / safe_key).resolve()
         if root not in source.parents:

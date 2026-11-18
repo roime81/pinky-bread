@@ -492,9 +492,9 @@ def build_job_graph(checkpointer):
         if state["kind"] == "goal_plan":
             result = await plan_goal(goal_id=state["target_id"], **args)
         elif state["kind"] == "goal_execution":
-            result = await execute_goal(goal_id=state["target_id"], **args)
+            result = await execute_goal(goal_id=state["target_id"], retry_failed=True, raise_on_error=True, **args)
         elif state["kind"] == "work_execution":
-            result = await execute_task(work_id=state["target_id"], **args)
+            result = await execute_task(work_id=state["target_id"], retry=True, **args)
         elif state["kind"] == "meeting":
             result = await convene_meeting(meeting_id=state["target_id"], **args)
         else:

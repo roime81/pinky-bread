@@ -22,7 +22,13 @@ jobs:
           node --check web/app.js
           node --check web/company-graph.js
       - name: Validate Docker Compose YAML
-        run: python -c "import yaml; yaml.safe_load(open('docker-compose.yml', encoding='utf-8')); print('docker-compose.yml: valid YAML')"
+        run: |
+          python - <<'PY'
+          import yaml
+          with open("docker-compose.yml", encoding="utf-8") as source:
+              yaml.safe_load(source)
+          print("docker-compose.yml: valid YAML")
+          PY
       - name: Run test suite
         env:
           PYTHONPATH: ${{ github.workspace }}

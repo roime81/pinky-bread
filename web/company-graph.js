@@ -9,6 +9,10 @@
     connectSource: null,
     eventSource: null,
     pollHandle: null,
+    jobsPollHandle: null,
+    jobsLoading: false,
+    jobs: [],
+    coordination: null,
     loading: false,
   };
 
@@ -110,7 +114,9 @@
       state.graph = await api(`/v2/companies/${state.company.id}/graph?tenant_id=${encodeURIComponent(state.company.tenant_id)}`);
       renderGraph();
       await loadEvents();
+      await loadJobs();
       if (reconnect) connectLiveEvents();
+      startJobsPolling();
     } catch (error) {
       showError(error.message);
     } finally {
@@ -238,6 +244,130 @@
     $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
   }
+
+  async function loadJobs() {
+    if (!state.company || state.jobsLoading) return;
+    state.jobsLoading = true;
+    try {
+      const tenant = encodeURIComponent(state.company.tenant_id);
+      const [jobsResult, coordinationResult] = await Promise.all([
+        api(`/v2/companies/${state.company.id}/jobs?tenant_id=${tenant}&limit=30`),
+        api(`/v2/companies/${state.company.id}/coordination?tenant_id=${tenant}`),
+      ]);
+      state.jobs = jobsResult.jobs || [];
+      state.coordination = coordinationResult.coordination || null;
+      renderJobs();
+      renderCoordination();
+    } catch (error) {
+      const target = $("#company-job-list");
+      if (target) target.innerHTML = `<div class="graph-error">${escapeHtml(error.message)}</div>`;
+    } finally {
+      state.jobsLoading = false;
+    }
+  }
+
+  function renderJobs() {
+    const target = $("#company-job-list");
+    if (!target) return;
+    const jobs = state.jobs || [];
+    $("#graph-job-count").textContent = `${jobs.length} jobs`;
+    target.innerHTML = jobs.slice(0, 25).map((job) => {
+      const status = String(job.status || "PENDING").toLowerCase();
+      const title = job.payload?.source === "company_coordination"
+        ? "Head of Agents · recurring coordination"
+        : `${String(job.kind || "job").replaceAll("_", " ")}`;
+      const stamp = job.created_at ? new Date(job.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      const attempts = `attempt ${job.attempts}/${job.max_attempts}`;
+      const canCancel = ["PENDING", "RUNNING"].includes(job.status);
+      return `<div class="company-job">
+        <div class="company-job-main">
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(job.target_id)} · ${escapeHtml(stamp)} · ${escapeHtml(attempts)}</small>
+        </div>
+        <span class="company-job-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
+        ${canCancel ? `<button class="graph-tool-btn" data-cancel-job="${escapeHtml(job.job_id)}">Cancel</button>` : ""}
+      </div>`;
+    }).join("") || '<div class="empty-state">No durable jobs yet. Plan or execute a goal to enqueue one.</div>';
+  }
+
+  function renderCoordination() {
+    const policy = state.coordination;
+    const stateLabel = $("#coordination-state");
+    if (!stateLabel) return;
+    stateLabel.textContent = !policy?.enabled
+      ? "Not scheduled"
+      : `${policy.mode.replaceAll("_", " ")} · every ${Math.round(policy.interval_seconds / 60)} min`;
+    $("#coordination-plan-only")?.classList.toggle("is-enabled", policy?.enabled && policy?.mode === "PLAN_ONLY");
+    $("#coordination-auto-execute")?.classList.toggle("is-enabled", policy?.enabled && policy?.mode === "AUTO_EXECUTE");
+    $("#coordination-stop")?.classList.toggle("is-enabled", !policy?.enabled);
+  }
+
+  function startJobsPolling() {
+    if (state.jobsPollHandle) return;
+    state.jobsPollHandle = window.setInterval(() => loadJobs(), 2500);
+  }
+
+  function stopJobsPolling() {
+    if (!state.jobsPollHandle) return;
+    window.clearInterval(state.jobsPollHandle);
+    state.jobsPollHandle = null;
+  }
+
+  async function configureCoordination(enabled, mode = "PLAN_ONLY") {
+    if (!state.company) return;
+    if (enabled && mode === "AUTO_EXECUTE") {
+      const approved = window.confirm(
+        "Enable continuous goal execution? The worker will run assignments for active goals without asking before each task. External financial, legal and customer-facing actions remain unavailable in this alpha."
+      );
+      if (!approved) return;
+    }
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/coordination`, {
+        method: "PUT",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          enabled,
+          mode,
+          interval_seconds: 300,
+        }),
+      });
+      state.coordination = result.coordination;
+      renderCoordination();
+      toast(!enabled ? "Head of Agents coordination paused" : `Coordination enabled · ${mode.replaceAll("_", " ")}`);
+      await loadJobs();
+    } catch (error) { toast(error.message); }
+  }
+
+  async function enqueueGoalJob(goalId, kind) {
+    if (!state.company) return;
+    const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/jobs`, {
+      method: "POST",
+      body: JSON.stringify({
+        tenant_id: state.company.tenant_id,
+        actor_id: "founder",
+        kind,
+        idempotency_key: `founder-ui:${kind}:${goalId}:${Math.floor(Date.now() / 30000)}`,
+      }),
+    });
+    await loadJobs();
+    return result;
+  }
+
+  $("#company-job-list")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-cancel-job]");
+    if (!button || !state.company) return;
+    button.disabled = true;
+    try {
+      await api(`/v2/companies/${state.company.id}/jobs/${button.dataset.cancelJob}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+      });
+      toast("Cancellation requested");
+      await loadJobs();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  });
 
   function onNodeClick(nodeId) {
     if (state.connectMode) {
@@ -410,7 +540,8 @@
       });
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
-      toast("Your company graph has been created");
+      startJobsPolling();
+      toast("Your company graph and virtual workforce have been created");
     } catch (error) {
       toast(error.message);
     } finally {
@@ -528,55 +659,56 @@
   async function planGoal(goalId) {
     if (!state.company) return;
     try {
-      const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/plan`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
-      });
-      await loadGraph();
+      const job = await enqueueGoalJob(goalId, "goal_plan");
       selectNode(goalId);
-      toast(result.created ? `${result.count} assignments created by the Head of Agents` : result.message);
+      toast(job.deduplicated ? "A plan job is already queued or running" : `Goal planning queued · ${job.job_id.slice(0, 8)}`);
     } catch (error) { toast(error.message); }
   }
 
   async function runGoal(goalId) {
     if (!state.company) return;
     const button = $("#inspect-run-goal");
-    if (button) { button.disabled = true; button.textContent = "Executing workflow…"; }
+    if (button) { button.disabled = true; button.textContent = "Queueing…"; }
     try {
-      const result = await api(`/v2/companies/${state.company.id}/goals/${goalId}/execute`, {
-        method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
-      });
+      const job = await enqueueGoalJob(goalId, "goal_execution");
+      toast(job.deduplicated ? "Goal execution is already queued or running" : `Goal execution queued · ${job.job_id.slice(0, 8)}`);
       await loadGraph();
       selectNode(goalId);
-      toast(`Completed ${result.completed} work items · ${result.errors.length} errors · ${result.progress.progress}% goal progress`);
     } catch (error) { toast(error.message); }
-    finally { if (button) { button.disabled = false; button.textContent = "Execute goal workflow"; } }
+    finally { if (button) { button.disabled = false; button.textContent = "Queue goal workflow"; } }
   }
 
-  async function executeWork(workId, retry = false) {
+  async function executeWork(workId) {
     if (!state.company) return;
     try {
-      const result = await api(`/v2/companies/${state.company.id}/work/${workId}/execute`, {
+      const job = await api(`/v2/companies/${state.company.id}/work/${workId}/jobs`, {
         method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder", retry }),
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          idempotency_key: `founder-ui:work:${workId}:${Math.floor(Date.now() / 30000)}`,
+        }),
       });
-      await loadGraph();
+      await loadJobs();
       selectNode(workId);
-      toast(result.idempotent ? result.message : "Assignment completed and deliverable stored");
+      toast(job.deduplicated ? "This assignment is already queued or running" : `Assignment queued · ${job.job_id.slice(0, 8)}`);
     } catch (error) { toast(error.message); }
   }
 
   async function conveneMeetingNode(meetingId) {
     if (!state.company) return;
     try {
-      const result = await api(`/v2/companies/${state.company.id}/meetings/${meetingId}/convene`, {
+      const job = await api(`/v2/companies/${state.company.id}/meetings/${meetingId}/jobs`, {
         method: "POST",
-        body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          idempotency_key: `founder-ui:meeting:${meetingId}:${Math.floor(Date.now() / 30000)}`,
+        }),
       });
-      await loadGraph();
+      await loadJobs();
       selectNode(meetingId);
-      toast(result.idempotent ? result.message : `Meeting completed · ${result.participants.length} agents · minutes stored`);
+      toast(job.deduplicated ? "This meeting is already queued or running" : `Meeting queued · ${job.job_id.slice(0, 8)}`);
     } catch (error) { toast(error.message); }
   }
 
@@ -651,6 +783,7 @@
     state.company = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
+    stopJobsPolling();
     $("#company-create-form").reset();
     setWorkspaceVisible(false);
   });
@@ -669,12 +802,16 @@
     toast(state.connectMode ? "Select the first dot, then the second dot" : "Connect mode cancelled");
   });
   $("#graph-refresh")?.addEventListener("click", () => loadGraph());
+  $("#coordination-plan-only")?.addEventListener("click", () => configureCoordination(true, "PLAN_ONLY"));
+  $("#coordination-auto-execute")?.addEventListener("click", () => configureCoordination(true, "AUTO_EXECUTE"));
+  $("#coordination-stop")?.addEventListener("click", () => configureCoordination(false, "PLAN_ONLY"));
   $("#graph-company-picker")?.addEventListener("change", async (event) => {
     state.company = state.companies.find((company) => company.id === event.target.value);
     state.selectedId = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
     await loadGraph(true);
+    startJobsPolling();
   });
   $("#company-command-send")?.addEventListener("click", handleCommand);
   $("#company-command-input")?.addEventListener("keydown", (event) => {

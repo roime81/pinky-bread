@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 import asyncio
 import re
 import uuid
@@ -13,6 +13,15 @@ from pydantic import BaseModel, Field
 
 from .settings import get_settings
 from .object_store import ObjectStore
+from .durable_runtime import (
+    enqueue_job,
+    get_job,
+    list_jobs,
+    cancel_job,
+    configure_coordination,
+    get_coordination,
+)
+
 from .workforce import (
     bootstrap_workforce,
     plan_goal,
@@ -80,10 +89,25 @@ class KpiMeasurementRequest(WorkforceAction):
     evidence: str = Field(default="", max_length=2000)
 
 
+class GoalJobRequest(WorkforceAction):
+    kind: Literal["goal_plan", "goal_execution"]
+    idempotency_key: str | None = Field(default=None, max_length=180)
+
+
+class CoordinationRequest(WorkforceAction):
+    enabled: bool = True
+    mode: Literal["PLAN_ONLY", "AUTO_EXECUTE"] = "PLAN_ONLY"
+    interval_seconds: int = Field(default=300, ge=60, le=86400)
+
+
+class TargetJobRequest(WorkforceAction):
+    idempotency_key: str | None = Field(default=None, max_length=180)
+
+
 @router.get("/capabilities")
 def company_graph_capabilities() -> dict[str, Any]:
     return {
-        "version": "2.0.0-alpha.2",
+        "version": "2.0.0-alpha.3",
         "node_types": sorted(NODE_TYPES | {"company"}),
         "relationships": sorted(RELATIONSHIPS),
         "persistence": "PostgreSQL/SQLAlchemy graph records and event history",
@@ -91,7 +115,11 @@ def company_graph_capabilities() -> dict[str, Any]:
         "object_storage": "Local filesystem or S3-compatible SeaweedFS with PostgreSQL metadata",
         "workforce": ["idempotent team bootstrap", "goal decomposition", "assigned work execution", "meeting facilitation", "KPI measurement history"],
         "inference": "Local OpenAI-compatible model endpoint or explicitly labelled mock mode",
-        "source_of_truth": "database",
+        "orchestration": "LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints",
+        "durable_jobs": "PostgreSQL job records, worker leases, retries, cancellation and recovery",
+        "coordination": "Founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE schedules",
+        "mcp": "Official MCP Python SDK v2 Streamable HTTP; bearer scopes for development/internal use",
+        "source_of_truth": "PostgreSQL; Valkey is only a best-effort coordination signal",
     }
 
 
@@ -511,6 +539,133 @@ def record_company_kpi_endpoint(
             source=request.source,
             evidence=request.evidence,
         )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+
+@router.post("/companies/{company_id}/goals/{goal_id}/jobs", status_code=202)
+def enqueue_goal_job_endpoint(
+    company_id: str, goal_id: str, request: GoalJobRequest
+) -> dict[str, Any]:
+    try:
+        return enqueue_job(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            kind=request.kind,
+            target_id=goal_id,
+            actor_id=request.actor_id,
+            idempotency_key=request.idempotency_key,
+            payload={"source": "company_api"},
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/work/{work_id}/jobs", status_code=202)
+def enqueue_work_job_endpoint(
+    company_id: str, work_id: str, request: TargetJobRequest
+) -> dict[str, Any]:
+    try:
+        return enqueue_job(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            kind="work_execution",
+            target_id=work_id,
+            actor_id=request.actor_id,
+            idempotency_key=request.idempotency_key,
+            payload={"source": "company_api"},
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/companies/{company_id}/meetings/{meeting_id}/jobs", status_code=202)
+def enqueue_meeting_job_endpoint(
+    company_id: str, meeting_id: str, request: TargetJobRequest
+) -> dict[str, Any]:
+    try:
+        return enqueue_job(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            kind="meeting",
+            target_id=meeting_id,
+            actor_id=request.actor_id,
+            idempotency_key=request.idempotency_key,
+            payload={"source": "company_api"},
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/companies/{company_id}/jobs")
+def list_company_jobs_endpoint(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+    limit: int = Query(default=100, ge=1, le=250),
+) -> dict[str, Any]:
+    if get_company_graph(company_id=company_id, tenant_id=tenant_id) is None:
+        raise HTTPException(404, "Company not found")
+    jobs = list_jobs(company_id=company_id, tenant_id=tenant_id, limit=limit)
+    return {"jobs": jobs, "count": len(jobs)}
+
+
+@router.get("/companies/{company_id}/jobs/{job_id}")
+def get_company_job_endpoint(
+    company_id: str,
+    job_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    job = get_job(job_id=job_id, company_id=company_id, tenant_id=tenant_id)
+    if job is None:
+        raise HTTPException(404, "Workforce job not found")
+    return job
+
+
+@router.post("/companies/{company_id}/jobs/{job_id}/cancel")
+def cancel_company_job_endpoint(
+    company_id: str,
+    job_id: str,
+    request: WorkforceAction,
+) -> dict[str, Any]:
+    job = cancel_job(job_id=job_id, company_id=company_id, tenant_id=request.tenant_id)
+    if job is None:
+        raise HTTPException(404, "Workforce job not found")
+    return job
+
+
+@router.get("/companies/{company_id}/coordination")
+def get_company_coordination_endpoint(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    if get_company_graph(company_id=company_id, tenant_id=tenant_id) is None:
+        raise HTTPException(404, "Company not found")
+    return {"coordination": get_coordination(company_id=company_id, tenant_id=tenant_id)}
+
+
+@router.put("/companies/{company_id}/coordination")
+def configure_company_coordination_endpoint(
+    company_id: str, request: CoordinationRequest
+) -> dict[str, Any]:
+    try:
+        policy = configure_coordination(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            enabled=request.enabled,
+            mode=request.mode,
+            interval_seconds=request.interval_seconds,
+        )
+        return {"coordination": policy}
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:

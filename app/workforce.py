@@ -4,7 +4,7 @@ import json
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -15,6 +15,11 @@ from .settings import get_settings
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+
+class WorkforceExecutionCancelled(RuntimeError):
+    """Cooperative cancellation at safe agent/task boundaries."""
 
 
 ROLE_SPECS: dict[str, dict[str, Any]] = {
@@ -358,8 +363,27 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
             f"Goal: {goal['name']}\nDescription: {goal.get('description', '')}\n"
             f"Available specialists: {', '.join(sorted(set(ROLE_SPECS) - {'head_of_agents'}))}"
         )
-        tasks = _parse_plan(await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.15, max_tokens=2400))
-        planner_mode = "local-model"
+        if settings.mcp_enabled:
+            from .mcp_client import complete_with_mcp
+
+            plan_response = await complete_with_mcp(
+                system_prompt=system,
+                user_prompt=prompt,
+                role="head_of_agents",
+                company_id=company_id,
+                tenant_id=tenant_id,
+                agent_id=head["id"],
+                max_tokens=2400,
+            )
+        else:
+            plan_response = await _chat_completion(
+                system_prompt=system,
+                user_prompt=prompt,
+                temperature=0.15,
+                max_tokens=2400,
+            )
+        tasks = _parse_plan(plan_response)
+        planner_mode = "local-model+mcp" if settings.mcp_enabled else "local-model"
     missing = sorted({task["role"] for task in tasks} - set(agents))
     if missing:
         raise RuntimeError(f"Workforce is missing specialist roles: {', '.join(missing)}")
@@ -417,7 +441,9 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
     }
 
 
-async def _execute_prompt(agent: dict[str, Any], prompt: str) -> str:
+async def _execute_prompt(
+    agent: dict[str, Any], prompt: str, *, company_id: str, tenant_id: str
+) -> str:
     settings = get_settings()
     data = agent.get("data") or {}
     if settings.mock_inference:
@@ -431,6 +457,18 @@ async def _execute_prompt(agent: dict[str, Any], prompt: str) -> str:
             "Configure a reachable local OpenAI-compatible model endpoint and set MOCK_INFERENCE=false for model-generated work.\n"
         )
     system = str(data.get("system_prompt") or "You are a specialist AI employee. Complete the assigned work, state assumptions and provide a practical deliverable.")
+    if settings.mcp_enabled:
+        from .mcp_client import complete_with_mcp
+
+        return await complete_with_mcp(
+            system_prompt=system,
+            user_prompt=prompt,
+            role=str(data.get("role") or "specialist"),
+            company_id=company_id,
+            tenant_id=tenant_id,
+            agent_id=agent["id"],
+            max_tokens=2400,
+        )
     return await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.25, max_tokens=2400)
 
 
@@ -459,7 +497,10 @@ def _goal_progress(company_id: str, tenant_id: str, goal_id: str, actor_id: str)
     return {"progress": progress, "completed_work": completed, "total_work": len(tasks)}
 
 
-async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_id: str, retry: bool = False) -> dict[str, Any]:
+async def execute_task(
+    *, company_id: str, tenant_id: str, work_id: str, actor_id: str,
+    retry: bool = False, cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
@@ -468,11 +509,24 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         raise LookupError("Work item not found")
     if work["status"] == "COMPLETED":
         return {"task": work, "idempotent": True, "message": "This assignment is already complete."}
+    if cancel_check and cancel_check():
+        raise WorkforceExecutionCancelled("Workforce job cancelled before assignment start")
+    data = work.get("data") or {}
+    recovering = False
     if work["status"] == "RUNNING":
-        raise RuntimeError("This assignment is already running")
+        started = data.get("started_at")
+        try:
+            started_at = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            age_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+        except (TypeError, ValueError):
+            age_seconds = get_settings().worker_lease_seconds + 1
+        if age_seconds <= get_settings().worker_lease_seconds:
+            raise RuntimeError("This assignment is already running under a live worker lease")
+        recovering = True
     if work["status"] == "FAILED" and not retry:
         raise RuntimeError("This assignment failed; set retry=true to run it again")
-    data = work.get("data") or {}
     for dependency_key in data.get("depends_on_keys", []):
         dependency = next((
             node for node in _nodes(graph)
@@ -493,14 +547,19 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         raise RuntimeError("Assigned agent is not available")
     goal = next((node for node in _nodes(graph) if node["id"] == data.get("goal_id")), None)
     company = next(node for node in _nodes(graph) if node["type"] == "company")
-    attempt = int(data.get("attempt", 0)) + 1
+    attempt = int(data.get("attempt", 0)) if recovering else int(data.get("attempt", 0)) + 1
     update_node(
         company_id=company_id,
         tenant_id=tenant_id,
         actor_id=agent["id"],
         node_id=work_id,
         status="RUNNING",
-        data_patch={"attempt": attempt, "started_at": _now(), "runtime_mode": "MOCK" if get_settings().mock_inference else "LOCAL_MODEL"},
+        data_patch={
+            "attempt": max(attempt, 1),
+            "started_at": data.get("started_at") if recovering else _now(),
+            "runtime_mode": "MOCK" if get_settings().mock_inference else "LOCAL_MODEL",
+            "recovered_after_lease_expiry": recovering,
+        },
     )
     dependencies = []
     for edge in _edges(graph):
@@ -521,11 +580,12 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         "Include a concise summary and explicit next steps. Do not claim that external actions were performed."
     )
     try:
-        output = await _execute_prompt(agent, prompt)
-        object_id = str(uuid.uuid4())
-        filename = f"{data.get('task_key', work_id)}-deliverable.md"
-        object_key = f"companies/{company_id}/deliverables/{object_id}-{filename}"
-        stored = ObjectStore().persist_object(
+        output = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
+        if cancel_check and cancel_check():
+            raise WorkforceExecutionCancelled("Workforce job cancelled after model inference")
+        filename = f"work-{work_id[:8]}-attempt-{max(attempt, 1)}.md"
+        object_key = f"companies/{company_id}/deliverables/{work_id}/attempt-{max(attempt, 1)}.md"
+        stored = ObjectStore().persist_object_idempotent(
             key=object_key,
             content=output.encode("utf-8"),
             content_type="text/markdown; charset=utf-8",
@@ -537,36 +597,62 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
             created_by=agent["id"],
             metadata={"goal_id": data.get("goal_id"), "agent_id": agent["id"], "work_id": work_id},
         )
-        deliverable = create_node(
-            company_id=company_id,
-            tenant_id=tenant_id,
-            actor_id=agent["id"],
-            node_type="deliverable",
-            name=f"Deliverable: {work['name']}",
-            description=f"Generated by {agent['name']} for assignment {work['name']}",
-            status="STORED",
-            data={
-                "object_id": stored["object_id"],
-                "filename": filename,
-                "content_type": stored["content_type"],
-                "size_bytes": stored["size_bytes"],
-                "sha256": stored["sha256"],
-                "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
-                "work_id": work_id,
-                "goal_id": data.get("goal_id"),
-                "agent_id": agent["id"],
-                "execution_mode": stored["metadata"].get("execution_mode", "MOCK" if get_settings().mock_inference else "LOCAL_MODEL"),
-            },
+        latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
+        deliverable_data = {
+            "object_id": stored["object_id"],
+            "filename": filename,
+            "content_type": stored["content_type"],
+            "size_bytes": stored["size_bytes"],
+            "sha256": stored["sha256"],
+            "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
+            "work_id": work_id,
+            "goal_id": data.get("goal_id"),
+            "agent_id": agent["id"],
+            "attempt": max(attempt, 1),
+            "execution_mode": "MOCK" if get_settings().mock_inference else "LOCAL_MODEL",
+        }
+        deliverable = next((
+            node for node in latest_graph["nodes"]
+            if node["type"] == "deliverable"
+            and (node.get("data") or {}).get("work_id") == work_id
+            and (node.get("data") or {}).get("attempt") == max(attempt, 1)
+        ), None)
+        if deliverable is None:
+            deliverable = create_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=agent["id"],
+                node_type="deliverable",
+                name=f"Deliverable: {work['name']}",
+                description=f"Generated by {agent['name']} for assignment {work['name']}",
+                status="STORED",
+                data=deliverable_data,
+            )
+        else:
+            deliverable = update_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=agent["id"],
+                node_id=deliverable["id"],
+                status="STORED",
+                data_patch=deliverable_data,
+            ) or deliverable
+        latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or latest_graph
+        has_produces_edge = any(
+            edge["source"] == work_id and edge["target"] == deliverable["id"]
+            and edge["relationship"] == "produces"
+            for edge in latest_graph["edges"]
         )
-        create_edge(
-            company_id=company_id,
-            tenant_id=tenant_id,
-            actor_id=agent["id"],
-            source_node_id=work_id,
-            target_node_id=deliverable["id"],
-            relationship="produces",
-            data={"object_id": stored["object_id"]},
-        )
+        if not has_produces_edge:
+            create_edge(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=agent["id"],
+                source_node_id=work_id,
+                target_node_id=deliverable["id"],
+                relationship="produces",
+                data={"object_id": stored["object_id"]},
+            )
         completed = update_node(
             company_id=company_id,
             tenant_id=tenant_id,
@@ -584,6 +670,16 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         )
         progress = _goal_progress(company_id, tenant_id, str(data.get("goal_id")), agent["id"])
         return {"task": completed, "deliverable": deliverable, "progress": progress, "idempotent": False}
+    except WorkforceExecutionCancelled as exc:
+        update_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=agent["id"],
+            node_id=work_id,
+            status="CANCELLED",
+            data_patch={"cancelled_at": _now(), "last_error": str(exc)[:1000]},
+        )
+        raise
     except Exception as exc:
         update_node(
             company_id=company_id,
@@ -596,7 +692,11 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         raise
 
 
-async def execute_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: str) -> dict[str, Any]:
+async def execute_goal(
+    *, company_id: str, tenant_id: str, goal_id: str, actor_id: str,
+    retry_failed: bool = False, raise_on_error: bool = False,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
@@ -611,6 +711,8 @@ async def execute_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_i
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for task in tasks:
+        if cancel_check and cancel_check():
+            raise WorkforceExecutionCancelled("Goal execution cancelled between assignments")
         current = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
         current_task = next((node for node in _nodes(current) if node["id"] == task["id"]), task)
         if current_task["status"] == "COMPLETED":
@@ -618,11 +720,14 @@ async def execute_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_i
             continue
         try:
             result = await execute_task(
-                company_id=company_id, tenant_id=tenant_id, work_id=task["id"], actor_id=actor_id
+                company_id=company_id, tenant_id=tenant_id, work_id=task["id"], actor_id=actor_id,
+                retry=retry_failed, cancel_check=cancel_check,
             )
             results.append({"work_id": task["id"], "status": result["task"]["status"], "deliverable_id": result["deliverable"]["id"]})
         except Exception as exc:
             errors.append({"work_id": task["id"], "error": str(exc)})
+            if raise_on_error:
+                raise
     progress = _goal_progress(company_id, tenant_id, goal_id, actor_id)
     return {
         "goal_id": goal_id,
@@ -634,7 +739,10 @@ async def execute_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_i
     }
 
 
-async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, actor_id: str) -> dict[str, Any]:
+async def convene_meeting(
+    *, company_id: str, tenant_id: str, meeting_id: str, actor_id: str,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise LookupError("Company not found")
@@ -673,6 +781,16 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
     )
     discussion: list[dict[str, Any]] = []
     for index, agent in enumerate(agents, start=1):
+        if cancel_check and cancel_check():
+            update_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                node_id=meeting_id,
+                status="CANCELLED",
+                data_patch={"meeting_state": "CANCELLED", "cancelled_at": _now()},
+            )
+            raise WorkforceExecutionCancelled("Meeting cancelled between agent turns")
         prior = "\n".join(f"{item['agent_name']}: {item['contribution']}" for item in discussion)
         prompt = (
             f"Company meeting: {meeting['name']}\nAgenda: {agenda}\n"
@@ -682,7 +800,17 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
             "Contribute one concise, practical perspective. Identify one risk or disagreement when relevant and suggest a concrete next step. "
             "Do not claim actions have been executed."
         )
-        contribution = await _execute_prompt(agent, prompt)
+        contribution = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
+        if cancel_check and cancel_check():
+            update_node(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                node_id=meeting_id,
+                status="CANCELLED",
+                data_patch={"meeting_state": "CANCELLED", "cancelled_at": _now()},
+            )
+            raise WorkforceExecutionCancelled("Meeting cancelled after agent response")
         discussion.append({
             "sequence": index,
             "agent_id": agent["id"],
@@ -707,15 +835,15 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
         )
         mode = "MOCK"
     else:
-        summary = await _chat_completion(
-            system_prompt=str((head.get("data") or {}).get("system_prompt") or ROLE_SPECS["head_of_agents"]["system_prompt"]),
-            user_prompt=(
+        summary = await _execute_prompt(
+            head,
+            (
                 "Summarise this virtual company meeting. Include key discussion points, disagreements, decisions proposed, "
                 "risks and recommended action items with suggested owners. Distinguish proposals from approved decisions.\n\n"
                 f"Meeting: {meeting['name']}\nAgenda: {agenda}\nTranscript:\n{transcript}"
             ),
-            temperature=0.2,
-            max_tokens=1800,
+            company_id=company_id,
+            tenant_id=tenant_id,
         )
         mode = "LOCAL_MODEL"
 
@@ -727,10 +855,10 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
         f"- Runtime: {mode}\n\n"
         f"## Facilitator summary\n{summary}\n\n## Discussion transcript\n{transcript}\n"
     )
-    object_id = str(uuid.uuid4())
     filename = f"meeting-{meeting_id}-minutes.md"
-    stored = ObjectStore().persist_object(
-        key=f"companies/{company_id}/meetings/{object_id}-{filename}",
+    object_key = f"companies/{company_id}/meetings/{meeting_id}/minutes.md"
+    stored = ObjectStore().persist_object_idempotent(
+        key=object_key,
         content=minutes.encode("utf-8"),
         content_type="text/markdown; charset=utf-8",
         tenant_id=tenant_id,
@@ -741,34 +869,58 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
         created_by=head["id"],
         metadata={"meeting_id": meeting_id, "participant_ids": [agent["id"] for agent in agents], "runtime_mode": mode},
     )
-    deliverable = create_node(
-        company_id=company_id,
-        tenant_id=tenant_id,
-        actor_id=head["id"],
-        node_type="deliverable",
-        name=f"Minutes: {meeting['name']}",
-        description="Persisted meeting minutes and turn-by-turn agent discussion.",
-        status="STORED",
-        data={
-            "object_id": stored["object_id"],
-            "filename": filename,
-            "content_type": stored["content_type"],
-            "size_bytes": stored["size_bytes"],
-            "sha256": stored["sha256"],
-            "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
-            "meeting_id": meeting_id,
-            "execution_mode": mode,
-        },
+    latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
+    deliverable_data = {
+        "object_id": stored["object_id"],
+        "filename": filename,
+        "content_type": stored["content_type"],
+        "size_bytes": stored["size_bytes"],
+        "sha256": stored["sha256"],
+        "download_endpoint": f"/v2/companies/{company_id}/artifacts/{stored['object_id']}",
+        "meeting_id": meeting_id,
+        "execution_mode": mode,
+    }
+    deliverable = next((
+        node for node in latest_graph["nodes"]
+        if node["type"] == "deliverable"
+        and (node.get("data") or {}).get("meeting_id") == meeting_id
+    ), None)
+    if deliverable is None:
+        deliverable = create_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            node_type="deliverable",
+            name=f"Minutes: {meeting['name']}",
+            description="Persisted meeting minutes and turn-by-turn agent discussion.",
+            status="STORED",
+            data=deliverable_data,
+        )
+    else:
+        deliverable = update_node(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            node_id=deliverable["id"],
+            status="STORED",
+            data_patch=deliverable_data,
+        ) or deliverable
+    latest_graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or latest_graph
+    has_produces_edge = any(
+        edge["source"] == meeting_id and edge["target"] == deliverable["id"]
+        and edge["relationship"] == "produces"
+        for edge in latest_graph["edges"]
     )
-    create_edge(
-        company_id=company_id,
-        tenant_id=tenant_id,
-        actor_id=head["id"],
-        source_node_id=meeting_id,
-        target_node_id=deliverable["id"],
-        relationship="produces",
-        data={"object_id": stored["object_id"]},
-    )
+    if not has_produces_edge:
+        create_edge(
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=head["id"],
+            source_node_id=meeting_id,
+            target_node_id=deliverable["id"],
+            relationship="produces",
+            data={"object_id": stored["object_id"]},
+        )
     completed = update_node(
         company_id=company_id,
         tenant_id=tenant_id,

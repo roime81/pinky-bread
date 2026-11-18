@@ -169,17 +169,17 @@ No proprietary hosted LLM, vector database, object storage or workflow service i
 The current feature branch implements:
 
 - Company creation with vision, mission and values.
-- Persistent graph nodes and typed edges.
-- Tenant-filtered graph snapshots.
-- Append-only company events with SHA-256 hash chaining and a chain verification API.
-- Valkey Pub/Sub notifications and a server-sent event endpoint for connected graph clients.
-- Company Graph as the default UI workspace.
-- First-run company creation and a proposed Head of Agents node.
-- UI creation of goal, agent, work and meeting nodes.
-- UI relationship creation by selecting two nodes.
-- Node inspector, relationship inspection and recent company event list.
-- Local or S3-compatible object storage for existing workflow attachments.
-- Compose services for PostgreSQL/pgvector, Valkey and SeaweedFS.
+- Persistent graph nodes and typed edges, including many-to-many agent-to-goal relationships.
+- Tenant-filtered graph snapshots and append-only SHA-256 hash-linked event history with verification.
+- Valkey Pub/Sub notifications and server-sent events for connected graph clients.
+- Company Graph as the primary UI, with an inspector that exposes node-specific workforce actions.
+- Idempotent bootstrap of Head of Agents and six reusable specialist identities.
+- Goal decomposition into persisted assignments, acceptance criteria, assigned-agent edges and prerequisite dependencies.
+- Request-driven execution through a configured local OpenAI-compatible inference endpoint, with explicitly labelled mock mode for GPU-free development.
+- Stored Markdown work products, object metadata/checksums and graph-linked deliverables.
+- Turn-based multi-agent text meetings with participant edges, timestamped contributions and stored minutes.
+- KPI measurement history with source, evidence, timestamp and target comparison.
+- PostgreSQL/pgvector, Valkey and SeaweedFS Compose services, with PostgreSQL as the durable source of truth.
 
 ### Explicit Alpha 2 boundaries
 
@@ -187,7 +187,7 @@ The Head of Agents can plan goal assignments and specialists can execute bounded
 
 Authentication, OIDC, tenant authorisation, RBAC, production approvals, durable LangGraph checkpoints, official MCP transport, pgvector retrieval and production telemetry are not complete. Development defaults and demo credentials must be replaced before a shared deployment.
 
-## API surface added in Alpha 1
+## API surface added in Alpha 1 and Alpha 2
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -200,6 +200,14 @@ Authentication, OIDC, tenant authorisation, RBAC, production approvals, durable 
 | `GET` | `/v2/companies/{id}/events` | Read durable company event history |
 | `GET` | `/v2/companies/{id}/events/verify` | Verify the company event hash chain |
 | `GET` | `/v2/companies/{id}/events/stream` | Receive Valkey-backed live graph notifications |
+| `POST` | `/v2/companies/{id}/workforce/bootstrap` | Create or reconcile the persistent starter workforce |
+| `POST` | `/v2/companies/{id}/goals/{goal_id}/plan` | Head of Agents decomposes a goal into assignments |
+| `POST` | `/v2/companies/{id}/goals/{goal_id}/execute` | Execute assignments sequentially in dependency order |
+| `POST` | `/v2/companies/{id}/work/{work_id}/execute` | Execute or explicitly retry one assignment |
+| `POST` | `/v2/companies/{id}/meetings/{meeting_id}/convene` | Convene agents and persist meeting minutes |
+| `POST` | `/v2/companies/{id}/kpis/{kpi_id}/measure` | Record a source-backed KPI measurement |
+| `POST` | `/v2/companies/{id}/artifacts` | Store a company document or deliverable in object storage |
+| `GET` | `/v2/companies/{id}/artifacts/{object_id}` | Download an authorised-by-tenant-context object record (OIDC authorization is not implemented yet) |
 
 ## Security and operational caveats
 

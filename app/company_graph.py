@@ -337,6 +337,58 @@ def create_node(
     return result
 
 
+
+def update_node(
+    *,
+    company_id: str,
+    tenant_id: str,
+    actor_id: str,
+    node_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
+    data_patch: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Update a graph node and append an auditable change event."""
+    with SessionLocal() as db:
+        node = db.query(CompanyGraphNode).filter(
+            CompanyGraphNode.node_id == node_id,
+            CompanyGraphNode.company_id == company_id,
+            CompanyGraphNode.tenant_id == tenant_id,
+        ).first()
+        if node is None:
+            return None
+        changes: dict[str, Any] = {}
+        if name is not None:
+            node.name = name
+            changes["name"] = name
+        if description is not None:
+            node.description = description
+            changes["description"] = description
+        if status is not None:
+            node.status = status
+            changes["status"] = status
+        if data_patch:
+            merged = dict(node.data or {})
+            merged.update(data_patch)
+            node.data = merged
+            changes["data_patch"] = data_patch
+        node.updated_at = utcnow()
+        event = _append_event(
+            db,
+            company_id=company_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            event_type=f"{node.node_type}.updated",
+            payload={"node_id": node_id, "changes": changes},
+        )
+        db.commit()
+        result = _node_dict(node)
+        event_data = _event_dict(event)
+    _notify(event_data)
+    return result
+
+
 def create_edge(
     *,
     company_id: str,

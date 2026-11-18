@@ -37,6 +37,9 @@ from .company_graph import (
     create_company,
     create_edge,
     create_node,
+    create_agent_node,
+    update_agent_node,
+    archive_agent_node,
     get_company_graph,
     list_companies,
     list_company_events,
@@ -77,6 +80,33 @@ class GraphEdgeCreate(BaseModel):
 class WorkforceAction(BaseModel):
     tenant_id: str = Field(default="demo-tenant", min_length=2, max_length=120)
     actor_id: str = Field(default="demo-user", min_length=2, max_length=120)
+
+
+class AgentCreateRequest(WorkforceAction):
+    name: str = Field(min_length=2, max_length=120)
+    role: str = Field(min_length=2, max_length=160)
+    title: str = Field(min_length=2, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    skills: list[str] = Field(default_factory=list, max_length=30)
+    responsibilities: list[str] = Field(default_factory=list, max_length=20)
+    system_prompt: str = Field(default="", max_length=8000)
+    seniority_level: int = Field(default=3, ge=1, le=10)
+    authority: Literal["SPECIALIST", "COORDINATOR"] = "SPECIALIST"
+    manager_id: str | None = Field(default=None, min_length=36, max_length=36)
+
+
+class AgentUpdateRequest(WorkforceAction):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    role: str | None = Field(default=None, min_length=2, max_length=160)
+    title: str | None = Field(default=None, min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=4000)
+    skills: list[str] | None = Field(default=None, max_length=30)
+    responsibilities: list[str] | None = Field(default=None, max_length=20)
+    system_prompt: str | None = Field(default=None, max_length=8000)
+    seniority_level: int | None = Field(default=None, ge=1, le=10)
+    authority: Literal["SPECIALIST", "COORDINATOR"] | None = None
+    manager_id: str | None = Field(default=None, min_length=36, max_length=36)
+    status: Literal["ACTIVE", "PAUSED"] | None = None
 
 
 class WorkExecutionRequest(WorkforceAction):
@@ -438,6 +468,136 @@ def download_company_artifact(
         headers={"Content-Disposition": f'attachment; filename="{record["filename"]}"'},
     )
 
+
+
+@router.get("/companies/{company_id}/agents")
+def list_company_agents_endpoint(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agents = [node for node in graph["nodes"] if node["type"] == "agent"]
+    return {"agents": agents, "count": len(agents)}
+
+
+@router.post("/companies/{company_id}/agents", status_code=201)
+def create_company_agent_endpoint(company_id: str, request: AgentCreateRequest) -> dict[str, Any]:
+    data = {
+        "role": request.role.strip(),
+        "title": request.title.strip(),
+        "skills": [item.strip() for item in request.skills if item.strip()],
+        "responsibilities": [item.strip() for item in request.responsibilities if item.strip()],
+        "system_prompt": request.system_prompt.strip(),
+        "seniority_level": request.seniority_level,
+        "authority": request.authority,
+        "runtime_status": "READY",
+        "created_via": "company_agent_management",
+    }
+    try:
+        node = create_agent_node(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            name=request.name.strip(),
+            description=request.description.strip(),
+            data=data,
+            manager_id=request.manager_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if node is None:
+        raise HTTPException(404, "Company not found")
+    return node
+
+
+@router.patch("/companies/{company_id}/agents/{agent_id}")
+def update_company_agent_endpoint(
+    company_id: str, agent_id: str, request: AgentUpdateRequest
+) -> dict[str, Any]:
+    fields = request.model_fields_set
+    patch: dict[str, Any] = {}
+    for key in ("role", "title", "skills", "responsibilities", "system_prompt", "seniority_level", "authority"):
+        if key in fields:
+            value = getattr(request, key)
+            patch[key] = [item.strip() for item in value if item.strip()] if key in {"skills", "responsibilities"} and value is not None else (value.strip() if key in {"role", "title", "system_prompt"} and value is not None else value)
+    try:
+        node = update_agent_node(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            node_id=agent_id,
+            name=request.name.strip() if request.name is not None else None,
+            description=request.description.strip() if request.description is not None else None,
+            data_patch=patch,
+            status=request.status,
+            manager_id=request.manager_id,
+            update_manager="manager_id" in fields,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if node is None:
+        raise HTTPException(404, "Agent not found")
+    return node
+
+
+@router.post("/companies/{company_id}/agents/{agent_id}/promote")
+def promote_company_agent_endpoint(company_id: str, agent_id: str, request: WorkforceAction) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agent = next((node for node in graph["nodes"] if node["id"] == agent_id and node["type"] == "agent"), None)
+    if agent is None:
+        raise HTTPException(404, "Agent not found")
+    level = int((agent.get("data") or {}).get("seniority_level", 3))
+    if level >= 10:
+        raise HTTPException(409, "Agent is already at the highest seniority level")
+    return update_agent_node(
+        company_id=company_id,
+        tenant_id=request.tenant_id,
+        actor_id=request.actor_id,
+        node_id=agent_id,
+        data_patch={"seniority_level": level + 1},
+    )
+
+
+@router.post("/companies/{company_id}/agents/{agent_id}/demote")
+def demote_company_agent_endpoint(company_id: str, agent_id: str, request: WorkforceAction) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agent = next((node for node in graph["nodes"] if node["id"] == agent_id and node["type"] == "agent"), None)
+    if agent is None:
+        raise HTTPException(404, "Agent not found")
+    level = int((agent.get("data") or {}).get("seniority_level", 3))
+    if level <= 1:
+        raise HTTPException(409, "Agent is already at the lowest seniority level")
+    return update_agent_node(
+        company_id=company_id,
+        tenant_id=request.tenant_id,
+        actor_id=request.actor_id,
+        node_id=agent_id,
+        data_patch={"seniority_level": level - 1},
+    )
+
+
+@router.delete("/companies/{company_id}/agents/{agent_id}")
+def remove_company_agent_endpoint(
+    company_id: str, agent_id: str, request: WorkforceAction
+) -> dict[str, Any]:
+    try:
+        node = archive_agent_node(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            node_id=agent_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if node is None:
+        raise HTTPException(404, "Agent not found")
+    return {"removed": True, "preserved_history": True, "agent": node}
 
 
 @router.post("/companies/{company_id}/workforce/bootstrap")

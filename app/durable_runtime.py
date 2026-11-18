@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String, Text, UniqueConstraint, and_, or_
+from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String, Text, UniqueConstraint, text as sql_text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from langgraph.graph import END, StateGraph
@@ -29,6 +30,15 @@ class WorkforceJob(Base):
         Index("ix_workforce_jobs_company", "company_id", "created_at"),
         Index("ix_workforce_jobs_lease", "status", "lease_expires_at"),
         UniqueConstraint("company_id", "idempotency_key", name="uq_workforce_job_idempotency"),
+        Index(
+            "uq_workforce_jobs_active_target",
+            "company_id",
+            "kind",
+            "target_id",
+            unique=True,
+            postgresql_where=sql_text("status IN ('PENDING', 'RUNNING')"),
+            sqlite_where=sql_text("status IN ('PENDING', 'RUNNING')"),
+        ),
     )
 
     job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -133,40 +143,61 @@ def enqueue_job(
     if target_id not in ids:
         raise LookupError("Job target not found in this company")
     key = (idempotency_key or f"request:{uuid.uuid4()}")[:180]
-    with SessionLocal() as db:
-        existing = db.query(WorkforceJob).filter(
-            WorkforceJob.company_id == company_id,
-            WorkforceJob.idempotency_key == key,
-        ).first()
-        if existing:
+    effective_max_attempts = min(max(int(max_attempts or get_settings().worker_max_attempts), 1), 10)
+    try:
+        with SessionLocal() as db:
+            existing = db.query(WorkforceJob).filter(
+                WorkforceJob.company_id == company_id,
+                WorkforceJob.idempotency_key == key,
+            ).first()
+            if existing:
+                return {**_job_dict(existing), "deduplicated": True}
+            active = db.query(WorkforceJob).filter(
+                WorkforceJob.company_id == company_id,
+                WorkforceJob.tenant_id == tenant_id,
+                WorkforceJob.kind == kind,
+                WorkforceJob.target_id == target_id,
+                WorkforceJob.status.in_(["PENDING", "RUNNING"]),
+            ).order_by(WorkforceJob.created_at.desc()).first()
+            if active:
+                return {**_job_dict(active), "deduplicated": True}
+            job = WorkforceJob(
+                job_id=str(uuid.uuid4()),
+                company_id=company_id,
+                tenant_id=tenant_id,
+                kind=kind,
+                target_id=target_id,
+                idempotency_key=key,
+                status="PENDING",
+                payload=payload or {},
+                attempts=0,
+                max_attempts=effective_max_attempts,
+                available_at=utcnow(),
+                created_by=actor_id,
+            )
+            db.add(job)
+            db.commit()
+            db.refresh(job)
+            result = _job_dict(job)
+    except IntegrityError:
+        # A concurrent producer may have won the unique idempotency/active-job
+        # index between the SELECT and INSERT. Return that durable row instead.
+        with SessionLocal() as db:
+            existing = db.query(WorkforceJob).filter(
+                WorkforceJob.company_id == company_id,
+                WorkforceJob.idempotency_key == key,
+            ).first()
+            if existing is None:
+                existing = db.query(WorkforceJob).filter(
+                    WorkforceJob.company_id == company_id,
+                    WorkforceJob.tenant_id == tenant_id,
+                    WorkforceJob.kind == kind,
+                    WorkforceJob.target_id == target_id,
+                    WorkforceJob.status.in_(["PENDING", "RUNNING"]),
+                ).order_by(WorkforceJob.created_at.desc()).first()
+            if existing is None:
+                raise
             return {**_job_dict(existing), "deduplicated": True}
-        active = db.query(WorkforceJob).filter(
-            WorkforceJob.company_id == company_id,
-            WorkforceJob.tenant_id == tenant_id,
-            WorkforceJob.kind == kind,
-            WorkforceJob.target_id == target_id,
-            WorkforceJob.status.in_(["PENDING", "RUNNING"]),
-        ).order_by(WorkforceJob.created_at.desc()).first()
-        if active:
-            return {**_job_dict(active), "deduplicated": True}
-        job = WorkforceJob(
-            job_id=str(uuid.uuid4()),
-            company_id=company_id,
-            tenant_id=tenant_id,
-            kind=kind,
-            target_id=target_id,
-            idempotency_key=key,
-            status="PENDING",
-            payload=payload or {},
-            attempts=0,
-            max_attempts=min(max(max_attempts, 1), 10),
-            available_at=utcnow(),
-            created_by=actor_id,
-        )
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-        result = _job_dict(job)
     _notify_workers(result["job_id"])
     return {**result, "deduplicated": False}
 
@@ -182,9 +213,13 @@ def get_job(*, job_id: str, company_id: str | None = None, tenant_id: str | None
         return _job_dict(job) if job else None
 
 
-def job_cancel_requested(job_id: str) -> bool:
+def job_cancel_requested(job_id: str, worker_id: str | None = None) -> bool:
     job = get_job(job_id=job_id)
-    return bool(job and (job["cancel_requested"] or job["status"] == "CANCELLED"))
+    if job is None or job["cancel_requested"] or job["status"] != "RUNNING":
+        return True
+    if worker_id is not None and job["lease_owner"] != worker_id:
+        return True
+    return False
 
 
 def list_jobs(*, company_id: str, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -410,7 +445,7 @@ def run_coordination_tick(limit: int = 50) -> int:
         rows = db.query(CompanyCoordination).filter(
             CompanyCoordination.enabled.is_(True),
             CompanyCoordination.next_run_at <= now,
-        ).order_by(CompanyCoordination.next_run_at.asc()).limit(limit).all()
+        ).order_by(CompanyCoordination.next_run_at.asc()).limit(limit).with_for_update(skip_locked=True).all()
         for row in rows:
             due.append((row.company_id, row.tenant_id, row.mode, row.interval_seconds))
             row.last_run_at = now
@@ -466,14 +501,14 @@ class DurableJobState(TypedDict, total=False):
     cancelled: bool
 
 
-def build_job_graph(checkpointer):
+def build_job_graph(checkpointer, worker_id: str | None = None):
     """Compile the LangGraph job state machine with the supplied checkpoint saver."""
 
     async def load_job(state: DurableJobState) -> dict[str, Any]:
         job = get_job(job_id=state["job_id"])
         if job is None:
             raise LookupError("Durable workforce job no longer exists")
-        if job["cancel_requested"] or job["status"] == "CANCELLED":
+        if job_cancel_requested(state["job_id"], worker_id):
             return {"cancelled": True}
         return {
             "company_id": job["company_id"],
@@ -500,7 +535,7 @@ def build_job_graph(checkpointer):
             "tenant_id": state["tenant_id"],
             "actor_id": state["actor_id"],
         }
-        cancel_check = lambda: job_cancel_requested(state["job_id"])
+        cancel_check = lambda: job_cancel_requested(state["job_id"], worker_id)
         try:
             if cancel_check():
                 return {"result": {"status": "CANCELLED"}}
@@ -553,7 +588,11 @@ async def execute_durable_job(graph, job: dict[str, Any]) -> dict[str, Any]:
 async def _heartbeat_loop(job_id: str, worker_id: str, interval: int, lease_seconds: int) -> None:
     while True:
         await asyncio.sleep(max(5, interval))
-        if not heartbeat_job(job_id, worker_id, lease_seconds):
+        try:
+            if not heartbeat_job(job_id, worker_id, lease_seconds):
+                return
+        except Exception:
+            # The lease will expire and another worker will recover the job.
             return
 
 
@@ -601,8 +640,9 @@ async def run_worker() -> None:
             run_coordination_tick()
             async with AsyncPostgresSaver.from_conn_string(dsn) as checkpointer:
                 await checkpointer.setup()
-                graph = build_job_graph(checkpointer)
+                graph = build_job_graph(checkpointer, worker_id)
                 while True:
+                    recover_expired_jobs()
                     run_coordination_tick()
                     job = claim_next_job(worker_id, lease_seconds)
                     if job is None:
@@ -622,6 +662,7 @@ async def run_worker() -> None:
                                     WorkforceJob.status: "CANCELLED",
                                     WorkforceJob.lease_owner: None,
                                     WorkforceJob.lease_expires_at: None,
+                                    WorkforceJob.completed_at: utcnow(),
                                     WorkforceJob.updated_at: utcnow(),
                                 }, synchronize_session=False)
                                 db.commit()
@@ -634,6 +675,9 @@ async def run_worker() -> None:
                         try:
                             await heartbeat
                         except asyncio.CancelledError:
+                            pass
+                        except Exception:
+                            # A heartbeat transport failure is resolved by lease expiry/recovery.
                             pass
         except asyncio.CancelledError:
             raise

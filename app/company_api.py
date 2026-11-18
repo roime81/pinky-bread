@@ -83,12 +83,14 @@ class KpiMeasurementRequest(WorkforceAction):
 @router.get("/capabilities")
 def company_graph_capabilities() -> dict[str, Any]:
     return {
-        "version": "2.0.0-alpha.1",
+        "version": "2.0.0-alpha.2",
         "node_types": sorted(NODE_TYPES | {"company"}),
         "relationships": sorted(RELATIONSHIPS),
-        "persistence": "SQLAlchemy relational database",
-        "event_log": "append-only hash-linked database records",
-        "live_notifications": "Valkey/Redis-compatible PubSub when configured",
+        "persistence": "PostgreSQL/SQLAlchemy graph records and event history",
+        "live_notifications": "Valkey Pub/Sub; PostgreSQL remains authoritative",
+        "object_storage": "Local filesystem or S3-compatible SeaweedFS with PostgreSQL metadata",
+        "workforce": ["idempotent team bootstrap", "goal decomposition", "assigned work execution", "meeting facilitation", "KPI measurement history"],
+        "inference": "Local OpenAI-compatible model endpoint or explicitly labelled mock mode",
         "source_of_truth": "database",
     }
 

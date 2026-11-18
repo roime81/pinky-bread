@@ -9,8 +9,8 @@ The design goal is self-hosted operation without mandatory proprietary SaaS depe
 | Application API | Python, FastAPI, Pydantic | HTTP API and request validation | Implemented |
 | Persistence | PostgreSQL 16, SQLAlchemy | Company graph, workflows, event history | Implemented |
 | Vector extension | pgvector | Semantic memory and document retrieval | Extension enabled; vector pipeline pending |
-| Live events | Valkey | Pub/Sub notifications for the living graph | Implemented |
-| Object storage | SeaweedFS S3 API | Uploaded documents and workflow artifacts | Compose and storage adapter implemented |
+| Live events | Valkey 9.1.3 | Pub/Sub notifications for the living graph | Implemented |
+| Object storage | SeaweedFS 4.53 S3 API | Uploaded documents and workflow artifacts | Compose and storage adapter implemented |
 | Local LLM | vLLM-compatible API | Local reasoning and vision inference | Existing adapter; inference server/model deployed separately |
 | Workflow orchestration | LangGraph | Durable multi-agent state graph and checkpoints | Planned |
 | Tool protocol | Official MCP Python SDK | Standard tool/resource/prompt integration | Planned; current tool gateway is a local demo adapter |
@@ -40,7 +40,7 @@ References:
 
 ## Local deployment profile
 
-The Compose profile uses:
+The Compose profile pins Valkey 9.1.3 and SeaweedFS 4.53 based on upstream stable releases available on 18 November 2026. The Compose profile uses:
 
 - FastAPI application container
 - PostgreSQL 16 pgvector image

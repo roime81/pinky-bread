@@ -320,6 +320,10 @@
 
   async function configureCoordination(enabled, mode = "PLAN_ONLY") {
     if (!state.company) return;
+    if (enabled && !activeAgents().some(_isCoordinatorForUi)) {
+      toast("Create an agent with Coordinator authority before enabling recurring coordination.");
+      return;
+    }
     if (enabled && mode === "AUTO_EXECUTE") {
       const approved = window.confirm(
         "Enable continuous goal execution? The worker will run assignments for active goals without asking before each task. External financial, legal and customer-facing actions remain unavailable in this alpha."
@@ -658,7 +662,10 @@
   }
 
   function openAgentEditor(agent = null, presetName = "") {
-    if (!state.company) return;
+    if (!state.company) {
+      toast("Create or select a company before adding agents.");
+      return;
+    }
     const dialog = $("#agent-editor-dialog");
     const form = $("#agent-editor-form");
     form.reset();

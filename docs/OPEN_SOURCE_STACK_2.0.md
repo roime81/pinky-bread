@@ -12,9 +12,11 @@ The design goal is self-hosted operation without mandatory proprietary SaaS depe
 | Live events | Valkey 9.1.3 | Pub/Sub notifications for the living graph | Implemented |
 | Object storage | SeaweedFS 4.53 S3 API | Company documents, generated deliverables, meeting minutes and workflow artifacts | Compose and adapter implemented |
 | Local LLM | Ollama 0.40.16 (optional Compose profile), vLLM or another OpenAI-compatible local server | Head-of-Agents planning, specialist execution and meeting turns | Alpha 3 supports local `/v1/chat/completions`; no model weights bundled |
-| Workforce planning and execution | FastAPI service + SQLAlchemy graph events + local OpenAI-compatible inference | Goal decomposition, assigned work, bounded request-driven execution | Implemented in Alpha 2; no durable worker/checkpoint yet |
-| Durable workflow orchestration | LangGraph + PostgreSQL checkpointer | Restartable multi-agent state graph | Planned |
-| Tool protocol | Official MCP Python SDK | Standard tool/resource/prompt integration | Planned; current tool gateway is a local demo adapter |
+| Workforce planning and execution | FastAPI + company graph + local OpenAI-compatible inference | Head-of-Agents planning, specialist execution and stored deliverables | Implemented in Alpha 2 |
+| Durable job queue | PostgreSQL jobs, idempotency index, leases and retry policy | Worker claims, heartbeat, fencing, cancellation and crash recovery | Implemented in Alpha 3 |
+| Durable workflow orchestration | LangGraph StateGraph + AsyncPostgresSaver | Per-job checkpoint thread and restart replay | Implemented in Alpha 3 |
+| Worker coordination | Valkey Pub/Sub + PostgreSQL polling | Low-latency wake-up with database-authoritative queue | Implemented in Alpha 3 |
+| Tool protocol | Official MCP Python SDK v2, Streamable HTTP | Internal MCP server/client, role-based tool allow-list and identity injection | Implemented in Alpha 3; static development bearer tokens only |
 | Identity | Keycloak / OIDC | Login, SSO, company membership and identity claims | Planned |
 | Secrets | OpenBao | Runtime credentials, rotation and access control | Planned |
 | Policy | Open Policy Agent | Approval and agent/tool authorisation policies | Planned |
@@ -51,7 +53,7 @@ The Compose profile pins Valkey 9.1.3 and SeaweedFS 4.53 based on upstream stabl
 - SeaweedFS with S3 gateway enabled
 - Persistent Docker volumes for database, cache and objects
 
-The optional `local-llm` profile adds the Ollama 0.40.16 service and a persistent model volume. Set `REASONING_API_URL=http://ollama:11434/v1`, `MOCK_INFERENCE=false` and `REASONING_MODEL` to a model name, then pull the selected model separately. The image does not include model weights.
+The optional `local-llm` profile adds the Ollama 0.40.16 service and a persistent model volume. Set `REASONING_API_URL=http://ollama:11434/v1`, `MOCK_INFERENCE=false` and `REASONING_MODEL` to a model name, then pull the selected model separately. The image does not include model weights. Worker replicas use PostgreSQL row locks and leases; Valkey is only an acceleration layer.
 
 The Compose network is internal to the Docker deployment. It is not a complete air-gap or security boundary by itself. Host firewalling, ingress, secret management, TLS and image supply-chain controls remain deployment responsibilities.
 

@@ -25,11 +25,13 @@ services:
       WORKER_POLL_SECONDS: "1.5"
       WORKER_LEASE_SECONDS: "120"
       WORKER_HEARTBEAT_SECONDS: "20"
+      LANGGRAPH_STRICT_MSGPACK: "true"
       MCP_ENABLED: "true"
       MCP_SERVER_URL: http://mcp:8090/mcp
       MCP_RESOURCE_URL: http://mcp:8090/mcp
       MCP_ISSUER_URL: http://pinky-bread-api:8080/issuer
       MCP_API_TOKEN: "${MCP_API_TOKEN:-pinky_bread_mcp_dev_only_change_me}"
+      MCP_READ_TOKEN: "${MCP_READ_TOKEN:-pinky_bread_mcp_read_dev_only_change_me}"
     volumes:
       - ./data:/opt/pinky-bread/data
       - ./config/agents:/opt/pinky-bread/config/agents:ro
@@ -107,7 +109,8 @@ services:
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8090"
       MCP_API_TOKEN: "${MCP_API_TOKEN:-pinky_bread_mcp_dev_only_change_me}"
-      MCP_RESOURCE_URL: http://mcp:8090/mcp
+      MCP_READ_TOKEN: "${MCP_READ_TOKEN:-pinky_bread_mcp_read_dev_only_change_me}"
+      MCP_RESOURCE_URL: http://mcp:8090/mcp"
       MCP_ISSUER_URL: http://pinky-bread-api:8080/issuer
     depends_on:
       postgres:

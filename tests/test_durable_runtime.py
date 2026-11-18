@@ -176,12 +176,14 @@ def test_langgraph_checkpoint_resume_after_worker_lease_expiry_is_idempotent():
     assert first_claim["job_id"] == queued["job_id"]
 
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
     from app.durable_runtime import build_job_graph, execute_durable_job
+    strict_serde = JsonPlusSerializer(allowed_msgpack_modules=None)
 
     settings_url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
 
     async def run_first_attempt():
-        async with AsyncPostgresSaver.from_conn_string(settings_url) as checkpointer:
+        async with AsyncPostgresSaver.from_conn_string(settings_url, serde=strict_serde) as checkpointer:
             await checkpointer.setup()
             graph = build_job_graph(checkpointer, "checkpoint-worker-one")
             return await execute_durable_job(graph, first_claim)

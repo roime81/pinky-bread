@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     mock_inference: bool = True
     database_url: str = "sqlite:///./data/pinky_bread.db"
     redis_url: str = "redis://localhost:6379/0"
-    storage_backend: str = "local"
+    storage_backend: Literal["local", "s3"] = "local"
     s3_endpoint_url: str = "http://localhost:8333"
     s3_region: str = "us-east-1"
     s3_bucket: str = "pinky-bread"

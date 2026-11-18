@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from sqlalchemy import create_engine, String, Text, DateTime, Integer
+from sqlalchemy import create_engine, String, Text, DateTime, Integer, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from .settings import get_settings
 
@@ -33,11 +33,24 @@ else:
 SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
 
 
+def check_db_connection() -> None:
+    """Fail fast when the configured database is unavailable."""
+    with _engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+
+
 def init_db() -> None:
-    # Register the company graph ORM tables before creating the schema.
+    """Create the schema from the one-shot bootstrap process only."""
+    # Register all ORM tables before creating the schema.
     from . import company_graph, object_store, durable_runtime  # noqa: F401
 
-    Base.metadata.create_all(bind=_engine)
+    if _engine.dialect.name == "postgresql":
+        # Protect against accidental concurrent invocations as a final safeguard.
+        with _engine.begin() as connection:
+            connection.execute(text("SELECT pg_advisory_xact_lock(724190381)"))
+            Base.metadata.create_all(bind=connection)
+    else:
+        Base.metadata.create_all(bind=_engine)
 
 
 def serialize_state(state: dict) -> str:

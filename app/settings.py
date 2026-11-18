@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     dev_mode: bool = True
     mock_inference: bool = True
     database_url: str = "sqlite:///./data/pinky_bread.db"
+    auto_create_schema: bool = True
     redis_url: str = "redis://localhost:6379/0"
     storage_backend: Literal["local", "s3"] = "local"
     s3_endpoint_url: str = "http://localhost:8333"

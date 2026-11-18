@@ -15,7 +15,7 @@ Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce pl
 
 ## Contents
 
-- [Pinky Bread 2.0 Alpha 3](#pinky-bread-20-alpha-2)
+- [Pinky Bread 2.0 Alpha 3](#pinky-bread-20-alpha-3)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -23,7 +23,7 @@ Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce pl
 - [Requirements](#requirements)
 - [Install and run locally](#install-and-run-locally)
 - [Run with Docker Compose](#run-with-docker-compose)
-- [Configure local vLLM inference](#configure-local-vllm-inference)
+- [Configure a self-hosted local model](#configure-a-self-hosted-local-model)
 - [Try the demo workflow](#try-the-demo-workflow)
 - [API reference](#api-reference)
 - [Configure specialist agents](#configure-specialist-agents)
@@ -285,6 +285,9 @@ docker compose ps
 # Scale durable job workers (PostgreSQL coordinates the replicas)
 docker compose up -d --scale worker=3
 
+# Scale durable job workers (PostgreSQL coordinates the replicas)
+docker compose up -d --scale worker=3
+
 # Stop containers and preserve named volumes
 docker compose down
 
@@ -318,6 +321,15 @@ MULTIMODAL_API_URL=http://127.0.0.1:8002/v1
 MULTIMODAL_MODEL=your-vision-model
 VLLM_API_KEY=local-development-key
 ```
+
+For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+
+```bash
+docker compose --profile local-llm up -d
+docker compose exec ollama ollama pull <model-name>
+```
+
+Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
 
 For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
 
@@ -404,6 +416,13 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 | `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
 | `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/convene` | Convene a turn-based agent meeting and store minutes |
 | `POST` | `/v2/companies/{company_id}/kpis/{kpi_id}/measure` | Record a KPI measurement and provenance |
+| `POST` | `/v2/companies/{company_id}/goals/{goal_id}/jobs` | Queue a durable goal-plan or execution job |
+| `POST` | `/v2/companies/{company_id}/work/{work_id}/jobs` | Queue one durable assignment |
+| `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/jobs` | Queue a meeting job |
+| `GET` | `/v2/companies/{company_id}/jobs` | List durable jobs |
+| `GET` | `/v2/companies/{company_id}/jobs/{job_id}` | Read a job's state/result/retries |
+| `POST` | `/v2/companies/{company_id}/jobs/{job_id}/cancel` | Request cooperative cancellation |
+| `GET` / `PUT` | `/v2/companies/{company_id}/coordination` | Read/configure recurring Head-of-Agents coordination |
 | `POST` | `/v2/companies/{company_id}/goals/{goal_id}/jobs` | Queue a durable goal-plan or execution job |
 | `POST` | `/v2/companies/{company_id}/work/{work_id}/jobs` | Queue one durable assignment |
 | `POST` | `/v2/companies/{company_id}/meetings/{meeting_id}/jobs` | Queue a meeting job |

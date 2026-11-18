@@ -417,7 +417,9 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
     }
 
 
-async def _execute_prompt(agent: dict[str, Any], prompt: str) -> str:
+async def _execute_prompt(
+    agent: dict[str, Any], prompt: str, *, company_id: str, tenant_id: str
+) -> str:
     settings = get_settings()
     data = agent.get("data") or {}
     if settings.mock_inference:
@@ -431,6 +433,18 @@ async def _execute_prompt(agent: dict[str, Any], prompt: str) -> str:
             "Configure a reachable local OpenAI-compatible model endpoint and set MOCK_INFERENCE=false for model-generated work.\n"
         )
     system = str(data.get("system_prompt") or "You are a specialist AI employee. Complete the assigned work, state assumptions and provide a practical deliverable.")
+    if settings.mcp_enabled:
+        from .mcp_client import complete_with_mcp
+
+        return await complete_with_mcp(
+            system_prompt=system,
+            user_prompt=prompt,
+            role=str(data.get("role") or "specialist"),
+            company_id=company_id,
+            tenant_id=tenant_id,
+            agent_id=agent["id"],
+            max_tokens=2400,
+        )
     return await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.25, max_tokens=2400)
 
 
@@ -537,7 +551,7 @@ async def execute_task(*, company_id: str, tenant_id: str, work_id: str, actor_i
         "Include a concise summary and explicit next steps. Do not claim that external actions were performed."
     )
     try:
-        output = await _execute_prompt(agent, prompt)
+        output = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
         filename = f"work-{work_id[:8]}-attempt-{max(attempt, 1)}.md"
         object_key = f"companies/{company_id}/deliverables/{work_id}/attempt-{max(attempt, 1)}.md"
         stored = ObjectStore().persist_object_idempotent(
@@ -729,7 +743,7 @@ async def convene_meeting(*, company_id: str, tenant_id: str, meeting_id: str, a
             "Contribute one concise, practical perspective. Identify one risk or disagreement when relevant and suggest a concrete next step. "
             "Do not claim actions have been executed."
         )
-        contribution = await _execute_prompt(agent, prompt)
+        contribution = await _execute_prompt(agent, prompt, company_id=company_id, tenant_id=tenant_id)
         discussion.append({
             "sequence": index,
             "agent_id": agent["id"],

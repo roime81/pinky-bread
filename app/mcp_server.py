@@ -8,6 +8,7 @@ from pydantic import AnyHttpUrl
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.auth.middleware.auth_context import get_access_token
 
 from .company_graph import get_company_graph
 from .database import init_db
@@ -22,13 +23,18 @@ class StaticBearerVerifier(TokenVerifier):
     """Development bearer verifier. Replace with Keycloak/OIDC JWT verification for shared use."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        expected = settings.mcp_api_token
-        if not expected or token != expected:
+        if settings.mcp_api_token and token == settings.mcp_api_token:
+            scopes = ["company:read", "workforce:enqueue"]
+            client_id = "pinky-bread-agent-runtime"
+        elif settings.mcp_read_token and token == settings.mcp_read_token:
+            scopes = ["company:read"]
+            client_id = "pinky-bread-readonly-client"
+        else:
             return None
         return AccessToken(
             token=token,
-            client_id="pinky-bread-agent-runtime",
-            scopes=["company:read", "workforce:enqueue"],
+            client_id=client_id,
+            scopes=scopes,
             resource=settings.mcp_resource_url,
         )
 
@@ -49,7 +55,14 @@ mcp = FastMCP(
 )
 
 
+def _require_scope(scope: str) -> None:
+    token = get_access_token()
+    if token is None or scope not in token.scopes:
+        raise PermissionError(f"MCP caller is missing the required scope: {scope}")
+
+
 def _company_graph(company_id: str, tenant_id: str) -> dict[str, Any]:
+    _require_scope("company:read")
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise ValueError("Company not found in the supplied tenant context")
@@ -120,6 +133,7 @@ def get_workforce_job(company_id: str, tenant_id: str, job_id: str) -> dict[str,
 @mcp.tool()
 def queue_goal_plan(company_id: str, tenant_id: str, goal_id: str, actor_id: str) -> dict[str, Any]:
     """Queue a Head-of-Agents goal planning job. The operation is idempotent while a matching job is active."""
+    _require_scope("workforce:enqueue")
     graph = _company_graph(company_id, tenant_id)
     if goal_id not in {node["id"] for node in graph["nodes"] if node["type"] == "goal"}:
         raise ValueError("Goal not found in the supplied company")
@@ -136,6 +150,7 @@ def queue_goal_plan(company_id: str, tenant_id: str, goal_id: str, actor_id: str
 @mcp.tool()
 def queue_goal_execution(company_id: str, tenant_id: str, goal_id: str, actor_id: str) -> dict[str, Any]:
     """Queue goal execution only when the founder has enabled AUTO_EXECUTE coordination for this company."""
+    _require_scope("workforce:enqueue")
     graph = _company_graph(company_id, tenant_id)
     if goal_id not in {node["id"] for node in graph["nodes"] if node["type"] == "goal"}:
         raise ValueError("Goal not found in the supplied company")

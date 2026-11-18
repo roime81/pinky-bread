@@ -23,7 +23,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="2.0.0-alpha.1", description="Local-first AI company and multi-agent operating system", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="2.0.0-alpha.2", description="Local-first AI company and multi-agent operating system", lifespan=lifespan)
 
 
 web_dir = Path(__file__).resolve().parent.parent / "web"

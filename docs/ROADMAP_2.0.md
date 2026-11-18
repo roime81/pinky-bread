@@ -42,18 +42,19 @@ Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 i
 
 ## Phase 3 — Durable agent workforce
 
-- [ ] Replace the request-driven dispatcher with LangGraph StateGraph workflows.
-- [ ] Use PostgreSQL-backed LangGraph checkpoints and tested restart/resume semantics.
+- [x] Replace the request-driven dispatcher with LangGraph StateGraph job workflows.
+- [x] Use PostgreSQL-backed `AsyncPostgresSaver` checkpoints keyed by durable job ID and test restart/resume semantics.
 - [x] Persist reusable AI employee identities with role, persona, skills, local model selection, runtime mode, health/status and version in the company graph.
-- [x] Implement a Head of Agents planning service using the configured local model endpoint (or an explicit mock planner) to decompose goals into validated work.
+- [x] Implement a Head of Agents planning service using a local model API (or explicit mock planner) to decompose goals into validated work.
 - [x] Bootstrap specialist agents for Strategy, Product, Technology, Marketing, Operations and Finance under the Head of Agents.
-- [x] Persist assigned work nodes, ownership, acceptance criteria, dependencies and agent-to-goal many-to-many relationships.
-- [x] Execute assignments through the local OpenAI-compatible inference adapter; store successful deliverables in the local/S3 object-store adapter and update goal work-completion progress.
-- [x] Make goal planning idempotent and support explicit retry of a failed individual assignment.
-- [ ] Add durable background workers, restart recovery, cancellation, concurrency limits, token/cost budgets and model/prompt/skill rollback.
+- [x] Persist assigned work nodes, owners, acceptance criteria, dependencies and many-to-many agent-to-goal relationships.
+- [x] Add PostgreSQL queue rows with idempotency and one-active-job constraints, worker leases, heartbeats, fencing, retry/backoff and cancellation.
+- [x] Recover expired worker leases and resume job execution through the same LangGraph checkpoint thread.
+- [x] Add founder-controlled recurring `PLAN_ONLY` and explicitly enabled `AUTO_EXECUTE` coordination.
+- [x] Store replay-safe deliverables and meeting minutes in the local/S3 object-store adapter.
+- [ ] Add token/cost budgets, tenant/agent concurrency quotas, model/prompt/skill rollback and capacity-aware scheduling.
 
-**Exit criteria:** an end-to-end goal is decomposed into persisted assignments, independently executed, resumed after restart and reconciled into the graph without duplicate work.
-
+**Exit criteria:** a durable end-to-end goal is decomposed, assigned, executed, resumed after process loss, and reconciled without duplicate jobs, outputs or graph nodes.
 ## Phase 4 — Official tools and open integrations
 
 - [x] Replace the workforce demo adapter with the official MCP Python SDK v2 and Streamable HTTP server/client.

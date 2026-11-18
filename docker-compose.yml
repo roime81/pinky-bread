@@ -7,7 +7,8 @@ services:
     environment:
       APP_ENV: docker
       DEV_MODE: "true"
-      MOCK_INFERENCE: "true"
+      MOCK_INFERENCE: "${MOCK_INFERENCE:-true}"
+      MODEL_PROVIDER: "${MODEL_PROVIDER:-vllm}"
       DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
       REDIS_URL: redis://valkey:6379/0
       STORAGE_BACKEND: s3
@@ -18,9 +19,22 @@ services:
       S3_SECRET_KEY: pinky_bread_dev_secret_change_me
       AGENT_CONFIG_DIR: /opt/pinky-bread/config/agents
       UPLOAD_DIR: /opt/pinky-bread/data/uploads
+      REASONING_API_URL: "${REASONING_API_URL:-http://host.docker.internal:8001/v1}"
+      REASONING_MODEL: "${REASONING_MODEL:-local-reasoner}"
+      VLLM_API_KEY: "${VLLM_API_KEY:-local-dev-key}"
+      WORKER_POLL_SECONDS: "1.5"
+      WORKER_LEASE_SECONDS: "120"
+      WORKER_HEARTBEAT_SECONDS: "20"
+      MCP_ENABLED: "true"
+      MCP_SERVER_URL: http://mcp:8090/mcp
+      MCP_RESOURCE_URL: http://mcp:8090/mcp
+      MCP_ISSUER_URL: http://pinky-bread-api:8080/issuer
+      MCP_API_TOKEN: "${MCP_API_TOKEN:-pinky_bread_mcp_dev_only_change_me}"
     volumes:
       - ./data:/opt/pinky-bread/data
       - ./config/agents:/opt/pinky-bread/config/agents:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,6 +42,78 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_started
+      mcp:
+        condition: service_started
+    networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: pinky-bread-worker
+    command: ["python", "-m", "app.worker"]
+    environment:
+      APP_ENV: docker
+      DEV_MODE: "true"
+      MOCK_INFERENCE: "${MOCK_INFERENCE:-true}"
+      MODEL_PROVIDER: "${MODEL_PROVIDER:-vllm}"
+      DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
+      REDIS_URL: redis://valkey:6379/0
+      STORAGE_BACKEND: s3
+      S3_ENDPOINT_URL: http://seaweedfs:8333
+      S3_REGION: us-east-1
+      S3_BUCKET: pinky-bread
+      S3_ACCESS_KEY: pinky_bread_dev
+      S3_SECRET_KEY: pinky_bread_dev_secret_change_me
+      AGENT_CONFIG_DIR: /opt/pinky-bread/config/agents
+      UPLOAD_DIR: /opt/pinky-bread/data/uploads
+      REASONING_API_URL: "${REASONING_API_URL:-http://host.docker.internal:8001/v1}"
+      REASONING_MODEL: "${REASONING_MODEL:-local-reasoner}"
+      VLLM_API_KEY: "${VLLM_API_KEY:-local-dev-key}"
+      WORKER_POLL_SECONDS: "1.5"
+      WORKER_LEASE_SECONDS: "120"
+      WORKER_HEARTBEAT_SECONDS: "20"
+      MCP_ENABLED: "true"
+      MCP_SERVER_URL: http://mcp:8090/mcp
+      MCP_RESOURCE_URL: http://mcp:8090/mcp
+      MCP_ISSUER_URL: http://pinky-bread-api:8080/issuer
+      MCP_API_TOKEN: "${MCP_API_TOKEN:-pinky_bread_mcp_dev_only_change_me}"
+    volumes:
+      - ./data:/opt/pinky-bread/data
+      - ./config/agents:/opt/pinky-bread/config/agents:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      mcp:
+        condition: service_started
+    networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+  mcp:
+    build: .
+    container_name: pinky-bread-mcp
+    command: ["python", "-m", "app.mcp_server"]
+    expose:
+      - "8090"
+    environment:
+      APP_ENV: docker
+      DATABASE_URL: postgresql+psycopg://pinky_bread:pinky_bread_dev_only@postgres:5432/pinky_bread
+      REDIS_URL: redis://valkey:6379/0
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8090"
+      MCP_API_TOKEN: "${MCP_API_TOKEN:-pinky_bread_mcp_dev_only_change_me}"
+      MCP_RESOURCE_URL: http://mcp:8090/mcp
+      MCP_ISSUER_URL: http://pinky-bread-api:8080/issuer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     networks: [pinky_bread_internal]
     restart: unless-stopped
 

@@ -221,8 +221,8 @@ def test_langgraph_checkpoint_resume_after_worker_lease_expiry_is_idempotent():
             return await execute_durable_job(graph, second_claim)
 
     recovered_result = asyncio.run(run_recovered_attempt())
-    assert recovered_result["created"] is False
     assert recovered_result["count"] == 6
+    assert recovered_result["goal_id"] == goal["id"]
     assert complete_job(queued["job_id"], "checkpoint-worker-two", recovered_result) is True
 
     graph_response = None

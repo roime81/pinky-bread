@@ -86,7 +86,7 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 | Capability | MVP implementation | Current boundary |
 |---|---|---|
 | Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views | Development UI; no login or authenticated tenant boundary |
-| Company graph and workforce | Company, goals, KPIs, reusable agents, assignments, meetings and deliverables with typed edges | Request-driven sequential execution; no durable worker pool or authenticated tenant boundary yet |
+| Company graph and workforce | Company, goals, KPIs, reusable agents, assignments, meetings and deliverables with typed edges | Durable PostgreSQL job queue, LangGraph checkpoints and worker recovery; authenticated tenant boundary remains future work |
 | Company event history | PostgreSQL append-only company events with SHA-256 chaining and verification API | Tamper-evident, not independently immutable or WORM protected |
 | Live graph updates | Valkey Pub/Sub notifications and SSE | Database event history is authoritative; Valkey notifications are best-effort |
 | Object storage | Local filesystem or S3-compatible SeaweedFS for source documents, generated deliverables and meeting minutes | PostgreSQL catalogues owner, company/tenant, checksum and object key; auth/retention policies remain planned |

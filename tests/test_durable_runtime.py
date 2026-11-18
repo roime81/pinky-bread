@@ -128,6 +128,17 @@ def test_postgres_job_queue_deduplicates_claims_heartbeats_and_recovers_expired_
 def test_founder_coordination_is_persisted_and_queues_plan_jobs():
     company, goal = _company_and_goal(f"durable-coordination-{uuid.uuid4().hex[:8]}")
     tenant = company["tenant_id"]
+    # Recurring jobs are attributed to a real founder-configured coordinator.
+    with TestClient(app) as client:
+        coordinator = client.post(f"/v2/companies/{company['id']}/agents", json={
+            "tenant_id": tenant,
+            "actor_id": "founder",
+            "name": "Company Coordinator",
+            "role": "Company coordination",
+            "title": "Chief of Staff",
+            "authority": "COORDINATOR",
+        })
+        assert coordinator.status_code == 201, coordinator.text
     policy = configure_coordination(
         company_id=company["id"],
         tenant_id=tenant,

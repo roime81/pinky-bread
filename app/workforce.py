@@ -141,15 +141,21 @@ def bootstrap_workforce(*, company_id: str, tenant_id: str, actor_id: str) -> di
             role_to_agent[role] = agent
             graph = get_company_graph(company_id=company_id, tenant_id=tenant_id) or graph
         else:
-            merged = {**(agent.get("data") or {}), **agent_data}
-            agent = update_node(
-                company_id=company_id,
-                tenant_id=tenant_id,
-                actor_id=actor_id,
-                node_id=agent["id"],
-                status="READY",
-                data_patch=merged,
-            ) or agent
+            existing_data = agent.get("data") or {}
+            needs_update = (
+                agent.get("status") != "READY"
+                or any(existing_data.get(key) != value for key, value in agent_data.items())
+            )
+            if needs_update:
+                merged = {**existing_data, **agent_data}
+                agent = update_node(
+                    company_id=company_id,
+                    tenant_id=tenant_id,
+                    actor_id=actor_id,
+                    node_id=agent["id"],
+                    status="READY",
+                    data_patch=merged,
+                ) or agent
             role_to_agent[role] = agent
         if role == "head_of_agents":
             _ensure_edge(company_id, tenant_id, actor_id, graph, company_id, agent["id"], "owns")
@@ -304,9 +310,12 @@ def _parse_plan(content: str) -> list[dict[str, Any]]:
             "acceptance_criteria": [value[:500] for value in criteria[:8]],
             "depends_on": dependencies[:10],
         })
-    for item in result:
+    for index, item in enumerate(result):
         if item["key"] in item["depends_on"] or any(dep not in keys for dep in item["depends_on"]):
             raise ValueError(f"Task {item['key']} contains an invalid dependency")
+        earlier_keys = {candidate["key"] for candidate in result[:index]}
+        if any(dep not in earlier_keys for dep in item["depends_on"]):
+            raise ValueError(f"Dependencies for {item['key']} must refer to earlier tasks so execution order is deterministic")
     return result
 
 

@@ -679,20 +679,26 @@ def update_agent_node(
                 CompanyGraphEdge.source_node_id == node_id,
                 CompanyGraphEdge.relationship == "reports_to",
             ).all()
-            for edge in previous:
-                db.delete(edge)
-            if manager_id:
-                db.add(CompanyGraphEdge(
-                    edge_id=str(uuid.uuid4()),
-                    company_id=company_id,
-                    tenant_id=tenant_id,
-                    source_node_id=node_id,
-                    target_node_id=manager_id,
-                    relationship="reports_to",
-                    data={"managed_by": "agent_management"},
-                    created_by=actor_id,
-                ))
-            changed_manager = True
+            previous_manager_ids = {edge.target_node_id for edge in previous}
+            if previous_manager_ids != ({manager_id} if manager_id else set()):
+                for edge in previous:
+                    db.delete(edge)
+                # Delete the old unique (source, target, relationship) row before
+                # inserting a replacement row, including when the previous
+                # reporting line is being restored to the same manager later.
+                db.flush()
+                if manager_id:
+                    db.add(CompanyGraphEdge(
+                        edge_id=str(uuid.uuid4()),
+                        company_id=company_id,
+                        tenant_id=tenant_id,
+                        source_node_id=node_id,
+                        target_node_id=manager_id,
+                        relationship="reports_to",
+                        data={"managed_by": "agent_management"},
+                        created_by=actor_id,
+                    ))
+                changed_manager = True
         node.updated_at = utcnow()
         event = _append_event(
             db,

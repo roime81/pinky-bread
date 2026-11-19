@@ -54,11 +54,9 @@
         </div>
 
         <div class="company-onboarding" id="company-onboarding" hidden>
-          <div class="onboarding-copy"><div class="eyebrow">START WITH YOUR VISION</div><h2>Build your company around a goal.</h2><p>Tell Pinky Bread what your company exists to do. You can add goals, KPIs, AI employees and workstreams as your organisation takes shape.</p></div>
+          <div class="onboarding-copy"><div class="eyebrow">START YOUR ORGANIZATION</div><h2>What should we call your company?</h2><p>Start with a company or department name. Define its mission, goals and operating principles later through a conversation with your AI workforce.</p></div>
           <form id="company-create-form" class="company-create-form">
             <label for="company-name">Company name</label><input id="company-name" required minlength="2" maxlength="240" placeholder="e.g. Northstar Studio" />
-            <label for="company-vision">Vision</label><textarea id="company-vision" rows="2" placeholder="What future are you trying to create?"></textarea>
-            <label for="company-mission">Mission</label><textarea id="company-mission" rows="2" placeholder="What does the company do, and for whom?"></textarea>
             <button type="submit" class="primary-btn">Establish company <span>↗</span></button>
           </form>
         </div>
@@ -209,10 +207,9 @@
         <form class="company-command-bar" id="company-command-form">
           <span class="command-spark">✳</span>
           <input id="company-command-input" aria-label="Founder instruction" placeholder="Message your AI team…" autocomplete="off" />
-          <select id="company-chat-agent" aria-label="AI employee" title="Choose which AI employee responds"><option value="">Select AI employee</option></select>
           <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
         </form>
-        <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Free text is sent to the selected AI employee.</div>
+        <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Every active AI employee can read the conversation. Relevant agents may join; use @Agent Name to call someone directly.</div>
       </section>
       <details class="chat-rail-details">
         <summary>Runtime status &amp; execution trace</summary>
@@ -248,6 +245,25 @@
       <div class="agent-editor-footer"><span id="agent-editor-feedback" role="status"></span><button type="button" class="secondary-btn" id="agent-editor-cancel">Cancel</button><button type="submit" class="primary-btn" id="agent-editor-save">Save agent</button></div>
     </form>
   </dialog>
+
+  <section id="auth-gate" class="auth-gate" hidden aria-labelledby="auth-heading">
+    <div class="auth-card">
+      <div class="auth-brand"><span class="auth-brand-mark">PB</span><span>THE PINKY BREAD</span></div>
+      <div class="eyebrow">PRIVATE COMPANY WORKSPACE</div>
+      <h1 id="auth-heading">Welcome back.</h1>
+      <p>Sign in to access your AI company and workforce.</p>
+      <form id="dev-login-form" class="auth-form">
+        <label for="auth-username">Username</label><input id="auth-username" name="username" autocomplete="username" value="admin" required />
+        <label for="auth-password">Password</label><input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" required />
+        <button type="submit" class="primary-btn" id="auth-submit">Sign in</button>
+        <div id="auth-error" class="auth-error" role="alert"></div>
+      </form>
+      <div id="auth-divider" class="auth-divider"><span>OR</span></div>
+      <a id="google-login-button" class="google-login-button" href="/auth/google"><span class="google-g">G</span> Continue with Google</a>
+      <div class="auth-footnote">Development access: <code>admin / admin</code>. Configure Google OAuth in your environment to enable Google sign-in.</div>
+    </div>
+  </section>
+  <script src="/static/auth.js?v=20261119-auth1"></script>
   <script src="/static/app.js?v=20261119-chat-rail1"></script>
   <script src="/static/company-graph.js?v=20261119-chat-rail1"></script>
 </body>

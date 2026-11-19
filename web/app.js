@@ -79,9 +79,9 @@ let initiallyChatHidden=false;
 try{
  const savedChatPanelState=localStorage.getItem('pinky-chat-panel-hidden');
  initiallyChatHidden=savedChatPanelState===null
-   ? window.matchMedia('(max-width: 960px)').matches
+   ? window.matchMedia('(max-width: 1180px)').matches
    : savedChatPanelState==='true';
-}catch{initiallyChatHidden=window.matchMedia('(max-width: 960px)').matches}
+}catch{initiallyChatHidden=window.matchMedia('(max-width: 1180px)').matches}
 setChatPanelHidden(initiallyChatHidden,false);
 chatPanelToggle?.addEventListener('click',()=>setChatPanelHidden(!appShell?.classList.contains('chat-hidden')));
 chatPanelClose?.addEventListener('click',()=>setChatPanelHidden(true));

@@ -723,3 +723,30 @@ The first startup downloads the model and requires internet access, disk space a
 The Founder conversation panel displays live model connectivity and model installation status. Company chat uses MCP when `MCP_ENABLED=true`: coordinators receive the allow-listed planning and queue tools, while specialists receive read-only company context tools. Provider, model identifier and optional endpoint are stored per employee. An empty per-agent endpoint inherits the workspace endpoint.
 
 For host-based vLLM or another OpenAI-compatible server, set `MODEL_PROVIDER=vllm` or `openai-compatible`, configure `REASONING_API_URL`, `REASONING_MODEL` and `VLLM_API_KEY` in `.env`, and set each employee's model and optional endpoint. The endpoint must be reachable from the API and worker containers.
+
+## Local service endpoints and ports
+
+The default Docker Compose deployment runs the private Ollama model and the supporting services locally. Host ports are published separately; containers continue to use Docker service DNS names on the private Compose network.
+
+| Service | Host address | Container address | Purpose |
+|---|---|---|---|
+| Pinky Bread API + UI | `http://127.0.0.1:8888` / `http://api.localhost:8888` | `api:8080` | Web app and REST API |
+| MCP Streamable HTTP | `http://127.0.0.1:8060/mcp` / `http://mcp.localhost:8060/mcp` | `mcp:8090/mcp` | MCP tools and resources |
+| Ollama | `http://127.0.0.1:11434` / `http://ollama.localhost:11434` | `ollama:11434` | Private local LLM inference |
+| PostgreSQL | `127.0.0.1:5433` | `postgres:5432` | Durable state and LangGraph checkpoints |
+| Valkey | `127.0.0.1:6380` | `valkey:6379` | Coordination and notifications |
+| SeaweedFS S3 | `http://127.0.0.1:8333` | `seaweedfs:8333` | Local artifact/object storage |
+
+Host-side port binding defaults to loopback only through `PB_BIND_ADDRESS=127.0.0.1`. In GitHub Codespaces, if the forwarded-port proxy cannot reach a loopback-bound published port, set `PB_BIND_ADDRESS=0.0.0.0` in `.env`, recreate the stack, and use the Codespaces Ports panel to open the forwarded port. Keep forwarded ports private; do not expose database, cache, MCP or model ports publicly.
+
+Inside Compose, do not change service URLs to `localhost`: each container has its own loopback interface. API and worker use `http://ollama:11434/v1` and `http://mcp:8090/mcp`; the MCP server uses the internal API service address. From the host, use the published host ports above.
+
+Start everything with:
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose ps
+```
+
+The first start downloads the configured Ollama model into the persistent model volume. No separate Uvicorn, Ollama, MCP, PostgreSQL or Valkey command is required.

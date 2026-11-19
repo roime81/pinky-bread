@@ -1083,7 +1083,7 @@
     } catch (error) {
       pending.remove();
       const message = error.name === "AbortError"
-        ? "The model did not respond within 190 seconds. Check model availability and server logs."
+        ? "The model did not respond within 570 seconds. Check model availability and server logs."
         : error.message;
       appendConversationEntry("system", "AI request failed", message);
       toast(message);

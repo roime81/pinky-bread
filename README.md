@@ -228,7 +228,7 @@ pip install -r requirements.txt
 
 Copy-Item .env.example .env
 
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ```
 
 If PowerShell blocks activation, use the Python executable directly:
@@ -261,7 +261,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 - OpenAPI JSON: <http://127.0.0.1:8888/openapi.json>
 - Health endpoint: <http://127.0.0.1:8888/api/healthz>
 
-The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker, MCP and Ollama by default. The Ollama model is downloaded during first startup. A GPU is not required for mock mode, though local inference performance depends on available CPU/RAM.
+Standalone Python mode uses SQLite and local filesystem storage. For host-run inference, use the Ollama listener at `http://127.0.0.1:11434/v1` or deliberately enable mock mode. The recommended full-stack path is Docker Compose, which starts PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker, MCP and Ollama by default and downloads the configured model on first startup.
 
 ## Run with Docker Compose
 
@@ -672,12 +672,12 @@ Confirm the virtual environment is activated and install dependencies again:
 python -m pip install -r requirements.txt
 ```
 
-### Port 8080 is already in use
+### Port 8888 is already in use
 
 Choose another port, for example:
 
 ```bash
-uvicorn app.main:app --reload --port 8090
+uvicorn app.main:app --reload --port 8889
 ```
 
 ### The dashboard shows the API as offline

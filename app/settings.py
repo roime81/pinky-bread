@@ -21,24 +21,24 @@ class Settings(BaseSettings):
     agent_config_dir: Path = Path("./config/agents")
     upload_dir: Path = Path("./data/uploads")
     max_upload_mb: int = 12
-    reasoning_api_url: str = "http://localhost:8001/v1"
-    reasoning_model: str = "local-reasoner"
+    reasoning_api_url: str = "http://127.0.0.1:11434/v1"
+    reasoning_model: str = "qwen2.5:3b"
     multimodal_api_url: str = "http://localhost:8002/v1"
     multimodal_model: str = "local-vision"
     vllm_api_key: str = "local-dev-key"
-    model_provider: Literal["vllm", "ollama", "openai-compatible"] = "openai-compatible"
+    model_provider: Literal["vllm", "ollama", "openai-compatible"] = "ollama"
     worker_poll_seconds: float = 1.5
     worker_lease_seconds: int = 120
     worker_heartbeat_seconds: int = 20
     worker_max_attempts: int = 5
     mcp_enabled: bool = False
-    mcp_server_url: str = "http://localhost:8090/mcp"
+    mcp_server_url: str = "http://127.0.0.1:8060/mcp"
     mcp_host: str = "0.0.0.0"
-    mcp_port: int = 8090
+    mcp_port: int = 8060
     mcp_api_token: str = ""
     mcp_read_token: str = ""
-    mcp_resource_url: str = "http://localhost:8090/mcp"
-    mcp_issuer_url: str = "http://localhost:8080/issuer"
+    mcp_resource_url: str = "http://127.0.0.1:8060/mcp"
+    mcp_issuer_url: str = "http://127.0.0.1:8888/issuer"
     mcp_max_tool_rounds: int = 4
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

@@ -4,24 +4,33 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Pinky Bread · Autonomous Organization</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20261119-navfix" />
-  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-navfix" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261119-sidebar-nav2" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-sidebar-nav2" />
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-sidebar">
       <div class="brand-lockup">
         <div class="brand-mark"><span></span><span></span><span></span></div>
         <div><div class="brand-name">The Pinky Bread</div><div class="brand-sub">AUTONOMOUS ORGANIZATION</div></div>
       </div>
-      <div class="workspace-label">WORKSPACE</div>
-      <nav class="nav-list">
-        <button class="nav-item active" data-view="company-graph"><span class="nav-icon">◎</span> Company graph</button>
-        <button class="nav-item" data-view="company-agents"><span class="nav-icon">◇</span> AI workforce</button>
-        <button class="nav-item" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
-        <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflow <span class="nav-count" id="nav-workflow-count">0</span></button>
-        <button class="nav-item" data-view="agents"><span class="nav-icon">▧</span> Workflow Templates</button>
-        <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit Trails</button>
+      <div class="workspace-label">COMPANY</div>
+      <nav class="nav-list" aria-label="Main navigation">
+        <div class="nav-group">
+          <button class="nav-item active" data-view="company-graph" title="Company graph" aria-label="Company graph"><span class="nav-icon">◎</span><span class="nav-label">Company graph</span></button>
+          <div class="nav-sublist" aria-label="Company graph sections">
+            <button class="nav-item nav-subitem" data-view="company-graph" data-section="workforce-runtime-panel" title="Durable Workforce" aria-label="Durable Workforce"><span class="nav-icon">↻</span><span class="nav-label">Durable Workforce</span></button>
+            <button class="nav-item nav-subitem" data-view="company-graph" data-section="agent-management-panel" title="Your Virtual Team" aria-label="Your Virtual Team"><span class="nav-icon">◇</span><span class="nav-label">Your Virtual Team</span></button>
+            <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-activity-panel" title="Company Event Log" aria-label="Company Event Log"><span class="nav-icon">≋</span><span class="nav-label">Company Event Log</span></button>
+            <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-brief-panel" title="Founder View" aria-label="Founder View"><span class="nav-icon">⌂</span><span class="nav-label">Founder View</span></button>
+          </div>
+        </div>
+        <div class="workspace-label nav-workspace-heading">WORKSPACE</div>
+        <button class="nav-item" data-view="company-agents" title="AI Workforce"><span class="nav-icon">◇</span><span class="nav-label">AI Workforce</span></button>
+        <button class="nav-item" data-view="overview" title="Overview"><span class="nav-icon">◫</span><span class="nav-label">Overview</span></button>
+        <button class="nav-item" data-view="workflows" title="Workflow"><span class="nav-icon">⌘</span><span class="nav-label">Workflow</span><span class="nav-count" id="nav-workflow-count">0</span></button>
+        <button class="nav-item" data-view="agents" title="Workflow Templates"><span class="nav-icon">▧</span><span class="nav-label">Workflow Templates</span></button>
+        <button class="nav-item" data-view="audit" title="Audit Trails"><span class="nav-icon">≋</span><span class="nav-label">Audit Trails</span></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="airgap-card"><div class="airgap-head"><span class="pulse-dot"></span> LOCAL ENVIRONMENT</div><div class="airgap-title">Local-first runtime</div><div class="airgap-desc">No external model API is required. Enforce egress isolation at the deployment network layer.</div></div>
@@ -31,7 +40,10 @@
 
     <main class="main-area">
       <header class="topbar">
-        <div class="breadcrumb"><span>Workspace</span><i>/</i><strong id="breadcrumb-current">Overview</strong></div>
+        <div class="topbar-leading">
+          <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Hide sidebar" aria-expanded="true" aria-controls="app-sidebar" title="Hide sidebar">☰</button>
+          <div class="breadcrumb"><span>Workspace</span><i>/</i><strong id="breadcrumb-current">Company graph</strong></div>
+        </div>
         <div class="top-actions"><div class="env-chip"><span class="pulse-dot"></span><span id="environment-label">DEVELOPMENT</span></div><button class="icon-btn" title="Refresh" id="refresh-btn">↻</button><div class="top-avatar">PB</div></div>
       </header>
 
@@ -106,11 +118,11 @@
             <div id="company-agent-list" class="company-agent-list"><div class="empty-state">Your team is empty. Create your first agent to get started.</div></div>
           </section>
           <div class="company-bottom-grid">
-            <section class="graph-activity-panel">
+            <section class="graph-activity-panel" id="graph-activity-panel">
               <div class="graph-panel-heading"><div><div class="eyebrow">COMPANY EVENT LOG</div><strong>What is changing</strong></div><span id="graph-event-count">0 events</span></div>
               <div id="company-event-list" class="company-event-list"><div class="empty-state">Company activity will appear here.</div></div>
             </section>
-            <section class="graph-brief-panel">
+            <section class="graph-brief-panel" id="graph-brief-panel">
               <div class="eyebrow">FOUNDER VIEW</div><strong>Goal → Work → Result</strong>
               <p>Follow every objective through the agents assigned to it, their tasks, meetings, decisions and deliverables. The database is the source of truth; this graph is its live projection.</p>
               <div class="graph-brief-stats"><span><b id="graph-goal-count">0</b> goals</span><span><b id="graph-agent-count">0</b> agents</span><span><b id="graph-work-count">0</b> work items</span></div>
@@ -233,7 +245,7 @@
       <div class="agent-editor-footer"><span id="agent-editor-feedback" role="status"></span><button type="button" class="secondary-btn" id="agent-editor-cancel">Cancel</button><button type="submit" class="primary-btn" id="agent-editor-save">Save agent</button></div>
     </form>
   </dialog>
-  <script src="/static/app.js?v=20261119-navfix"></script>
-  <script src="/static/company-graph.js?v=20261119-navfix"></script>
+  <script src="/static/app.js?v=20261119-sidebar-nav2"></script>
+  <script src="/static/company-graph.js?v=20261119-sidebar-nav2"></script>
 </body>
 </html>

@@ -61,11 +61,11 @@ def session_user(request: Request) -> dict[str, Any] | None:
     return _verify(request.cookies.get(SESSION_COOKIE))
 
 
-def _set_session(response: Response, *, subject: str, email: str | None = None, provider: str) -> None:
+def _set_session(response: Response, *, subject: str, email: str | None = None, provider: str, secure: bool = False) -> None:
     settings = get_settings()
     token = _sign({"sub": subject, "email": email, "provider": provider, "exp": int(time.time()) + 43200})
     response.set_cookie(
-        SESSION_COOKIE, token, max_age=43200, httponly=True, secure=False,
+        SESSION_COOKIE, token, max_age=43200, httponly=True, secure=secure,
         samesite="lax", path="/",
     )
 
@@ -104,7 +104,7 @@ def dev_login(request: Request, credentials: LoginRequest) -> Response:
     if not (username_ok and password_ok):
         raise HTTPException(401, "Invalid username or password")
     response = JSONResponse({"authenticated": True, "user": {"sub": settings.dev_admin_username, "provider": "development"}})
-    _set_session(response, subject=settings.dev_admin_username, provider="development")
+    _set_session(response, subject=settings.dev_admin_username, provider="development", secure=request.url.scheme == "https")
     return response
 
 
@@ -173,7 +173,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
     if not profile.get("email") or profile.get("email_verified") is not True:
         raise HTTPException(403, "Google account must have a verified email address")
     response = RedirectResponse("/", status_code=303)
-    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google")
+    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google", secure=request.url.scheme == "https")
     response.delete_cookie(STATE_COOKIE, path="/auth")
     return response
 

@@ -4,18 +4,18 @@
 
 Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led virtual company. A founder defines the company vision, mission, goals and KPIs; a persistent company graph connects AI employees, assignments, meetings, decisions, deliverables and business outcomes. The graph is the primary workspace and a live projection of database records and company events.
 
-Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce platform. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
+Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime: Ollama starts by default, the selected model is pulled automatically, API and MCP have dedicated host ports, and Docker service DNS keeps container-to-container calls predictable. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
 
-> **Versioning:** the complete Pinky Bread 2.0 Alpha 3 stack is now merged into the default `main` branch. The [Alpha 1 company graph](https://github.com/roime81/pinky-bread/pull/1), [Alpha 2 workforce runtime](https://github.com/roime81/pinky-bread/pull/2) and [Alpha 3 durable runtime](https://github.com/roime81/pinky-bread/pull/3) were delivered as a stacked sequence. This README describes the current `main` branch. Check the [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md) for implemented scope and remaining work.
+> **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md).
 
 > [!IMPORTANT]
-> **MVP / demonstration software.** The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Mock inference is enabled by default and does not inspect image pixels. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production RBAC/tenant isolation, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
+> **MVP / demonstration software.** Docker Compose uses live local Ollama inference by default; mock inference is available only when explicitly enabled and does not inspect image pixels. The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
 
 ---
 
 ## Contents
 
-- [Pinky Bread 2.0 Alpha 3](#pinky-bread-20-alpha-3)
+- [Pinky Bread 2.0 Alpha 4](#pinky-bread-20-alpha-4)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -33,7 +33,7 @@ Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce pl
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 
-## Pinky Bread 2.0 Alpha 3
+## Pinky Bread 2.0 Alpha 4
 
 ### What is new
 
@@ -54,13 +54,13 @@ Pinky Bread 2.0 Alpha 3 advances the virtual company into a durable workforce pl
 - **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.
 - **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
 - **Continuous coordination:** the founder-selected coordinator can run recurring PLAN_ONLY or AUTO_EXECUTE schedules; disabled by default.
-- **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity.
-- **Self-hosted local models:** Ollama (optional Compose profile) or vLLM-compatible OpenAI chat-completions endpoints. No hosted LLM is required.
+- **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity. MCP is published on a dedicated host port for private local integrations.
+- **Default private LLM:** Ollama starts with the Compose stack, pulls `qwen2.5:3b` on first startup and stores model files in a persistent Docker volume. vLLM and other OpenAI-compatible local endpoints remain configurable.
 - **Durable worker service:** separate worker process that can be scaled horizontally.
 
 ### What still needs to be built
 
-Alpha 3 is a durable workforce increment, not yet a production-ready company. Job execution is checkpointed and recovers expired leases, but cancellation is cooperative at safe boundaries rather than interrupting an in-flight model generation. Meetings remain text-based; calendar scheduling and voice/video are not implemented. KPI measurements remain manual. No external MCP side-effect tools are enabled.
+Alpha 4 is a local-first durable workforce release, not yet a production-ready company. Job execution is checkpointed and recovers expired leases, but cancellation is cooperative at safe boundaries rather than interrupting an in-flight model generation. Meetings remain text-based; calendar scheduling and voice/video are not implemented. KPI measurements remain manual. No external MCP side-effect tools are enabled.
 
 Keycloak/OIDC JWT validation, company-scoped RBAC, OpenBao secrets, OPA policy enforcement, pgvector retrieval, model/prompt rollback, token/cost budgets, OpenTelemetry/Prometheus/Grafana and production backup/restore remain future work. Tenant and actor identifiers in current APIs are caller-supplied and are not an authorization boundary. The MCP static bearer verifier is for private development only. Do not expose this alpha to untrusted users.
 
@@ -92,14 +92,14 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 | Object storage | Local filesystem or S3-compatible SeaweedFS for source documents, generated deliverables and meeting minutes | PostgreSQL catalogues owner, company/tenant, checksum and object key; auth/retention policies remain planned |
 | Declarative agent registry | YAML manifests, Pydantic validation, reload endpoint | Registry reload is local configuration, not a governed deployment pipeline |
 | Deterministic routing | Router plus explicit specialist hand-off logic | Lightweight Python state machine, not LangGraph |
-| Local LLM integration | OpenAI-compatible chat completions adapter | Endpoint compatibility depends on the selected model/server |
+| Local LLM integration | Ollama by default; vLLM/other OpenAI-compatible endpoints optional | Endpoint compatibility depends on the selected model/server |
 | Mock inference | GPU-free deterministic development response | Does not understand or OCR image contents |
 | Multimodal artifact intake | PNG/JPEG/PDF uploads, artifact persistence, PDF text extraction, image forwarding to configured vision endpoint | Scanned PDF OCR is not included; mock mode does not inspect images |
 | Human-in-the-loop | Pending approval state, approve/reject API, approver ID and notes in audit | Approver ID is supplied by the caller; not authenticated |
-| Tool access control | Agent manifest allow-list checked before simulated refund tool execution | Local MCP-style adapter only; no MCP protocol transport |
+| Tool access control | Agent manifest allow-list plus MCP v2 role-scoped tools | Static development bearer verifier; production identity remains future work |
 | Audit trail | SHA-256 input hashes and previous-event hash links | Tamper-evident linkage, not WORM/immutable storage or signed audit |
-| Persistence | SQLAlchemy workflow state stored in SQLite or PostgreSQL | No LangGraph checkpointing or migration framework |
-| Container deployment | Dockerfile and Compose with PostgreSQL/pgvector, Valkey and SeaweedFS | Development credentials are in the sample Compose file; replace them before shared deployment |
+| Persistence | PostgreSQL company graph, durable jobs and LangGraph checkpoints; SQLite for standalone mode | Compose migration bootstrap is provided; production migration governance remains future work |
+| Container deployment | Docker Compose with API, worker, MCP, Ollama, PostgreSQL/pgvector, Valkey and SeaweedFS | Development credentials are in Compose; replace them before shared deployment |
 
 ## Architecture
 
@@ -188,184 +188,137 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 
 ## Requirements
 
-### For local Python execution
+### Recommended full-stack deployment
 
-- Python **3.11 or newer**
-- `pip`
-- A supported Windows, macOS, or Linux environment
-- Internet access to install Python packages for the first setup, unless dependencies are available from an internal package mirror
+- Docker Engine or Docker Desktop with Docker Compose v2
+- Internet access on first startup to pull container images and the selected Ollama model
+- Sufficient disk and memory for PostgreSQL, Valkey, SeaweedFS, the API/worker and the selected model
+- A GPU is optional. Ollama can run on CPU, although inference may be slower
 
-No GPU is required when `MOCK_INFERENCE=true` (the default).
+### Optional standalone Python deployment
 
-### For Docker Compose
+- Python 3.11 or newer and `pip`
+- A local Ollama installation listening on `127.0.0.1:11434`, or another OpenAI-compatible model server
+- PostgreSQL/Valkey/MCP are not started by the standalone API command; this mode is intended for API-only development
 
-- Docker Engine or Docker Desktop with Compose v2
-- Sufficient memory and disk for API, PostgreSQL, Valkey, SeaweedFS and the worker; local models require additional RAM/VRAM and model storage
+## Recommended installation: Docker Compose
 
-### For local model inference (optional)
-
-- A running OpenAI-compatible local inference server, for example vLLM
-- The model weights and tokenizer already available to that inference server
-- A reasoning model endpoint and, when image understanding is required, a vision-capable endpoint
-- Network connectivity from Pinky Bread to those internal endpoints
-
-Pinky Bread does not download model weights automatically.
-
-## Install and run locally
-
-### Windows PowerShell
-
-From the directory where you want the source checked out or extracted:
-
-```powershell
-cd pinky-bread
-
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-Copy-Item .env.example .env
-
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
-```
-
-If PowerShell blocks activation, use the Python executable directly:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
-```
-
-### macOS / Linux
+The full Compose stack is the recommended path. It starts the API, worker, MCP server, PostgreSQL, Valkey, SeaweedFS and Ollama. The first start pulls the configured model automatically. You do not need to run Uvicorn, Ollama, MCP, PostgreSQL or Valkey in separate terminals.
 
 ```bash
+git clone https://github.com/roime81/pinky-bread.git
 cd pinky-bread
-
-python3.11 -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
 cp .env.example .env
 
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
-```
+# GitHub Codespaces: use 0.0.0.0 for Docker port forwarding.
+# On a normal local machine, keep the safer 127.0.0.1 binding.
+# sed -i 's/^PB_BIND_ADDRESS=.*/PB_BIND_ADDRESS=0.0.0.0/' .env
 
-### Open the application
-
-- Web console: <http://127.0.0.1:8888>
-- Interactive API docs: <http://127.0.0.1:8888/docs>
-- OpenAPI JSON: <http://127.0.0.1:8888/openapi.json>
-- Health endpoint: <http://127.0.0.1:8888/api/healthz>
-
-Standalone Python mode uses SQLite and local filesystem storage. For host-run inference, use the Ollama listener at `http://127.0.0.1:11434/v1` or deliberately enable mock mode. The recommended full-stack path is Docker Compose, which starts PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker, MCP and Ollama by default and downloads the configured model on first startup.
-
-## Run with Docker Compose
-
-Start the full local container stack:
-
-```bash
-docker compose up --build
-```
-
-Open <http://127.0.0.1:8888>.
-
-Useful commands:
-
-```bash
-# Follow application logs
-docker compose logs -f api
-
-# Show service state
+docker compose config --quiet
+docker compose up --build -d
 docker compose ps
+```
 
-# Scale durable job workers (PostgreSQL coordinates the replicas)
+Open the UI at <http://127.0.0.1:8888>. In Codespaces, open port `8888` from the Ports panel. Keep the other forwarded ports private.
+
+### Local service ports
+
+| Service | Host port / URL | Container DNS / port | Purpose |
+|---|---|---|---|
+| Pinky Bread UI + API | `127.0.0.1:8888` | `api:8080` | Web app, REST API and OpenAPI docs |
+| MCP Streamable HTTP | `127.0.0.1:8060/mcp` | `mcp:8090/mcp` | Private MCP integration endpoint |
+| Ollama | `127.0.0.1:11434` | `ollama:11434` | Private local LLM inference |
+| PostgreSQL | `127.0.0.1:5433` | `postgres:5432` | Company data, jobs and LangGraph checkpoints |
+| Valkey | `127.0.0.1:6380` | `valkey:6379` | Notifications and worker wake-ups |
+| SeaweedFS S3 | `127.0.0.1:8333` | `seaweedfs:8333` | Local object/document storage |
+
+`PB_BIND_ADDRESS` controls the host-side listener for these published ports. It defaults to `127.0.0.1`. In Codespaces, set it to `0.0.0.0` if the forwarded-port proxy cannot reach loopback-bound Docker ports. Do not make database, cache, MCP or Ollama ports public.
+
+### Host access versus Docker DNS
+
+Host tools and browsers use `127.0.0.1` and the published host ports. Containers must use Docker service names because `localhost` inside a container refers only to that same container:
+
+- API and worker → Ollama: `http://ollama:11434/v1`
+- API and worker → MCP: `http://mcp:8090/mcp`
+- API and worker → PostgreSQL: `postgres:5432`
+- API and worker → Valkey: `valkey:6379`
+- API and worker → SeaweedFS: `http://seaweedfs:8333`
+
+Do not put `127.0.0.1:11434` into a container's model endpoint. Compose uses the separate `REASONING_CONTAINER_API_URL` variable for its internal Ollama address.
+
+### Model bootstrap and first startup
+
+The default is `MODEL_PROVIDER=ollama`, `MOCK_INFERENCE=false` and `REASONING_MODEL=qwen2.5:3b`. The one-shot `ollama-init` service checks `/api/tags`, pulls the configured model when missing, and completes before API/worker startup. Model files persist in the `ollama_data` volume, so they are not downloaded on every restart.
+
+```bash
+# Watch model download and service startup
+docker compose logs -f ollama ollama-init api worker
+
+# Confirm the API is not in mock mode
+docker compose exec api printenv MOCK_INFERENCE
+docker compose exec worker printenv MOCK_INFERENCE
+
+# List locally installed Ollama models
+curl http://127.0.0.1:11434/api/tags
+
+# Check the API health endpoint
+curl http://127.0.0.1:8888/api/healthz
+```
+
+To choose another Ollama model, change `REASONING_MODEL` in `.env` and run `docker compose up --build -d`. Check the model's memory requirements and licence before using it.
+
+### Useful Compose operations
+
+```bash
+docker compose ps
+docker compose logs -f api worker mcp
+docker compose logs -f ollama ollama-init
+docker compose exec ollama ollama list
 docker compose up -d --scale worker=3
-
-# Stop containers and preserve named volumes
 docker compose down
 
-# Stop containers and remove database/cache volumes (destructive)
+# Destructive: also removes PostgreSQL, Valkey, SeaweedFS and Ollama model volumes
 docker compose down --volumes
 ```
 
-The Compose stack contains:
+`docker compose down` preserves named data volumes. Do not use `--volumes` unless you intend to delete persisted company data and downloaded model files.
 
-- `api`: FastAPI web console and company/workforce API
-- `worker`: LangGraph worker process; scale by adding replicas
-- `mcp`: internal MCP v2 Streamable HTTP server (port 8090 is not published to the host)
-- `postgres`: PostgreSQL 16 using the pgvector image; durable queue and checkpoints
-- `valkey`: Valkey with append-only persistence enabled; worker wake-up only
-- `seaweedfs`: SeaweedFS S3-compatible object storage
-- `ollama`: optional `local-llm` profile for self-hosted models
+### Optional standalone Python mode
 
-The default application network is configured as `internal: true`, which restricts container egress. The optional Ollama profile is attached to a separate model-download network so it can pull the model explicitly; remove that egress path after preloading models for an air-gapped deployment. **Compose is not proof of a fully air-gapped deployment.** Host firewall rules, ingress, routing, DNS, secrets, image sources and infrastructure controls must be reviewed independently. PostgreSQL owns durable job/checkpoint state; Valkey only wakes workers and publishes live graph notifications. SeaweedFS stores documents and outputs while PostgreSQL keeps object metadata and checksums. The extension init script for pgvector runs only on a fresh PostgreSQL data directory; an existing volume needs a manual extension migration.
+Use this only when you intentionally do not want the Compose worker/data stack. First install and start Ollama on the host, then:
 
-The PostgreSQL password and SeaweedFS S3 keys are development-only values. Replace them with managed secrets and restrict the S3 identity before any shared or non-development deployment.
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8888
+```
 
-## Configure a self-hosted local model
+Open <http://127.0.0.1:8888>. In this mode the API uses the SQLite/local-file settings from `.env`; `MCP_ENABLED=false` means the MCP server is not part of this standalone command. Do not also run Uvicorn when the Compose `api` service is already running.
 
-Mock mode is enabled by default. To use a local OpenAI-compatible endpoint, edit `.env`. vLLM and Ollama can both be used when configured with the compatible chat-completions API:
+## Configure the Ollama model
+
+These are the model settings in `.env`:
 
 ```dotenv
 MOCK_INFERENCE=false
-REASONING_API_URL=http://127.0.0.1:8001/v1
-REASONING_MODEL=your-reasoning-model
-MULTIMODAL_API_URL=http://127.0.0.1:8002/v1
-MULTIMODAL_MODEL=your-vision-model
-VLLM_API_KEY=local-development-key
+MODEL_PROVIDER=ollama
+REASONING_API_URL=http://127.0.0.1:11434/v1
+REASONING_CONTAINER_API_URL=http://ollama:11434/v1
+REASONING_MODEL=qwen2.5:3b
+VLLM_API_KEY=ollama
 ```
 
-For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+`REASONING_API_URL` is the host-run endpoint. Docker Compose overrides the application container endpoint using `REASONING_CONTAINER_API_URL`. For vLLM or another OpenAI-compatible endpoint, set `MODEL_PROVIDER` to `vllm` or `openai-compatible`, configure the endpoint reachable from the API and worker containers, set `REASONING_MODEL`, and provide `VLLM_API_KEY` when the server requires one.
 
-```bash
-docker compose --profile local-llm up -d
-docker compose exec ollama ollama pull <model-name>
-```
+Agent manifests may override the provider, model name and endpoint per employee. An empty agent-specific endpoint inherits the workspace endpoint.
 
-Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
+### Multimodal model
 
-For a local Ollama container instead of vLLM, start the optional profile and pull your chosen model:
+`MULTIMODAL_API_URL` and `MULTIMODAL_MODEL` are optional endpoints for a separately deployed OpenAI-compatible vision model. This Compose stack does not start a vision server. Text-based PDFs are extracted locally; scanned-PDF OCR is not included. Mock mode does not inspect image pixels.
 
-```bash
-docker compose --profile local-llm up -d
-docker compose exec ollama ollama pull <model-name>
-```
 
-Set `REASONING_API_URL=http://ollama:11434/v1`, `REASONING_MODEL=<model-name>` and `MOCK_INFERENCE=false` in `.env`, then recreate the API and worker. Pinky Bread uses the local model's OpenAI-compatible chat-completions endpoint; when `MCP_ENABLED=true`, model tool calls are routed through the internal MCP server.
-
-Then restart the application. The adapter sends requests to:
-
-```text
-{REASONING_API_URL}/chat/completions
-{MULTIMODAL_API_URL}/chat/completions
-```
-
-Reasoning uses the `model_name` and optional `endpoint` configured in the selected agent manifest. Image requests use the configured multimodal endpoint/model and an OpenAI-compatible `image_url` content part. Verify that the chosen inference server and model support this request format.
-
-For containerized execution, `127.0.0.1` inside the API container refers to that container itself. Use an appropriate Docker network service name or reachable internal hostname for the model server.
-
-Example agent-specific model configuration:
-
-```yaml
-model_configuration:
-  provider: local_vllm
-  endpoint: http://vllm-reasoning:8000/v1
-  model_name: local-reasoning-model
-  temperature: 0.05
-  max_tokens: 1200
-```
-
-### Multimodal notes
-
-- Text-based PDF content is extracted locally with PyMuPDF.
-- Scanned PDFs do not receive OCR in this MVP. Add a local OCR/VLM processing pipeline for scanned documents.
-- PNG and JPEG bytes are accepted as artifacts and passed to the multimodal endpoint only when mock mode is disabled.
-- Mock mode records that images were attached but does not inspect their pixels.
-- The current masking implementation is regex-based and should not be considered a complete PII/PHI detector.
 
 ## Try the demo workflow
 
@@ -516,40 +469,79 @@ After saving a manifest, call `POST /v1/agents/reload` or click **Reload manifes
 
 ## Configuration reference
 
-The application reads environment variables from the environment and `.env` file. See `.env.example` for the complete sample configuration.
+The `.env.example` file is the canonical template. Copy it to `.env` once and edit `.env`; do not overwrite an existing `.env` when upgrading because it may contain your own tokens or settings.
+
+### Application and model
+
+| Variable | Default / effective value | Description |
+|---|---|---|
+| `APP_NAME` | `Pinky Bread` | Application title and API metadata. |
+| `APP_ENV` | `development` standalone; `docker` in Compose | Environment label. |
+| `DEV_MODE` | `true` | Development mode only; it does not add authentication. |
+| `PB_BIND_ADDRESS` | `127.0.0.1` | Host bind address for Compose-published ports. Use `0.0.0.0` in Codespaces when required by port forwarding. |
+| `MOCK_INFERENCE` | `false` | `false` uses the configured live model. Set `true` only for a deterministic simulation without real LLM reasoning. Compose and the sample `.env` default to `false`. |
+| `MODEL_PROVIDER` | `ollama` | Default reasoning provider: `ollama`, `vllm` or `openai-compatible`. |
+| `REASONING_API_URL` | `http://127.0.0.1:11434/v1` | Host-run OpenAI-compatible reasoning endpoint. Do not use this host address inside Docker containers. |
+| `REASONING_CONTAINER_API_URL` | `http://ollama:11434/v1` | Compose-only override passed to API, worker and model bootstrap; use Docker DNS here. |
+| `REASONING_MODEL` | `qwen2.5:3b` | Default model name pulled by `ollama-init` and used when an agent does not override it. |
+| `VLLM_API_KEY` | `ollama` in sample; `local-dev-key` in bare settings | Bearer credential for an OpenAI-compatible model server. Ollama local use does not normally require a real API key. |
+| `MULTIMODAL_API_URL` | `http://127.0.0.1:8002/v1` | Optional OpenAI-compatible vision endpoint. No vision server is included in this Compose stack. |
+| `MULTIMODAL_MODEL` | `local-vision` | Model identifier for the optional vision endpoint. |
+
+### Database, cache and object storage
+
+| Variable | Default / effective value | Description |
+|---|---|---|
+| `DATABASE_URL` | Standalone: `sqlite:///./data/pinky_bread.db`; Compose: PostgreSQL at `postgres:5432` | SQLAlchemy connection. Compose services override this value and use the one-shot `migrate` service. |
+| `AUTO_CREATE_SCHEMA` | `true` standalone; `false` in API/worker/MCP containers | Allow local schema creation. Compose runs migrations before app services start. |
+| `REDIS_URL` | Standalone: `redis://localhost:6379/0`; Compose: `redis://valkey:6379/0` | Valkey/Redis-compatible notifications and worker wake-ups. PostgreSQL remains the durable job source of truth. |
+| `STORAGE_BACKEND` | `local` standalone; `s3` in Compose | Select local filesystem or S3-compatible object storage. |
+| `S3_ENDPOINT_URL` | Standalone: `http://localhost:8333`; Compose: `http://seaweedfs:8333` | S3-compatible object storage endpoint. |
+| `S3_REGION` | `us-east-1` | S3 signing region. |
+| `S3_BUCKET` | `pinky-bread` | Bucket for workflow and company artifacts. |
+| `S3_ACCESS_KEY` | Development sample credential | S3 access key. Replace before shared deployment. |
+| `S3_SECRET_KEY` | Development sample credential | S3 secret key. Replace before shared deployment. |
+| `UPLOAD_DIR` | Standalone: `./data/uploads`; Compose: `/opt/pinky-bread/data/uploads` | Local upload/artifact directory. |
+| `MAX_UPLOAD_MB` | `12` | Maximum artifact upload size in MB. |
+| `AGENT_CONFIG_DIR` | Standalone: `./config/agents`; Compose: `/opt/pinky-bread/config/agents` | Directory containing YAML agent manifests. |
+
+### Durable worker and LangGraph
 
 | Variable | Default | Description |
-|---|---|---|
-| `APP_NAME` | `Pinky Bread` | Application display/API title |
-| `APP_ENV` | `development` | Environment label shown by health endpoint and UI |
-| `DEV_MODE` | `true` | Development setting; does not enable authentication |
-| `MOCK_INFERENCE` | `true` | Use GPU-free mock responses instead of HTTP model calls |
-| `DATABASE_URL` | `sqlite:///./data/pinky_bread.db` | SQLAlchemy database connection URL |
-| `REDIS_URL` | `redis://localhost:6379/0` | Valkey/Redis-compatible URL used for best-effort company graph notifications |
-| `AGENT_CONFIG_DIR` | `./config/agents` | Directory containing YAML agent manifests |
-| `UPLOAD_DIR` | `./data/uploads` | Local object and upload storage directory |
-| `MAX_UPLOAD_MB` | `12` | Maximum size per artifact |
-| `STORAGE_BACKEND` | `local` | `local` filesystem or `s3` compatible object storage |
-| `S3_ENDPOINT_URL` | `http://localhost:8333` | S3 endpoint, such as SeaweedFS |
-| `S3_REGION` | `us-east-1` | S3 signing region |
-| `S3_BUCKET` | `pinky-bread` | Bucket for workflow artifacts |
-| `S3_ACCESS_KEY` | development value | S3-compatible access key; replace before shared deployment |
-| `S3_SECRET_KEY` | development value | S3-compatible secret; replace before shared deployment |
-| `REASONING_API_URL` | `http://localhost:8001/v1` | OpenAI-compatible local reasoning endpoint base URL |
-| `REASONING_MODEL` | `local-reasoner` | Default reasoning model setting; agent manifest `model_name` is used for reasoning calls |
-| `MULTIMODAL_API_URL` | `http://localhost:8002/v1` | OpenAI-compatible local vision endpoint base URL |
-| `MULTIMODAL_MODEL` | `local-vision` | Vision model identifier |
-| `VLLM_API_KEY` | `local-dev-key` | Bearer token passed to local inference endpoint |
+|---|---:|---|
+| `WORKER_POLL_SECONDS` | `1.5` | Worker polling interval for durable jobs. |
+| `WORKER_LEASE_SECONDS` | `120` | Duration of an active worker lease. |
+| `WORKER_HEARTBEAT_SECONDS` | `20` | Worker lease heartbeat interval. |
+| `WORKER_MAX_ATTEMPTS` | `5` | Maximum job execution attempts. |
+| `LANGGRAPH_STRICT_MSGPACK` | `true` | Enable strict MsgPack serialization for LangGraph checkpoints. |
 
-Do not commit a real `.env` file, API key, password, certificate, or private model credential.
+### MCP server and identity
+
+| Variable | Default / effective value | Description |
+|---|---|---|
+| `MCP_ENABLED` | `false` standalone; forced `true` for Compose API/worker | Enable the model-to-MCP client integration. The Compose stack starts and enables the MCP service automatically. |
+| `MCP_SERVER_URL` | Standalone: `http://127.0.0.1:8060/mcp`; Compose: `http://mcp:8090/mcp` | MCP Streamable HTTP endpoint used by the client. |
+| `MCP_HOST` | `127.0.0.1` in sample host mode; `0.0.0.0` in Compose | Interface on which the MCP server listens. |
+| `MCP_PORT` | `8060` host mode; `8090` inside Compose | MCP listener port. Compose maps host port `8060` to container port `8090`. |
+| `MCP_API_TOKEN` | `replace-with-a-long-random-workforce-token` in sample | Workforce bearer token with read and enqueue scopes. Use a long random secret. |
+| `MCP_READ_TOKEN` | `replace-with-a-different-read-only-token` in sample | Separate read-only bearer token. Use a different long random secret. |
+| `MCP_RESOURCE_URL` | Host: `http://127.0.0.1:8060/mcp`; Compose: `http://mcp:8090/mcp` | Protected MCP resource audience URL. |
+| `MCP_ISSUER_URL` | Host: `http://127.0.0.1:8888/issuer`; Compose: `http://pinky-bread-api:8080/issuer` | Issuer metadata URL used by the current development verifier. It is not a Keycloak/OIDC token issuer. |
+| `MCP_MAX_TOOL_ROUNDS` | `4` | Maximum model/MCP tool-calling rounds per request. |
+
+Compose has internal development defaults for PostgreSQL credentials and SeaweedFS credentials in `docker-compose.yml`. They are not production secrets. Replace or externalize them before any shared deployment. The static MCP bearer verifier is also development-only; use OIDC/JWT validation before exposing it.
+
+Do not commit `.env`, real API keys, passwords, access tokens, certificates or private model credentials.
 
 ## Connect the local model to MCP
 
-The Compose stack starts an internal MCP v2 Streamable HTTP server. The local model client discovers its tools dynamically and then filters those tools by the active agent role. The model cannot choose its own company, tenant or agent ID; those values are injected by the runtime.
+The Compose stack starts the MCP v2 Streamable HTTP server automatically and enables the model-to-MCP client in the API and worker. The client discovers tools dynamically and applies per-agent role allow-lists. Company, tenant and agent identities are injected by the runtime rather than selected by the model.
 
-Before using non-mock inference, set `MCP_ENABLED=true` and replace `MCP_API_TOKEN` and `MCP_READ_TOKEN` in `.env` with separate long random values. The MCP port is internal to Compose and is not published to the host. The current verifier is for private development, not production OIDC; see [the durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) before exposing it.
+Host-side integrations can reach the endpoint at `http://127.0.0.1:8060/mcp`. Inside Compose, use `http://mcp:8090/mcp`. The host port is private by default; do not expose it to untrusted networks.
 
-Create at least one agent with **Coordinator** authority before planning goals. Add as many user-defined specialists as the company needs. From the Company Graph workspace, **Enable planning loop** lets the coordinator create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
+Before using MCP beyond a local single-user experiment, replace `MCP_API_TOKEN` and `MCP_READ_TOKEN` in `.env` with separate long random values. The current static bearer verifier is for private development only; it is not Keycloak/OIDC, does not issue production JWTs and does not establish tenant authorization. Review [the durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) before extending MCP access.
+
+Create at least one agent with **Coordinator** authority before planning goals. From the Company Graph workspace, **Enable planning loop** lets the coordinator create plans on its schedule. **Enable auto-execution** requires explicit founder confirmation and lets the worker execute ready work. The default is disabled. Stop coordination at any time with **Pause coordination**.
 
 ## Run tests
 
@@ -626,7 +618,7 @@ Pinky Bread is a prototype. Before any enterprise or regulated deployment, addre
 - **Tenant isolation:** enforce tenant ownership on every workflow, artifact and approval request. The `tenant_id` field is stored but is not an authorization boundary.
 - **Privacy:** replace regex-only masking with tested local PII/PHI detection, controlled tokenization, secure re-identification policy, encrypted sensitive state, retention controls and data minimization. Original prompts are persisted in workflow records.
 - **MCP identity:** replace the internal static bearer verifier with Keycloak/OIDC JWT/JWKS or token introspection, company membership checks and per-agent tool grants. The current MCP v2 server is internal-development only.
-- **Workflow durability:** LangGraph + PostgreSQL checkpoints, lease recovery and bounded retries are implemented in Alpha 3. Add budget enforcement, richer concurrency controls, prompt/model rollback and backup/restore drills.
+- **Workflow durability:** LangGraph + PostgreSQL checkpoints, lease recovery and bounded retries are implemented in Alpha 3/4. Add budget enforcement, richer concurrency controls, prompt/model rollback and backup/restore drills.
 - **Audit integrity:** add WORM or independently protected storage, signed records, external anchoring, controlled access, and audit-chain verification tooling. Hash-linked database rows alone are not immutable.
 - **Network security:** enforce egress control, ingress restrictions, mTLS, DNS policy, registry controls and host firewall rules outside this application. A Compose `internal` network is only one deployment control.
 - **Secrets and supply chain:** use a secrets manager, trusted internal registries, image scanning, dependency pinning/SBOM, vulnerability scanning and signed artifacts.
@@ -639,8 +631,8 @@ No regulatory certification, security assurance, production air-gap verification
 
 See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
 
-1. **Durable orchestration:** LangGraph `StateGraph`, PostgreSQL checkpoints, restart recovery, bounded retries and idempotent workflow resume.
-2. **Real MCP integration:** MCP SDK server/client transport, structured tool schemas, authenticated tool identities and tool-level policy checks.
+1. **Workforce quality:** richer coordination, cancellation semantics, budget enforcement, agent evaluation and repeatable execution policies.
+2. **Production MCP identity:** OIDC/JWT validation, authenticated tool identities, per-agent grants and tool-level policy checks.
 3. **Approval security:** authenticated approvers, role/tenant checks, separation of duties and replay protection.
 4. **Multimodal processing:** local OCR for scanned PDFs, image validation, vision-model integration tests and safer artifact lifecycle controls.
 5. **Privacy and governance:** local NER/Presidio, secure token vault, prompt/model manifest versioning, audit export and retention policy.
@@ -650,14 +642,10 @@ See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the
 
 ### Local API startup and PostgreSQL connection refused
 
-The sample `.env.example` uses SQLite for API-only local development, so the
-API can start without a separately installed PostgreSQL server. If your existing
-`.env` still points to PostgreSQL at `localhost:5432`, either change
-`DATABASE_URL` to `sqlite:///./data/pinky_bread.db` and set
-`AUTO_CREATE_SCHEMA=true`, or start the full stack with Docker Compose:
+The sample `.env.example` uses SQLite for standalone API-only development. For the recommended full stack, use Docker Compose:
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 Compose runs a one-shot `migrate` service after PostgreSQL is healthy. The API,
@@ -684,13 +672,13 @@ uvicorn app.main:app --reload --port 8889
 
 Check that the server process is still running and that the browser is using the same host/port displayed in the terminal. Inspect `/api/healthz` for the service response.
 
-### A local model call fails
+### AI chat says `MOCK_INFERENCE=true`
 
-Check `MOCK_INFERENCE=false`, model endpoint reachability from the API process/container, the `/v1` base path, model identifier, bearer token configuration, and whether the server supports the expected OpenAI-compatible chat completion payload.
+An existing `.env` can override the sample file. Set `MOCK_INFERENCE=false`, then recreate the API, worker and model bootstrap with `docker compose up --build -d`. Verify with `docker compose exec api printenv MOCK_INFERENCE` and `docker compose exec worker printenv MOCK_INFERENCE`. Do not simply edit `.env.example`; Compose reads `.env`.
 
-### Docker cannot connect to a model running on the host
+### Docker cannot resolve the model or MCP hostname
 
-Do not use the container's `localhost` address for a model server running on the host. Configure a hostname/address reachable from the container network, and verify the host's firewall policy.
+Inside Compose, use `http://ollama:11434/v1` and `http://mcp:8090/mcp`, not `localhost` or `127.0.0.1`. Check `docker compose ps`, `docker compose logs ollama ollama-init api worker mcp`, and the `REASONING_CONTAINER_API_URL` setting. From the host, use the published ports such as `127.0.0.1:11434` and `127.0.0.1:8060`.
 
 ### Agent reload reports validation errors
 
@@ -701,53 +689,3 @@ Review the reported YAML filename and schema error. Ensure each manifest include
 ## License
 
 This repository includes the Apache License, Version 2.0 in [`LICENSE`](LICENSE). Review the full license text for the permissions, conditions, limitations, and attribution requirements that apply to this project.
-
-
-
-## Default live AI runtime
-
-The full-stack Docker Compose deployment starts Ollama by default, downloads `qwen2.5:3b` once into the persistent `ollama_data` volume, and only then starts the API and worker. The default Compose path uses live inference. It does not silently simulate company conversations.
-
-```bash
-cp .env.example .env
-# Check: MOCK_INFERENCE=false, MODEL_PROVIDER=ollama,
-# REASONING_API_URL=http://ollama:11434/v1, REASONING_MODEL=qwen2.5:3b
-docker compose down
-docker compose up --build -d
-docker compose ps
-docker compose logs -f ollama ollama-init api worker
-```
-
-The first startup downloads the model and requires internet access, disk space and memory. Later restarts reuse the persistent model volume. To use a different Ollama model, change `REASONING_MODEL` in `.env`; the one-shot bootstrap pulls it before the API and worker start. Set `MOCK_INFERENCE=true` only when you intentionally want a GPU-free development simulation. Company chat will then state that live inference is disabled.
-
-The Founder conversation panel displays live model connectivity and model installation status. Company chat uses MCP when `MCP_ENABLED=true`: coordinators receive the allow-listed planning and queue tools, while specialists receive read-only company context tools. Provider, model identifier and optional endpoint are stored per employee. An empty per-agent endpoint inherits the workspace endpoint.
-
-For host-based vLLM or another OpenAI-compatible server, set `MODEL_PROVIDER=vllm` or `openai-compatible`, configure `REASONING_API_URL`, `REASONING_MODEL` and `VLLM_API_KEY` in `.env`, and set each employee's model and optional endpoint. The endpoint must be reachable from the API and worker containers.
-
-## Local service endpoints and ports
-
-The default Docker Compose deployment runs the private Ollama model and the supporting services locally. Host ports are published separately; containers continue to use Docker service DNS names on the private Compose network.
-
-| Service | Host address | Container address | Purpose |
-|---|---|---|---|
-| Pinky Bread API + UI | `http://127.0.0.1:8888` / `http://api.localhost:8888` | `api:8080` | Web app and REST API |
-| MCP Streamable HTTP | `http://127.0.0.1:8060/mcp` / `http://mcp.localhost:8060/mcp` | `mcp:8090/mcp` | MCP tools and resources |
-| Ollama | `http://127.0.0.1:11434` / `http://ollama.localhost:11434` | `ollama:11434` | Private local LLM inference |
-| PostgreSQL | `127.0.0.1:5433` | `postgres:5432` | Durable state and LangGraph checkpoints |
-| Valkey | `127.0.0.1:6380` | `valkey:6379` | Coordination and notifications |
-| SeaweedFS S3 | `http://127.0.0.1:8333` | `seaweedfs:8333` | Local artifact/object storage |
-
-Host-side port binding defaults to loopback only through `PB_BIND_ADDRESS=127.0.0.1`. In GitHub Codespaces, if the forwarded-port proxy cannot reach a loopback-bound published port, set `PB_BIND_ADDRESS=0.0.0.0` in `.env`, recreate the stack, and use the Codespaces Ports panel to open the forwarded port. Keep forwarded ports private; do not expose database, cache, MCP or model ports publicly.
-
-Inside Compose, do not change service URLs to `localhost`: each container has its own loopback interface. API and worker use `http://ollama:11434/v1` and `http://mcp:8090/mcp`; the MCP server uses the internal API service address. From the host, use the published host ports above.
-
-Start everything with:
-
-```bash
-cp .env.example .env
-docker compose up --build -d
-docker compose config --quiet
-docker compose ps
-```
-
-The first start downloads the configured Ollama model into the persistent model volume. No separate Uvicorn, Ollama, MCP, PostgreSQL or Valkey command is required.

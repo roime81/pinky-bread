@@ -439,7 +439,18 @@ async def _execute_prompt(
             agent_id=agent["id"],
             max_tokens=2400,
         )
-    return await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.25, max_tokens=2400)
+    model_config = data.get("model_configuration") or {}
+    endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)
+    if not endpoint.startswith(("http://", "https://")):
+        raise RuntimeError("The selected agent model endpoint must be an HTTP(S) URL.")
+    return await _chat_completion(
+        system_prompt=system,
+        user_prompt=prompt,
+        temperature=float(model_config.get("temperature", 0.25)),
+        max_tokens=int(model_config.get("max_tokens", 2400)),
+        model_name=str(model_config.get("model_name") or settings.reasoning_model),
+        api_url=endpoint,
+    )
 
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -50,9 +51,10 @@ def _verify(token: str | None) -> dict[str, Any] | None:
         return None
     try:
         payload = json.loads(_unb64(raw))
-    except (ValueError, TypeError):
+        expires_at = int(payload.get("exp", 0)) if isinstance(payload, dict) else 0
+    except (ValueError, TypeError, binascii.Error):
         return None
-    if not isinstance(payload, dict) or int(payload.get("exp", 0)) <= int(time.time()):
+    if not isinstance(payload, dict) or expires_at <= int(time.time()):
         return None
     return payload
 
@@ -104,7 +106,7 @@ def dev_login(request: Request, credentials: LoginRequest) -> Response:
     if not (username_ok and password_ok):
         raise HTTPException(401, "Invalid username or password")
     response = JSONResponse({"authenticated": True, "user": {"sub": settings.dev_admin_username, "provider": "development"}})
-    _set_session(response, subject=settings.dev_admin_username, provider="development", secure=request.url.scheme == "https")
+    _set_session(response, subject=settings.dev_admin_username, provider="development", secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https")
     return response
 
 

@@ -126,7 +126,8 @@
             </div>
             <form class="company-command-bar" id="company-command-form">
               <span class="command-spark">✳</span>
-              <input id="company-command-input" aria-label="Founder instruction" placeholder="Give your company an instruction…" autocomplete="off" />
+              <input id="company-command-input" aria-label="Founder instruction" placeholder="Ask your AI team anything, or use goal:, plan:, run:…" autocomplete="off" />
+              <select id="company-chat-agent" aria-label="AI employee" title="Choose which AI employee responds"><option value="">Select AI employee</option></select>
               <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
             </form>
             <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Free text starts the goal creation flow.</div>
@@ -219,6 +220,9 @@
         <label>Role / function<input id="agent-editor-role" required maxlength="160" placeholder="e.g. Customer research and insights" /></label>
         <label>Position title<input id="agent-editor-title" required maxlength="160" placeholder="e.g. Senior Customer Researcher" /></label>
         <label>Seniority level <span class="agent-field-hint">1 = entry · 10 = highest</span><input id="agent-editor-level" type="number" min="1" max="10" value="3" required /></label>
+        <label>LLM provider<select id="agent-editor-provider"><option value="ollama">Ollama</option><option value="vllm">vLLM</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
+        <label>Model identifier<input id="agent-editor-model" required maxlength="160" value="llama3.1:8b" placeholder="e.g. llama3.1:8b" /></label>
+        <label class="agent-editor-wide">Model API endpoint <span class="agent-field-hint">Optional · defaults to workspace endpoint</span><input id="agent-editor-endpoint" maxlength="500" placeholder="http://ollama:11434/v1" /></label>
         <label>Authority<select id="agent-editor-authority"><option value="SPECIALIST">Specialist · assigned work</option><option value="COORDINATOR">Coordinator · plans and delegates</option></select></label>
         <label>Reports to<select id="agent-editor-manager"><option value="">No manager / direct to company</option></select></label>
         <label class="agent-editor-wide">Scope and description<textarea id="agent-editor-description" rows="2" maxlength="4000" placeholder="What is this agent accountable for?"></textarea></label>

@@ -480,7 +480,6 @@
     state.selectedId = null;
     await loadGraph();
     renderAgentDirectory();
-    renderChatAgentPicker();
     toast("Agent archived; history preserved");
   }
 

@@ -701,3 +701,22 @@ Review the reported YAML filename and schema error. Ensure each manifest include
 ## License
 
 This repository includes the Apache License, Version 2.0 in [`LICENSE`](LICENSE). Review the full license text for the permissions, conditions, limitations, and attribution requirements that apply to this project.
+
+
+## Enable real AI inference
+
+Pinky Bread deliberately labels mock execution as a simulation. The default `MOCK_INFERENCE=true` keeps the application usable without a model server, but it does **not** generate AI responses. To enable real local inference with the bundled Ollama service:
+
+```bash
+MOCK_INFERENCE=false REASONING_API_URL=http://ollama:11434/v1 docker compose --profile local-llm up --build -d
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+Then create or edit an AI employee and set:
+- Provider: **Ollama**
+- Model identifier: **llama3.1:8b**
+- API endpoint: **http://ollama:11434/v1**
+
+The endpoint and model are stored with that employee and are used for founder conversations and delegated work. The first model download can take several minutes and requires sufficient disk space and memory. For a host-based vLLM or another OpenAI-compatible server, set `REASONING_API_URL` to an endpoint reachable from the API and worker containers, set `MOCK_INFERENCE=false`, and configure each employee's model identifier and optional endpoint accordingly.
+
+If mock mode remains enabled, the AI conversation endpoint returns a clear service-unavailable message instead of pretending a model answered. Do not expose the development endpoints or example credentials to the public internet.

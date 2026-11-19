@@ -595,6 +595,11 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
         raise HTTPException(502, f"Model or MCP request failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
     except (ValueError, PermissionError) as exc:
         raise HTTPException(502, f"AI runtime error: {str(exc)[:300]}") from exc
+    except Exception as exc:
+        # MCP SDK and provider adapters can surface transport/schema errors
+        # outside the httpx exception hierarchy. Return a visible, bounded
+        # diagnostic instead of leaving the founder with a generic 500.
+        raise HTTPException(502, f"AI runtime integration failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
     return {
         "reply": reply,
         "mode": "LIVE_MODEL_WITH_MCP" if get_settings().mcp_enabled else "LIVE_MODEL",

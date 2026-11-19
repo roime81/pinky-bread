@@ -798,7 +798,6 @@
       $("#agent-editor-dialog").close();
       await loadGraph();
       renderAgentDirectory();
-      renderChatAgentPicker();
       toast(id ? "Agent profile updated" : "AI employee created");
     } catch (error) {
       $("#agent-editor-feedback").textContent = error.message;

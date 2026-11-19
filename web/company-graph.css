@@ -76,3 +76,9 @@
 @media(max-width:1280px){.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr)!important}}
 @media(max-width:960px){.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr)!important}}
 @media(max-width:640px){.topbar-leading{gap:8px}.breadcrumb{gap:6px}.sidebar-toggle{width:32px;height:32px;flex-basis:32px}}
+
+@media(max-width:960px){
+ .nav-sublist{padding-left:0}
+ .nav-subitem{justify-content:center;padding:10px 4px!important;font-size:0!important;border-left:0;border-radius:8px}
+ .nav-subitem .nav-label{display:none}
+}

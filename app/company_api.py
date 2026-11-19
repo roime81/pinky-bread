@@ -30,7 +30,7 @@ from .workforce import (
     execute_task,
     convene_meeting,
     record_kpi_measurement,
-    chat_with_agent,
+    chat_with_workforce,
 )
 
 from .company_graph import (
@@ -125,7 +125,6 @@ class AgentUpdateRequest(WorkforceAction):
 
 
 class CompanyChatRequest(WorkforceAction):
-    agent_id: str | None = None
     message: str = Field(min_length=1, max_length=12000)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
 
@@ -568,22 +567,17 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
     ]
     if not agents:
         raise HTTPException(409, "Create an AI employee before starting a company conversation")
-    agent = next((item for item in agents if item["id"] == request.agent_id), None) if request.agent_id else None
-    if request.agent_id and agent is None:
-        raise HTTPException(404, "Selected AI employee is not active in this company")
-    if agent is None:
-        agent = next((item for item in agents if str((item.get("data") or {}).get("authority", "")).upper() == "COORDINATOR"), agents[0])
     history = []
     for item in request.history[-12:]:
         role = item.get("role")
         content = item.get("content", "")
         if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
             history.append({"role": role, "content": content[:4000]})
+    company = next(node for node in graph["nodes"] if node["type"] == "company")
     try:
-        reply = await chat_with_agent(
-            agent=agent,
-            company=next(node for node in graph["nodes"] if node["type"] == "company"),
+        responses = await chat_with_workforce(
             agents=agents,
+            company=company,
             message=request.message,
             history=history,
             company_id=company_id,
@@ -596,20 +590,23 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
     except (ValueError, PermissionError) as exc:
         raise HTTPException(502, f"AI runtime error: {str(exc)[:300]}") from exc
     except Exception as exc:
-        # MCP SDK and provider adapters can surface transport/schema errors
-        # outside the httpx exception hierarchy. Return a visible, bounded
-        # diagnostic instead of leaving the founder with a generic 500.
         raise HTTPException(502, f"AI runtime integration failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
+    if not responses:
+        raise HTTPException(503, "No active AI employee was available to respond")
+    reply = "\\n\\n".join(f"**{item['name']} · {item['role']}**\\n{item['reply']}" for item in responses)
+    first = next((item for item in agents if item["id"] == responses[0]["agent_id"]), agents[0])
     return {
         "reply": reply,
+        "responses": responses,
         "mode": "LIVE_MODEL_WITH_MCP" if get_settings().mcp_enabled else "LIVE_MODEL",
         "agent": {
-            "id": agent["id"],
-            "name": agent["name"],
-            "role": (agent.get("data") or {}).get("role", "AI employee"),
-            "model": (agent.get("data") or {}).get("model_configuration", {}).get("model_name"),
+            "id": first["id"],
+            "name": first["name"],
+            "role": (first.get("data") or {}).get("role", "AI employee"),
+            "model": (first.get("data") or {}).get("model_configuration", {}).get("model_name"),
         },
     }
+
 
 @router.get("/companies/{company_id}/agents")
 def list_company_agents_endpoint(

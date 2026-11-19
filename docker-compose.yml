@@ -18,8 +18,16 @@ services:
     ports:
       - "${PB_BIND_ADDRESS:-127.0.0.1}:8888:8080"
     environment:
-      APP_ENV: docker
+      APP_ENV: "${APP_ENV:-docker}"
       DEV_MODE: "true"
+      AUTH_ENABLED: "${AUTH_ENABLED:-true}"
+      DEV_AUTH_ENABLED: "${DEV_AUTH_ENABLED:-true}"
+      DEV_ADMIN_USERNAME: "${DEV_ADMIN_USERNAME:-admin}"
+      DEV_ADMIN_PASSWORD: "${DEV_ADMIN_PASSWORD:-admin}"
+      SESSION_SECRET: "${SESSION_SECRET:-pinky-bread-local-development-session-secret-change-me}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_REDIRECT_URI: "${GOOGLE_REDIRECT_URI:-}"
       AUTO_CREATE_SCHEMA: "false"
       MOCK_INFERENCE: "${MOCK_INFERENCE:-false}"
       MODEL_PROVIDER: "${MODEL_PROVIDER:-ollama}"

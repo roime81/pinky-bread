@@ -542,6 +542,49 @@ Compose has internal development defaults for PostgreSQL credentials and Seaweed
 
 Do not commit `.env`, real API keys, passwords, access tokens, certificates or private model credentials.
 
+## Sign in to Pinky Bread
+
+The Docker Compose workspace opens with a sign-in screen. For local development, the default credentials are:
+
+- Username: `admin`
+- Password: `admin`
+
+These credentials are deliberately restricted to `APP_ENV=development` or the Compose `APP_ENV=docker` environment and are **not enabled in production**. Change them in your local `.env` file before exposing the workspace to anyone else:
+
+```dotenv
+AUTH_ENABLED=true
+DEV_AUTH_ENABLED=true
+DEV_ADMIN_USERNAME=admin
+DEV_ADMIN_PASSWORD=use-a-unique-local-password
+SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters
+```
+
+The API and company graph endpoints require a signed, HTTP-only browser session cookie when authentication is enabled. Sessions expire after 12 hours. The dashboard shell and static assets remain available to render the sign-in screen; company and workflow APIs are protected.
+
+### Enable Google sign-in
+
+1. In Google Cloud Console, create an OAuth 2.0 Client ID with application type **Web application**.
+2. Add the exact callback URL to **Authorized redirect URIs**:
+   - Local: `http://localhost:8888/auth/google/callback`
+   - Codespaces: `https://YOUR-CODESPACE-8888.app.github.dev/auth/google/callback` (use the actual forwarded hostname shown by Codespaces).
+3. Put the client credentials in `.env`:
+
+```dotenv
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+GOOGLE_REDIRECT_URI=https://YOUR-HOST/auth/google/callback
+```
+
+4. Recreate the API service:
+
+```bash
+docker compose up -d --build api
+```
+
+The Google callback validates OAuth state and requires a verified Google email address. Google sign-in is shown automatically when both credentials are configured. The current implementation authenticates a Google identity but does not yet provide organization-domain allow-lists, user provisioning, role-based authorization or tenant membership enforcement; configure those before a multi-user or production deployment.
+
+**Important:** `admin:admin` and the sample session secret are development conveniences only. Do not use them on a public or production deployment. Set a unique password and random session secret, and disable `DEV_AUTH_ENABLED` outside local development.
+
 ## Connect the local model to MCP
 
 The Compose stack starts the MCP v2 Streamable HTTP server automatically and enables the model-to-MCP client in the API and worker. The client discovers tools dynamically and applies per-agent role allow-lists. Company, tenant and agent identities are injected by the runtime rather than selected by the model.

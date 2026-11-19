@@ -8,6 +8,14 @@ class Settings(BaseSettings):
     app_name: str = "Pinky Bread"
     app_env: str = "development"
     dev_mode: bool = True
+    auth_enabled: bool = False
+    dev_auth_enabled: bool = True
+    dev_admin_username: str = "admin"
+    dev_admin_password: str = "admin"
+    session_secret: str = "pinky-bread-local-development-session-secret-change-me"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""
     mock_inference: bool = False
     database_url: str = "sqlite:///./data/pinky_bread.db"
     auto_create_schema: bool = True

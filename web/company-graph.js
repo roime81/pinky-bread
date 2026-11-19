@@ -262,7 +262,6 @@
     $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent" && node.status !== "ARCHIVED").length;
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
     renderAgentDirectory();
-    renderChatAgentPicker();
     $("#graph-company-name").textContent = state.company.name;
     $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
@@ -481,7 +480,6 @@
     state.selectedId = null;
     await loadGraph();
     renderAgentDirectory();
-    renderChatAgentPicker();
     toast("Agent archived; history preserved");
   }
 
@@ -609,8 +607,6 @@
           tenant_id: "demo-tenant",
           owner_id: "founder",
           name,
-          vision: $("#company-vision").value.trim(),
-          mission: $("#company-mission").value.trim(),
           values: [],
         }),
       });
@@ -733,22 +729,6 @@
     if (count) count.textContent = `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`;
   }
 
-  function renderChatAgentPicker() {
-    const picker = $("#company-chat-agent");
-    if (!picker) return;
-    const agents = activeAgents();
-    const previous = picker.value;
-    picker.innerHTML = agents.map((agent) =>
-      `<option value="${escapeHtml(agent.id)}">${escapeHtml(agent.name)} · ${escapeHtml(agent.data?.title || agent.data?.role || "Agent")}</option>`
-    ).join("");
-    if (agents.some((agent) => agent.id === previous)) picker.value = previous;
-    else {
-      const coordinator = agents.find((agent) => _isCoordinatorForUi(agent));
-      if (coordinator) picker.value = coordinator.id;
-    }
-    picker.disabled = agents.length === 0;
-  }
-
   function openAgentEditor(agent = null) {
     const form = $("#agent-editor-form");
     if (!form) return;
@@ -818,7 +798,6 @@
       $("#agent-editor-dialog").close();
       await loadGraph();
       renderAgentDirectory();
-      renderChatAgentPicker();
       toast(id ? "Agent profile updated" : "AI employee created");
     } catch (error) {
       $("#agent-editor-feedback").textContent = error.message;
@@ -1063,9 +1042,7 @@
 
   async function sendAiMessage(message) {
     if (!state.company || state.chatSending) return;
-    const picker = $("#company-chat-agent");
-    const agentId = picker?.value || activeAgents()[0]?.id;
-    if (!agentId) {
+    if (!activeAgents().length) {
       appendConversationEntry("system", "Create your first AI employee", "Add an agent to your company before starting an AI conversation.");
       toast("Create an AI agent first");
       return;
@@ -1075,7 +1052,7 @@
     const send = $("#company-command-send");
     if (send) { send.disabled = true; send.textContent = "Thinking…"; }
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 190000);
+    const timeout = window.setTimeout(() => controller.abort(), 570000);
     const pending = document.createElement("div");
     pending.className = "conversation-entry assistant pending";
     pending.textContent = "AI employee is thinking…";
@@ -1086,22 +1063,26 @@
         body: JSON.stringify({
           tenant_id: state.company.tenant_id,
           actor_id: "founder",
-          agent_id: agentId,
           message,
           history,
         }),
         signal: controller.signal,
       });
       pending.remove();
-      appendConversationEntry("assistant", result.agent?.name || "AI employee", result.reply || "The model returned an empty response.");
+      const responses = Array.isArray(result.responses) ? result.responses : [];
+      if (responses.length) {
+        responses.forEach((item) => appendConversationEntry("assistant", item.name || "AI employee", item.reply || ""));
+      } else {
+        appendConversationEntry("assistant", result.agent?.name || "AI workforce", result.reply || "The model returned an empty response.");
+      }
       state.chatHistory.push({ role: "user", content: message }, { role: "assistant", content: result.reply || "" });
       state.chatHistory = state.chatHistory.slice(-30);
       try { localStorage.setItem(`pinky-chat:${state.company.id}`, JSON.stringify(state.chatHistory)); } catch {}
-      toast(`Response from ${result.agent?.name || "your AI employee"} · ${result.mode || "LIVE"}`);
+      toast(`${responses.length || 1} AI employee${responses.length === 1 ? "" : "s"} responded · ${result.mode || "LIVE"}`);
     } catch (error) {
       pending.remove();
       const message = error.name === "AbortError"
-        ? "The model did not respond within 190 seconds. Check model availability and server logs."
+        ? "The model did not respond within 570 seconds. Check model availability and server logs."
         : error.message;
       appendConversationEntry("system", "AI request failed", message);
       toast(message);

@@ -37,7 +37,8 @@ def test_founder_workspace_contains_all_agent_editor_and_chat_controls():
         "agent-editor-model",
         "agent-editor-endpoint",
         "agent-editor-manager",
-        "company-chat-agent",
+        "auth-gate",
+        "auth-logout",
         "company-command-form",
         "ai-runtime-status",
     ]:
@@ -58,3 +59,11 @@ def test_saved_company_initialization_reveals_the_dashboard():
     assert "state.company = state.companies[0]" in initialise
     assert "setWorkspaceVisible(true)" in initialise
     assert initialise.index("setWorkspaceVisible(true)") < initialise.index("await loadGraph(true)")
+
+
+def test_founder_chat_does_not_require_manual_agent_selection():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
+    assert 'id="company-chat-agent"' not in html
+    assert "renderChatAgentPicker" not in source
+    assert "Relevant agents may join" in html

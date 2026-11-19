@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -238,6 +239,97 @@ async def chat_with_agent(
         api_url=endpoint,
     )
 
+
+
+def _chat_agent_matches(agent: dict[str, Any], message: str) -> bool:
+    """Return true when the founder explicitly calls an employee by name or role."""
+    data = agent.get("data") or {}
+    labels = [agent.get("name", ""), data.get("role", ""), data.get("title", "")]
+    for label in labels:
+        value = str(label or "").strip()
+        if len(value) < 2:
+            continue
+        if re.search(rf"(?<![\w])@?{re.escape(value)}(?![\w])", message, re.IGNORECASE):
+            return True
+    return False
+
+
+def _chat_relevance_score(agent: dict[str, Any], message: str) -> int:
+    """Lightweight, explainable role/skill routing; all active employees receive the same transcript."""
+    data = agent.get("data") or {}
+    profile = " ".join([
+        str(agent.get("name") or ""), str(agent.get("description") or ""),
+        _agent_role(agent), _agent_title(agent),
+        " ".join(map(str, data.get("skills") or [])),
+        " ".join(map(str, data.get("responsibilities") or [])),
+        str(data.get("system_prompt") or ""),
+    ]).lower()
+    stop = {"the", "and", "for", "with", "that", "this", "from", "your", "you", "are",
+            "can", "could", "would", "should", "what", "when", "where", "how", "why",
+            "please", "help", "about", "into", "have", "has", "our", "their", "they"}
+    words = {word for word in re.findall(r"[a-z0-9]{3,}", message.lower()) if word not in stop}
+    if not words:
+        return 0
+    score = 0
+    for word in words:
+        if re.search(rf"\b{re.escape(word)}\b", profile):
+            score += 2
+    # A specialist's configured responsibility/skill match is stronger than a generic prompt match.
+    specialist_text = " ".join(map(str, data.get("skills") or [])) + " " + " ".join(map(str, data.get("responsibilities") or []))
+    specialist_text = specialist_text.lower()
+    score += sum(2 for word in words if re.search(rf"\\b{re.escape(word)}\\b", specialist_text))
+    if _is_coordinator(agent):
+        score += 1
+    return score
+
+
+async def chat_with_workforce(
+    *,
+    agents: list[dict[str, Any]],
+    company: dict[str, Any],
+    message: str,
+    history: list[dict[str, str]],
+    company_id: str,
+    tenant_id: str,
+) -> list[dict[str, str]]:
+    """Let every active employee observe the conversation, then invite relevant people to answer.
+
+    Explicit name/role mentions are mandatory responders. Otherwise the highest-scoring
+    specialists are invited, with the coordinator as a fallback. Responses are sequential
+    so later speakers can build on earlier contributions.
+    """
+    if not agents:
+        return []
+    mentioned = [agent for agent in agents if _chat_agent_matches(agent, message)]
+    if mentioned:
+        selected = mentioned
+    else:
+        ranked = sorted(
+            ((_chat_relevance_score(agent, message), agent) for agent in agents),
+            key=lambda item: (item[0], _is_coordinator(item[1])),
+            reverse=True,
+        )
+        relevant = [agent for score, agent in ranked if score > 0][:3]
+        if not relevant:
+            coordinator = next((agent for agent in agents if _is_coordinator(agent)), None)
+            relevant = [coordinator or ranked[0][1]]
+        selected = relevant
+
+    responses: list[dict[str, str]] = []
+    shared_history = list(history)
+    for agent in selected:
+        reply = await chat_with_agent(
+            agent=agent,
+            company=company,
+            agents=agents,
+            message=message,
+            history=shared_history,
+            company_id=company_id,
+            tenant_id=tenant_id,
+        )
+        responses.append({"agent_id": str(agent["id"]), "name": str(agent["name"]), "role": _agent_role(agent), "reply": reply})
+        shared_history.append({"role": "assistant", "content": f"{agent['name']} ({_agent_role(agent)}): {reply}"[:4000]})
+    return responses
 
 def _parse_plan(content: str, allowed_agent_ids: set[str]) -> list[dict[str, Any]]:
     start, end = content.find("{"), content.rfind("}")

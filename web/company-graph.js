@@ -14,6 +14,8 @@
     jobs: [],
     coordination: null,
     loading: false,
+    chatHistory: [],
+    chatSending: false,
   };
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -49,6 +51,7 @@
         return;
       }
       state.company = state.companies[0];
+      try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
       $("#graph-company-picker").value = state.company.id;
       await loadGraph(true);
     } catch (error) {
@@ -247,6 +250,7 @@
     $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent" && node.status !== "ARCHIVED").length;
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
     renderAgentDirectory();
+    renderChatAgentPicker();
     $("#graph-company-name").textContent = state.company.name;
     $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
@@ -431,21 +435,7 @@
     selectNode(node.id);
   }
 
-  async function editAgent(node) {
-    const name = askForName("Agent name", node.name);
-    if (!name) return;
-    const description = askForName("Agent responsibility", node.description || node.data?.role || "");
-    if (description === null) return;
-    const provider = askForName("LLM provider", node.data?.model_configuration?.provider || "ollama");
-    if (!provider) return;
-    const model = askForName("Model identifier", node.data?.model_configuration?.model_name || "llama3.1:8b");
-    if (!model) return;
-    await updateAgent(node, {
-      name, description,
-      data_patch: { role: description, model_configuration: { provider, model_name: model } },
-    });
-    toast("Agent profile and model updated");
-  }
+  async function editAgent(node) { openAgentEditor(node); }
 
   async function changeAgentRank(node, promote) {
     const ranks = ["specialist", "lead", "executive"];
@@ -666,6 +656,96 @@
     } catch (error) { toast(error.message); }
   }
 
+  function renderChatAgentPicker() {
+    const picker = $("#company-chat-agent");
+    if (!picker) return;
+    const agents = activeAgents();
+    const previous = picker.value;
+    picker.innerHTML = agents.map((agent) =>
+      `<option value="${escapeHtml(agent.id)}">${escapeHtml(agent.name)} · ${escapeHtml(agent.data?.title || agent.data?.role || "Agent")}</option>`
+    ).join("");
+    if (agents.some((agent) => agent.id === previous)) picker.value = previous;
+    else {
+      const coordinator = agents.find((agent) => _isCoordinatorForUi(agent));
+      if (coordinator) picker.value = coordinator.id;
+    }
+    picker.disabled = agents.length === 0;
+  }
+
+  function openAgentEditor(agent = null) {
+    const form = $("#agent-editor-form");
+    if (!form) return;
+    form.reset();
+    const data = agent?.data || {};
+    const model = data.model_configuration || {};
+    $("#agent-editor-id").value = agent?.id || "";
+    $("#agent-editor-heading").textContent = agent ? "Edit AI employee" : "Create an AI employee";
+    $("#agent-editor-name").value = agent?.name || "";
+    $("#agent-editor-role").value = data.role || "";
+    $("#agent-editor-title").value = data.title || "Specialist";
+    $("#agent-editor-level").value = data.seniority_level || 3;
+    $("#agent-editor-authority").value = data.authority || "SPECIALIST";
+    $("#agent-editor-description").value = agent?.description || "";
+    $("#agent-editor-skills").value = (data.skills || []).join(", ");
+    $("#agent-editor-responsibilities").value = (data.responsibilities || []).join("\n");
+    $("#agent-editor-prompt").value = data.system_prompt || "";
+    $("#agent-editor-provider").value = model.provider || "ollama";
+    $("#agent-editor-model").value = model.model_name || "llama3.1:8b";
+    $("#agent-editor-endpoint").value = model.endpoint || "";
+    const manager = $("#agent-editor-manager");
+    manager.innerHTML = '<option value="">Reports directly to founder</option>' + activeAgents()
+      .filter((item) => item.id !== agent?.id)
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+    const reporting = state.graph.edges.find((edge) => edge.source === agent?.id && edge.relationship === "reports_to");
+    manager.value = data.manager_id || reporting?.target || "";
+    $("#agent-editor-feedback").textContent = "";
+    $("#agent-editor-dialog").showModal();
+  }
+
+  async function saveAgent(event) {
+    event.preventDefault();
+    if (!state.company) return;
+    const save = $("#agent-editor-save");
+    save.disabled = true;
+    $("#agent-editor-feedback").textContent = "Saving agent…";
+    const id = $("#agent-editor-id").value;
+    const managerId = $("#agent-editor-manager").value || null;
+    const modelConfiguration = {
+      provider: $("#agent-editor-provider").value,
+      model_name: $("#agent-editor-model").value.trim(),
+      endpoint: $("#agent-editor-endpoint").value.trim() || null,
+    };
+    const payload = {
+      tenant_id: state.company.tenant_id,
+      actor_id: "founder",
+      name: $("#agent-editor-name").value.trim(),
+      role: $("#agent-editor-role").value.trim(),
+      title: $("#agent-editor-title").value.trim(),
+      description: $("#agent-editor-description").value.trim(),
+      skills: $("#agent-editor-skills").value.split(",").map((v) => v.trim()).filter(Boolean),
+      responsibilities: $("#agent-editor-responsibilities").value.split("\n").map((v) => v.trim()).filter(Boolean),
+      system_prompt: $("#agent-editor-prompt").value.trim(),
+      seniority_level: Number($("#agent-editor-level").value),
+      authority: $("#agent-editor-authority").value,
+      manager_id: managerId,
+      model_configuration: modelConfiguration,
+    };
+    try {
+      if (id) {
+        await api(`/v2/companies/${state.company.id}/agents/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      } else {
+        await api(`/v2/companies/${state.company.id}/agents`, { method: "POST", body: JSON.stringify(payload) });
+      }
+      $("#agent-editor-dialog").close();
+      await loadGraph();
+      toast(id ? "Agent profile updated" : "AI employee created");
+    } catch (error) {
+      $("#agent-editor-feedback").textContent = error.message;
+      toast(error.message);
+    } finally {
+      save.disabled = false;
+    }
+  }
   async function addAgent() {
     openAgentEditor();
   }
@@ -824,11 +904,12 @@
   function appendConversationEntry(kind, title, message) {
     const log = $("#company-conversation");
     if (!log) return;
+    log.querySelector(".conversation-welcome")?.remove();
     const entry = document.createElement("div");
     entry.className = `conversation-entry ${kind}`;
     const avatar = document.createElement("span");
     avatar.className = "conversation-avatar";
-    avatar.textContent = kind === "founder" ? "YOU" : "PB";
+    avatar.textContent = kind === "founder" ? "YOU" : kind === "assistant" ? "AI" : "PB";
     const copy = document.createElement("div");
     copy.className = "conversation-copy";
     const heading = document.createElement("strong");
@@ -841,47 +922,81 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  async function sendAiMessage(message) {
+    if (!state.company || state.chatSending) return;
+    const picker = $("#company-chat-agent");
+    const agentId = picker?.value || activeAgents()[0]?.id;
+    if (!agentId) {
+      appendConversationEntry("system", "Create your first AI employee", "Add an agent to your company before starting an AI conversation.");
+      toast("Create an AI agent first");
+      return;
+    }
+    const history = state.chatHistory.slice(-12);
+    state.chatSending = true;
+    const send = $("#company-command-send");
+    if (send) { send.disabled = true; send.textContent = "Thinking…"; }
+    const pending = document.createElement("div");
+    pending.className = "conversation-entry assistant pending";
+    pending.textContent = "AI employee is thinking…";
+    $("#company-conversation")?.append(pending);
+    try {
+      const result = await api(`/v2/companies/${state.company.id}/chat`, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: state.company.tenant_id,
+          actor_id: "founder",
+          agent_id: agentId,
+          message,
+          history,
+        }),
+      });
+      pending.remove();
+      appendConversationEntry("assistant", result.agent?.name || "AI employee", result.reply || "The model returned an empty response.");
+      state.chatHistory.push({ role: "user", content: message }, { role: "assistant", content: result.reply || "" });
+      state.chatHistory = state.chatHistory.slice(-30);
+      try { localStorage.setItem(`pinky-chat:${state.company.id}`, JSON.stringify(state.chatHistory)); } catch {}
+      toast(`Response from ${result.agent?.name || "your AI employee"} · ${result.mode || "LIVE"}`);
+    } catch (error) {
+      pending.remove();
+      appendConversationEntry("system", "AI request failed", error.message);
+      toast(error.message);
+    } finally {
+      state.chatSending = false;
+      if (send) { send.disabled = false; send.innerHTML = 'Send <span>↗</span>'; }
+    }
+  }
+
   function handleCommand(event) {
     event?.preventDefault();
     const input = $("#company-command-input");
     const command = input.value.trim();
-    if (!command) return;
+    if (!command || state.chatSending) return;
     const lower = command.toLowerCase();
-    appendConversationEntry("founder", "Founder instruction", command);
+    appendConversationEntry("founder", "Founder", command);
+    input.value = "";
     if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
-      appendConversationEntry("system", "Goal setup", "Opening the goal details flow. Complete the success-criteria prompt to add it to your company graph.");
-      addGoal(command.split(":").slice(1).join(":").trim());
+      addGoal(command.split(":").slice(1).join(":").trim()).catch((error) => appendConversationEntry("system", "Goal creation failed", error.message));
     } else if (lower.startsWith("plan:")) {
       const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
         || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
-      if (goal) {
-        appendConversationEntry("system", "Planning requested", `Submitting a planning job for “${goal.name}”. Check Worker activity for its durable status.`);
-        planGoal(goal.id);
-      } else {
-        appendConversationEntry("system", "Goal not found", "Select a goal in the graph or use plan: followed by the exact name of an existing goal.");
-        toast("Select a goal dot or use plan: with an existing goal name");
-      }
+      if (goal) planGoal(goal.id);
+      else appendConversationEntry("system", "Goal not found", "Select a goal or use plan: followed by its exact name.");
     } else if (lower.startsWith("run:")) {
       const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
         || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
-      if (goal) {
-        appendConversationEntry("system", "Execution requested", `Submitting an execution job for “${goal.name}”. Follow its status in Worker activity.`);
-        runGoal(goal.id);
-      } else {
-        appendConversationEntry("system", "Goal not found", "Select a goal in the graph or use run: followed by the exact name of an existing goal.");
-        toast("Select a goal dot or use run: with an existing goal name");
-      }
+      if (goal) runGoal(goal.id);
+      else appendConversationEntry("system", "Goal not found", "Select a goal or use run: followed by its exact name.");
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
-      if (name) {
-        appendConversationEntry("system", "Agent setup", `Opening the agent creation flow for “${name}”. Configure its role, model and reporting line before saving.`);
-        addAgentFromCommand(name).catch((error) => { appendConversationEntry("system", "Action failed", error.message); toast(error.message); });
-      }
+      if (name) openAgentEditorWithName(name);
     } else {
-      appendConversationEntry("system", "Goal setup", "This alpha interprets free text as a new goal. Use goal: to make that action explicit, or agent:, plan: and run: for workforce commands.");
-      addGoal(command);
+      sendAiMessage(command);
     }
-    input.value = "";
+  }
+
+  function openAgentEditorWithName(name) {
+    openAgentEditor();
+    $("#agent-editor-name").value = name;
   }
 
   function toast(message) {
@@ -946,6 +1061,7 @@
   $("#coordination-stop")?.addEventListener("click", () => configureCoordination(false, "PLAN_ONLY"));
   $("#graph-company-picker")?.addEventListener("change", async (event) => {
     state.company = state.companies.find((company) => company.id === event.target.value);
+    try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
     state.selectedId = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
@@ -953,9 +1069,6 @@
     startJobsPolling();
   });
   $("#company-command-form")?.addEventListener("submit", handleCommand);
-  $("#company-command-input")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") handleCommand();
-  });
 
   window.loadCompanyGraph = () => {
     if (!state.company) initialise();

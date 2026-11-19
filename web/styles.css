@@ -192,3 +192,10 @@ button:not(:disabled),.nav-item,[role="button"]{cursor:pointer;pointer-events:au
  .agent-editor-wide{grid-column:auto}
  .console-mode{white-space:normal}
 }
+
+
+/* Navigation hit-area hardening: keep the workspace menu above canvas layers. */
+.sidebar{position:sticky;top:0;z-index:30;isolation:isolate;pointer-events:auto}
+.sidebar .nav-list{position:relative;z-index:31;pointer-events:auto}
+.sidebar .nav-item{position:relative;z-index:32;display:flex;width:100%;min-height:40px;pointer-events:auto;touch-action:manipulation}
+.sidebar .nav-item:focus-visible{outline:2px solid #7da58a;outline-offset:2px}

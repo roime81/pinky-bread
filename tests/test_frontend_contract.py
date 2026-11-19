@@ -48,3 +48,13 @@ def test_hidden_sections_cannot_override_the_hidden_attribute():
     source = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
     assert "[hidden]{display:none!important}" in source
     assert re.search(r"\.view\.active\s*\{\s*display:\s*block\s*!important", source)
+
+
+def test_saved_company_initialization_reveals_the_dashboard():
+    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
+    init_start = source.index("async function initialise()")
+    init_end = source.index("function renderCompanyPicker()", init_start)
+    initialise = source[init_start:init_end]
+    assert "state.company = state.companies[0]" in initialise
+    assert "setWorkspaceVisible(true)" in initialise
+    assert initialise.index("setWorkspaceVisible(true)") < initialise.index("await loadGraph(true)")

@@ -50,6 +50,7 @@ jobs:
         run: |
           node --check web/app.js
           node --check web/company-graph.js
+          node --check web/auth.js
       - name: Validate Docker Compose YAML
         run: |
           python - <<'PY'

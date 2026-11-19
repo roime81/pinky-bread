@@ -1113,6 +1113,11 @@
     const input = $("#company-command-input");
     const command = input.value.trim();
     if (!command || state.chatSending) return;
+    if (!state.company) {
+      appendConversationEntry("system", "Create your company first", "Open Company Graph and establish a company before sending instructions to your AI workforce.");
+      toast("Create or select a company first");
+      return;
+    }
     const lower = command.toLowerCase();
     appendConversationEntry("founder", "Founder", command);
     input.value = "";

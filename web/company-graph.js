@@ -583,6 +583,7 @@
         }),
       });
       state.company = company;
+      state.chatHistory = [];
       state.companies.push(company);
       renderCompanyPicker();
       setWorkspaceVisible(true);

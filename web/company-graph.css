@@ -138,10 +138,16 @@
 .app-shell.chat-hidden .chat-rail{display:none!important}
 .app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr) 360px!important}
 .app-shell.sidebar-hidden.chat-hidden{grid-template-columns:minmax(0,1fr)!important}
-@media(max-width:1280px) and (min-width:961px){
-  .app-shell{grid-template-columns:200px minmax(0,1fr) 340px!important}
-  .app-shell.chat-hidden{grid-template-columns:200px minmax(0,1fr)!important}
-  .app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr) 340px!important}
+@media(max-width:1180px){
+  .app-shell,.app-shell.chat-hidden{grid-template-columns:200px minmax(0,1fr)!important}
+  .app-shell.sidebar-hidden,.app-shell.sidebar-hidden.chat-hidden{grid-template-columns:minmax(0,1fr)!important}
+  .app-shell .chat-rail{
+    position:fixed;top:0;right:0;bottom:0;left:auto;width:min(380px,calc(100vw - 200px));
+    height:100dvh;min-height:0;z-index:50;transform:translateX(0);
+    transition:transform .2s ease;box-shadow:-18px 0 42px rgba(26,42,32,.13);
+  }
+  .app-shell.sidebar-hidden .chat-rail{width:min(380px,100vw)}
+  .app-shell.chat-hidden .chat-rail{display:flex!important;transform:translateX(110%)}
 }
 @media(max-width:960px){
   .app-shell,.app-shell.chat-hidden{grid-template-columns:68px minmax(0,1fr)!important}

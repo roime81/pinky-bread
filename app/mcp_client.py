@@ -97,7 +97,7 @@ async def complete_with_mcp(
     model_tools: list[dict[str, Any]] = []
     async with httpx.AsyncClient(
         headers=headers,
-        timeout=httpx2.Timeout(30.0, read=300.0),
+        timeout=httpx.Timeout(30.0, read=300.0),
     ) as http_client:
         transport = streamable_http_client(
             url=settings.mcp_server_url,

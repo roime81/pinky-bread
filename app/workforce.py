@@ -334,6 +334,8 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 tenant_id=tenant_id,
                 agent_id=coordinator["id"],
                 max_tokens=3000,
+                model_name=str((coordinator.get("data") or {}).get("model_configuration", {}).get("model_name") or settings.reasoning_model),
+                api_url=str((coordinator.get("data") or {}).get("model_configuration", {}).get("endpoint") or settings.reasoning_api_url),
             )
         else:
             plan_response = await _chat_completion(
@@ -438,6 +440,8 @@ async def _execute_prompt(
             tenant_id=tenant_id,
             agent_id=agent["id"],
             max_tokens=2400,
+            model_name=str((data.get("model_configuration") or {}).get("model_name") or settings.reasoning_model),
+            api_url=str((data.get("model_configuration") or {}).get("endpoint") or settings.reasoning_api_url),
         )
     model_config = data.get("model_configuration") or {}
     endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)

@@ -58,3 +58,21 @@
 @media(max-width:1180px){.company-graph-layout{grid-template-columns:minmax(0,1fr) 260px}}
 @media(max-width:960px){.company-graph-layout{grid-template-columns:minmax(0,1fr)}.graph-inspector{max-height:none;min-height:180px}.company-canvas-wrap{min-height:520px}#company-graph-svg{height:520px}}
 @media(max-width:640px){.company-canvas-wrap{min-height:440px}#company-graph-svg{height:440px}.canvas-hint{display:none}.canvas-legend{left:7px;right:7px;bottom:7px;gap:8px}}
+
+
+/* Company Graph section navigation and hideable left sidebar. */
+.topbar-leading{display:flex;align-items:center;gap:12px;min-width:0}
+.sidebar-toggle{width:34px;height:34px;flex:0 0 34px;font-size:17px;line-height:1}
+.nav-group{display:grid;gap:3px}
+.nav-sublist{display:grid;gap:2px;padding:0 0 8px 13px}
+.nav-subitem{min-height:34px;padding:8px 9px 8px 10px!important;border-left:1px solid #e3eae4;border-radius:0 7px 7px 0;font-size:11px!important;font-weight:550!important;gap:9px!important;color:#87938a!important}
+.nav-subitem .nav-icon{font-size:14px;width:15px;color:#91a18f}
+.nav-subitem:hover{color:#395b42!important;background:#f5f8f5!important}
+.nav-subitem.active{color:#385e43!important;background:#edf5ee!important;box-shadow:inset 2px 0 #6e9b74!important;border-left-color:#6e9b74}
+.nav-workspace-heading{padding-top:8px}
+#workforce-runtime-panel,#agent-management-panel,#graph-activity-panel,#graph-brief-panel{scroll-margin-top:84px}
+.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr) 270px!important}
+.app-shell.sidebar-hidden .sidebar{display:none!important}
+@media(max-width:1280px){.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr)!important}}
+@media(max-width:960px){.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr)!important}}
+@media(max-width:640px){.topbar-leading{gap:8px}.breadcrumb{gap:6px}.sidebar-toggle{width:32px;height:32px;flex-basis:32px}}

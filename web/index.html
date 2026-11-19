@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Pinky Bread · Autonomous Organization</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20261119-sidebar-nav2" />
-  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-sidebar-nav2" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261119-chat-rail1" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-chat-rail1" />
 </head>
 <body>
   <div class="app-shell">
@@ -44,7 +44,7 @@
           <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Hide sidebar" aria-expanded="true" aria-controls="app-sidebar" title="Hide sidebar">☰</button>
           <div class="breadcrumb"><span>Workspace</span><i>/</i><strong id="breadcrumb-current">Company graph</strong></div>
         </div>
-        <div class="top-actions"><div class="env-chip"><span class="pulse-dot"></span><span id="environment-label">DEVELOPMENT</span></div><button class="icon-btn" title="Refresh" id="refresh-btn">↻</button><div class="top-avatar">PB</div></div>
+        <div class="top-actions"><div class="env-chip"><span class="pulse-dot"></span><span id="environment-label">DEVELOPMENT</span></div><button class="icon-btn chat-panel-toggle" id="chat-panel-toggle" type="button" aria-label="Hide chat panel" aria-expanded="true" aria-controls="chat-panel" title="Hide chat panel">▤</button><button class="icon-btn" title="Refresh" id="refresh-btn">↻</button><div class="top-avatar">PB</div></div>
       </header>
 
       <section class="view active" id="view-company-graph">
@@ -128,22 +128,6 @@
               <div class="graph-brief-stats"><span><b id="graph-goal-count">0</b> goals</span><span><b id="graph-agent-count">0</b> agents</span><span><b id="graph-work-count">0</b> work items</span></div>
             </section>
           </div>
-          <section class="founder-console" aria-label="Founder command center">
-            <header class="founder-console-head">
-              <div><div class="eyebrow">FOUNDER / COMMAND CENTER</div><strong>Company conversation</strong><p>Issue structured instructions and review the actions Pinky Bread starts.</p></div>
-              <span class="console-mode" id="ai-runtime-status" role="status" aria-live="polite"><i></i> CHECKING MODEL</span>
-            </header>
-            <div id="company-conversation" class="company-conversation" role="log" aria-live="polite">
-              <div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Start with a goal or create an AI employee. Actions and confirmations will appear here.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>
-            </div>
-            <form class="company-command-bar" id="company-command-form">
-              <span class="command-spark">✳</span>
-              <input id="company-command-input" aria-label="Founder instruction" placeholder="Ask your AI team anything, or use goal:, plan:, run:…" autocomplete="off" />
-              <select id="company-chat-agent" aria-label="AI employee" title="Choose which AI employee responds"><option value="">Select AI employee</option></select>
-              <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
-            </form>
-            <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Free text starts the goal creation flow.</div>
-          </section>
         </div>
       </section>
 
@@ -213,10 +197,29 @@
       <footer class="main-footer"><span>Pinky Bread <b>2.0.0-alpha.4</b></span><span>Local-first · policy-governed · deterministic workflows</span><span>API <b id="api-status">checking…</b></span></footer>
     </main>
 
-    <aside class="right-rail">
-      <div class="rail-section"><div class="rail-title">RUNTIME STATUS <span class="live-label">● LIVE</span></div><div class="runtime-card"><div class="runtime-row"><span>API service</span><b><i class="status-dot green-dot"></i> Online</b></div><div class="runtime-row"><span>Agent registry</span><b id="rail-agent-count">—</b></div><div class="runtime-row"><span>Model adapter</span><b id="rail-model-mode">—</b></div><div class="runtime-row"><span>External egress</span><b class="muted-value">Deployment policy</b></div></div></div>
-      <div class="rail-section"><div class="rail-title">EXECUTION TRACE</div><div id="trace-empty" class="trace-empty"><div class="trace-orbit">◎</div><strong>Ready for a task</strong><span>Workflow node events will appear here after execution.</span></div><div id="trace-list" class="trace-list"></div></div>
-      <div class="rail-bottom"><div class="shield-icon">⬡</div><div><strong>Governance by design</strong><span>Approvals, tool permissions and traceability are enforced by the workflow service.</span></div></div>
+    <aside class="right-rail chat-rail" id="chat-panel" aria-label="Founder chat panel">
+      <section class="founder-console" aria-label="Founder command center">
+        <header class="founder-console-head">
+          <div><div class="eyebrow">FOUNDER / COMMAND CENTER</div><strong>Company conversation</strong><p>Talk to your AI employees, delegate work and review their responses.</p></div>
+          <div class="chat-panel-head-actions"><span class="console-mode" id="ai-runtime-status" role="status" aria-live="polite"><i></i> CHECKING MODEL</span><button type="button" class="icon-btn chat-panel-close" id="chat-panel-close" aria-label="Hide chat panel" title="Hide chat panel">×</button></div>
+        </header>
+        <div id="company-conversation" class="company-conversation" role="log" aria-live="polite">
+          <div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Create or select a company, then start a conversation with your AI workforce.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>
+        </div>
+        <form class="company-command-bar" id="company-command-form">
+          <span class="command-spark">✳</span>
+          <input id="company-command-input" aria-label="Founder instruction" placeholder="Message your AI team…" autocomplete="off" />
+          <select id="company-chat-agent" aria-label="AI employee" title="Choose which AI employee responds"><option value="">Select AI employee</option></select>
+          <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
+        </form>
+        <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Free text is sent to the selected AI employee.</div>
+      </section>
+      <details class="chat-rail-details">
+        <summary>Runtime status &amp; execution trace</summary>
+        <div class="rail-section"><div class="rail-title">RUNTIME STATUS <span class="live-label">● LIVE</span></div><div class="runtime-card"><div class="runtime-row"><span>API service</span><b><i class="status-dot green-dot"></i> Online</b></div><div class="runtime-row"><span>Agent registry</span><b id="rail-agent-count">—</b></div><div class="runtime-row"><span>Model adapter</span><b id="rail-model-mode">—</b></div><div class="runtime-row"><span>External egress</span><b class="muted-value">Deployment policy</b></div></div></div>
+        <div class="rail-section"><div class="rail-title">EXECUTION TRACE</div><div id="trace-empty" class="trace-empty"><div class="trace-orbit">◎</div><strong>Ready for a task</strong><span>Workflow node events will appear here after execution.</span></div><div id="trace-list" class="trace-list"></div></div>
+        <div class="rail-bottom"><div class="shield-icon">⬡</div><div><strong>Governance by design</strong><span>Approvals, tool permissions and traceability are enforced by the workflow service.</span></div></div>
+      </details>
     </aside>
   </div>
   <div id="toast" class="toast"></div>
@@ -245,7 +248,7 @@
       <div class="agent-editor-footer"><span id="agent-editor-feedback" role="status"></span><button type="button" class="secondary-btn" id="agent-editor-cancel">Cancel</button><button type="submit" class="primary-btn" id="agent-editor-save">Save agent</button></div>
     </form>
   </dialog>
-  <script src="/static/app.js?v=20261119-sidebar-nav2"></script>
-  <script src="/static/company-graph.js?v=20261119-sidebar-nav2"></script>
+  <script src="/static/app.js?v=20261119-chat-rail1"></script>
+  <script src="/static/company-graph.js?v=20261119-chat-rail1"></script>
 </body>
 </html>

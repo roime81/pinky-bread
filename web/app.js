@@ -64,6 +64,28 @@ let initiallyHidden=false;
 try{initiallyHidden=localStorage.getItem('pinky-sidebar-hidden')==='true';}catch{}
 setSidebarHidden(initiallyHidden,false);
 sidebarToggle?.addEventListener('click',()=>setSidebarHidden(!appShell?.classList.contains('sidebar-hidden')));
+
+const chatPanelToggle=$('#chat-panel-toggle');
+const chatPanelClose=$('#chat-panel-close');
+function setChatPanelHidden(hidden,persist=true){
+ if(!appShell||!chatPanelToggle)return;
+ appShell.classList.toggle('chat-hidden',hidden);
+ chatPanelToggle.setAttribute('aria-expanded',String(!hidden));
+ chatPanelToggle.setAttribute('aria-label',hidden?'Show chat panel':'Hide chat panel');
+ chatPanelToggle.title=hidden?'Show chat panel':'Hide chat panel';
+ if(persist){try{localStorage.setItem('pinky-chat-panel-hidden',hidden?'true':'false');}catch{}}
+}
+let initiallyChatHidden=false;
+try{
+ const savedChatPanelState=localStorage.getItem('pinky-chat-panel-hidden');
+ initiallyChatHidden=savedChatPanelState===null
+   ? window.matchMedia('(max-width: 1180px)').matches
+   : savedChatPanelState==='true';
+}catch{initiallyChatHidden=window.matchMedia('(max-width: 1180px)').matches}
+setChatPanelHidden(initiallyChatHidden,false);
+chatPanelToggle?.addEventListener('click',()=>setChatPanelHidden(!appShell?.classList.contains('chat-hidden')));
+chatPanelClose?.addEventListener('click',()=>setChatPanelHidden(true));
+
 $('#new-workflow-btn')?.addEventListener('click',()=>{go('overview');$('#prompt')?.focus();window.scrollTo({top:0,behavior:'smooth'})});
 $('#browse-btn')?.addEventListener('click',()=>$('#artifact-file')?.click());
 $('#artifact-file')?.addEventListener('change',e=>{for(const f of e.target.files){if(!['image/png','image/jpeg','application/pdf'].includes(f.type)){toast(`Unsupported file: ${f.name}`);continue}if(f.size>12*1024*1024){toast(`${f.name} exceeds 12 MB`);continue}selectedFiles.push(f)}renderSelectedFiles();e.target.value=''});

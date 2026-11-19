@@ -82,3 +82,92 @@
  .nav-subitem{justify-content:center;padding:10px 4px!important;font-size:0!important;border-left:0;border-radius:8px}
  .nav-subitem .nav-label{display:none}
 }
+
+
+/* Founder conversation lives in a dedicated, hideable right-side workspace rail. */
+.app-shell{grid-template-columns:232px minmax(0,1fr) 360px!important}
+.app-shell .chat-rail{
+  display:flex!important;flex-direction:column;gap:0;min-width:0;min-height:100vh;
+  height:100vh;align-self:start;position:sticky;top:0;overflow:hidden;
+  padding:0;border-left:1px solid var(--pb-line);background:#fafcfb;
+}
+.app-shell .chat-rail .founder-console{
+  display:flex;flex:1 1 auto;flex-direction:column;min-height:0;height:100%;
+  padding:0;border:0;border-radius:0;background:transparent;overflow:hidden;
+}
+.chat-rail .founder-console-head{flex:0 0 auto;padding:18px 16px 14px;align-items:flex-start}
+.chat-rail .founder-console-head>div:first-child{min-width:0}
+.chat-rail .founder-console-head strong{font-size:13px}
+.chat-rail .founder-console-head p{max-width:225px;line-height:1.55}
+.chat-panel-head-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.chat-panel-head-actions .console-mode{font-size:8px}
+.chat-panel-close{width:28px;height:28px;flex:0 0 28px;font-size:17px}
+.chat-rail .company-conversation{
+  flex:1 1 auto;min-height:160px;max-height:none;overflow:auto;
+  padding:15px 14px;overscroll-behavior:contain;
+}
+.chat-rail .conversation-welcome,.chat-rail .conversation-entry{max-width:100%}
+.chat-rail .company-command-bar{
+  flex:0 0 auto;min-width:0;display:grid;
+  grid-template-columns:20px minmax(0,1fr) minmax(96px,112px) 44px;
+  gap:7px;padding:11px 10px;border-top:1px solid #e9efea;border-radius:0;
+  box-shadow:none;background:#fff;
+}
+.chat-rail .company-command-bar input{width:100%;min-width:0;padding:8px 2px;font-size:11px}
+.chat-rail .company-command-bar select{
+  width:100%;min-width:0;height:31px;border:1px solid #e3eae4;border-radius:6px;
+  padding:0 5px;background:#fff;color:#627067;font:9px system-ui;
+}
+.chat-rail .company-command-bar button{min-width:0;padding:8px 7px;font-size:9px}
+.chat-rail .company-command-bar button span{margin-left:3px}
+.chat-rail .console-footnote{flex:0 0 auto;padding:0 13px 13px;font-size:8px;line-height:1.55}
+.chat-rail .chat-rail-details{
+  flex:0 0 auto;max-height:190px;overflow:auto;border-top:1px solid #e8eee9;
+  padding:9px 13px 12px;background:#f7faf7;
+}
+.chat-rail-details summary{cursor:pointer;list-style:none;color:#718078;font:9px ui-monospace,monospace;letter-spacing:.35px}
+.chat-rail-details summary::-webkit-details-marker{display:none}
+.chat-rail-details summary:after{content:"＋";float:right;color:#8b9b8f}
+.chat-rail-details[open] summary:after{content:"−"}
+.chat-rail-details .rail-section{margin:12px 0 15px}
+.chat-rail-details .rail-title{margin-bottom:8px}
+.chat-rail-details .trace-empty{padding:18px 8px}
+.chat-rail-details .rail-bottom{margin-top:14px;padding-top:12px}
+.chat-panel-toggle{font-size:15px;line-height:1}
+.app-shell.chat-hidden{grid-template-columns:232px minmax(0,1fr)!important}
+.app-shell.chat-hidden .chat-rail{display:none!important}
+.app-shell.sidebar-hidden{grid-template-columns:minmax(0,1fr) 360px!important}
+.app-shell.sidebar-hidden.chat-hidden{grid-template-columns:minmax(0,1fr)!important}
+@media(max-width:1180px){
+  .app-shell,.app-shell.chat-hidden{grid-template-columns:200px minmax(0,1fr)!important}
+  .app-shell.sidebar-hidden,.app-shell.sidebar-hidden.chat-hidden{grid-template-columns:minmax(0,1fr)!important}
+  .app-shell .chat-rail{
+    position:fixed;top:0;right:0;bottom:0;left:auto;width:min(380px,calc(100vw - 200px));
+    height:100dvh;min-height:0;z-index:50;transform:translateX(0);
+    transition:transform .2s ease;box-shadow:-18px 0 42px rgba(26,42,32,.13);
+  }
+  .app-shell.sidebar-hidden .chat-rail{width:min(380px,100vw)}
+  .app-shell.chat-hidden .chat-rail{display:flex!important;transform:translateX(110%)}
+}
+@media(max-width:960px){
+  .app-shell,.app-shell.chat-hidden{grid-template-columns:68px minmax(0,1fr)!important}
+  .app-shell.sidebar-hidden,.app-shell.sidebar-hidden.chat-hidden{grid-template-columns:minmax(0,1fr)!important}
+  .app-shell .chat-rail{
+    position:fixed;top:0;right:0;bottom:0;left:auto;width:min(380px,calc(100vw - 68px));
+    height:100dvh;min-height:0;z-index:50;transform:translateX(0);
+    transition:transform .2s ease;box-shadow:-18px 0 42px rgba(26,42,32,.13);
+  }
+  .app-shell.sidebar-hidden .chat-rail{width:min(380px,100vw)}
+  .app-shell.chat-hidden .chat-rail{display:flex!important;transform:translateX(110%)}
+  .chat-rail .founder-console-head{padding:15px 13px 12px}
+  .chat-rail .company-conversation{min-height:120px}
+}
+@media(max-width:640px){
+  .chat-rail .company-command-bar{
+    grid-template-columns:18px minmax(0,1fr) minmax(90px,104px) 42px;
+    gap:5px;padding:9px 8px;
+  }
+  .chat-rail .company-command-bar input{font-size:10px}
+  .chat-rail .company-command-bar button{font-size:8px;padding:8px 5px}
+  .chat-rail .console-footnote{font-size:7px}
+}

@@ -1215,13 +1215,13 @@
   $("#company-command-form")?.addEventListener("submit", handleCommand);
 
   window.loadCompanyGraph = () => {
-    if (!state.company) initialise();
-    else loadGraph();
+    if (!state.company) return initialise();
+    return loadGraph();
   };
   window.loadCompanyAgents = () => {
-    if (!state.company) initialise();
-    else if (!state.graph.nodes?.length) loadGraph(true);
-    else renderAgentDirectory();
+    if (!state.company) return initialise();
+    if (!state.graph.nodes?.length) return loadGraph(true);
+    return renderAgentDirectory();
   };
 
   initialise();

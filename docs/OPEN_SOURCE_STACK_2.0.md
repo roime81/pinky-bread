@@ -43,7 +43,7 @@ References:
 
 ## Local deployment profile
 
-The Compose profile pins Valkey 9.1.3 and SeaweedFS 4.53 based on upstream stable releases available on 18 November 2026. The default Compose profile uses:
+The Compose stack pins Valkey 9.1.3 and SeaweedFS 4.53. The default Compose deployment uses:
 
 - FastAPI application container
 - Horizontally scalable workforce worker container(s)

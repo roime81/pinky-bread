@@ -47,4 +47,4 @@ def test_founder_workspace_contains_all_agent_editor_and_chat_controls():
 def test_hidden_sections_cannot_override_the_hidden_attribute():
     source = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
     assert "[hidden]{display:none!important}" in source
-    assert ".view.active{display:block!important}" in source
+    assert re.search(r"\\.view\\.active\\s*\\{\\s*display:\\s*block\\s*!important", source)

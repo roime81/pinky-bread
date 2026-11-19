@@ -98,19 +98,19 @@ MCP_ENABLED=true
 MCP_API_TOKEN=<long-random-secret>
 ```
 
-Then start/recreate the API and workers:
+Then start the complete stack; the API and worker wait for the migration and model-bootstrap services:
 
 ```bash
-docker compose up -d --force-recreate api worker
+docker compose up --build -d
 ```
 
-The Compose example uses a separate egress network for the optional Ollama service so it can pull model files. The default application network remains marked internal. In an air-gapped installation, preload the model volume from an approved offline source and remove Ollama's egress network. Model licences, redistribution terms, memory requirements and hardware support vary; Pinky Bread does not bundle model weights or automatically choose a model.
+The Compose example attaches Ollama to a separate model-download network so the first-start bootstrap can pull model files while the application network remains internal. In an air-gapped installation, preload the model volume from an approved offline source and remove Ollama's egress network. Model licences, redistribution terms, memory requirements and hardware support vary; model weights are not bundled in the container image.
 
 The default full-stack Compose configuration uses `MOCK_INFERENCE=false` and live Ollama inference. Set `MOCK_INFERENCE=true` only when intentionally running a GPU-free simulation; no genuine model reasoning is performed in mock mode.
 
 ## MCP integration
 
-Alpha 3 uses the official MCP Python SDK v2.x and Streamable HTTP:
+The runtime uses the official MCP Python SDK v2.x and Streamable HTTP:
 - Dedicated `mcp` service runs `app.mcp_server` on container port 8090 and is published as host port 8060 for private local integration.
 - The local model adapter connects with the MCP v2 `Client` and `streamable_http_client`, passing auth through its `httpx2.AsyncClient`.
 - MCP tool definitions are exposed to the model only through an agent-role allow-list.

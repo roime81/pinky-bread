@@ -13,6 +13,7 @@ from .registry import AgentRegistry
 from .schemas import WorkflowInvokeRequest, ApprovalRequest, ArtifactInput
 from .settings import get_settings
 from .company_api import router as company_graph_router
+from .auth import router as auth_router, AuthMiddleware
 
 settings = get_settings()
 registry = AgentRegistry(settings.agent_config_dir)
@@ -34,6 +35,8 @@ app = FastAPI(title=settings.app_name, version="2.0.0-alpha.4", description="Loc
 web_dir = Path(__file__).resolve().parent.parent / "web"
 app.mount("/static", StaticFiles(directory=web_dir), name="static")
 app.include_router(company_graph_router)
+app.include_router(auth_router)
+app.add_middleware(AuthMiddleware)
 
 
 @app.get("/", response_class=HTMLResponse)

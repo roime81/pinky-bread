@@ -228,7 +228,7 @@ pip install -r requirements.txt
 
 Copy-Item .env.example .env
 
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ```
 
 If PowerShell blocks activation, use the Python executable directly:
@@ -256,12 +256,12 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 
 ### Open the application
 
-- Web console: <http://127.0.0.1:8080>
-- Interactive API docs: <http://127.0.0.1:8080/docs>
-- OpenAPI JSON: <http://127.0.0.1:8080/openapi.json>
-- Health endpoint: <http://127.0.0.1:8080/api/healthz>
+- Web console: <http://127.0.0.1:8888>
+- Interactive API docs: <http://127.0.0.1:8888/docs>
+- OpenAPI JSON: <http://127.0.0.1:8888/openapi.json>
+- Health endpoint: <http://127.0.0.1:8888/api/healthz>
 
-The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker and internal MCP; Ollama is an optional profile. A GPU is not required for mock mode.
+Standalone Python mode uses SQLite and local filesystem storage. For host-run inference, use the Ollama listener at `http://127.0.0.1:11434/v1` or deliberately enable mock mode. The recommended full-stack path is Docker Compose, which starts PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker, MCP and Ollama by default and downloads the configured model on first startup.
 
 ## Run with Docker Compose
 
@@ -271,7 +271,7 @@ Start the full local container stack:
 docker compose up --build
 ```
 
-Open <http://localhost:8080>.
+Open <http://127.0.0.1:8888>.
 
 Useful commands:
 
@@ -369,7 +369,7 @@ model_configuration:
 
 ## Try the demo workflow
 
-1. Start the application and open <http://127.0.0.1:8080>.
+1. Start the application and open <http://127.0.0.1:8888>.
 2. In **Start a workflow**, enter:
 
    ```text
@@ -435,7 +435,7 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 ### Invoke a workflow with curl
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/workflows/invoke \
+curl -X POST http://127.0.0.1:8888/v1/workflows/invoke \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Review a cancelled flight and prepare a refund proposal for RM450."}'
 ```
@@ -445,7 +445,7 @@ curl -X POST http://127.0.0.1:8080/v1/workflows/invoke \
 Replace `<THREAD_ID>` with the `thread_id` returned by the invoke endpoint:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/workflows/<THREAD_ID>/approve \
+curl -X POST http://127.0.0.1:8888/v1/workflows/<THREAD_ID>/approve \
   -H 'Content-Type: application/json' \
   -d '{"approver_id":"finance.manager","decision":"APPROVED","notes":"Reviewed for MVP simulation"}'
 ```
@@ -672,12 +672,12 @@ Confirm the virtual environment is activated and install dependencies again:
 python -m pip install -r requirements.txt
 ```
 
-### Port 8080 is already in use
+### Port 8888 is already in use
 
 Choose another port, for example:
 
 ```bash
-uvicorn app.main:app --reload --port 8090
+uvicorn app.main:app --reload --port 8889
 ```
 
 ### The dashboard shows the API as offline
@@ -723,3 +723,31 @@ The first startup downloads the model and requires internet access, disk space a
 The Founder conversation panel displays live model connectivity and model installation status. Company chat uses MCP when `MCP_ENABLED=true`: coordinators receive the allow-listed planning and queue tools, while specialists receive read-only company context tools. Provider, model identifier and optional endpoint are stored per employee. An empty per-agent endpoint inherits the workspace endpoint.
 
 For host-based vLLM or another OpenAI-compatible server, set `MODEL_PROVIDER=vllm` or `openai-compatible`, configure `REASONING_API_URL`, `REASONING_MODEL` and `VLLM_API_KEY` in `.env`, and set each employee's model and optional endpoint. The endpoint must be reachable from the API and worker containers.
+
+## Local service endpoints and ports
+
+The default Docker Compose deployment runs the private Ollama model and the supporting services locally. Host ports are published separately; containers continue to use Docker service DNS names on the private Compose network.
+
+| Service | Host address | Container address | Purpose |
+|---|---|---|---|
+| Pinky Bread API + UI | `http://127.0.0.1:8888` / `http://api.localhost:8888` | `api:8080` | Web app and REST API |
+| MCP Streamable HTTP | `http://127.0.0.1:8060/mcp` / `http://mcp.localhost:8060/mcp` | `mcp:8090/mcp` | MCP tools and resources |
+| Ollama | `http://127.0.0.1:11434` / `http://ollama.localhost:11434` | `ollama:11434` | Private local LLM inference |
+| PostgreSQL | `127.0.0.1:5433` | `postgres:5432` | Durable state and LangGraph checkpoints |
+| Valkey | `127.0.0.1:6380` | `valkey:6379` | Coordination and notifications |
+| SeaweedFS S3 | `http://127.0.0.1:8333` | `seaweedfs:8333` | Local artifact/object storage |
+
+Host-side port binding defaults to loopback only through `PB_BIND_ADDRESS=127.0.0.1`. In GitHub Codespaces, if the forwarded-port proxy cannot reach a loopback-bound published port, set `PB_BIND_ADDRESS=0.0.0.0` in `.env`, recreate the stack, and use the Codespaces Ports panel to open the forwarded port. Keep forwarded ports private; do not expose database, cache, MCP or model ports publicly.
+
+Inside Compose, do not change service URLs to `localhost`: each container has its own loopback interface. API and worker use `http://ollama:11434/v1` and `http://mcp:8090/mcp`; the MCP server uses the internal API service address. From the host, use the published host ports above.
+
+Start everything with:
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose config --quiet
+docker compose ps
+```
+
+The first start downloads the configured Ollama model into the persistent model volume. No separate Uvicorn, Ollama, MCP, PostgreSQL or Valkey command is required.

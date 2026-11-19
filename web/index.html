@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Pinky Bread · Autonomous Organization</title>
-  <link rel="stylesheet" href="/static/styles.css" />
-  <link rel="stylesheet" href="/static/company-graph.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261119-navfix" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-navfix" />
 </head>
 <body>
   <div class="app-shell">
@@ -19,9 +19,9 @@
         <button class="nav-item active" data-view="company-graph"><span class="nav-icon">◎</span> Company graph</button>
         <button class="nav-item" data-view="company-agents"><span class="nav-icon">◇</span> AI workforce</button>
         <button class="nav-item" data-view="overview"><span class="nav-icon">◫</span> Overview</button>
-        <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflows <span class="nav-count" id="nav-workflow-count">0</span></button>
-        <button class="nav-item" data-view="agents"><span class="nav-icon">▧</span> Workflow templates</button>
-        <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit trail</button>
+        <button class="nav-item" data-view="workflows"><span class="nav-icon">⌘</span> Workflow <span class="nav-count" id="nav-workflow-count">0</span></button>
+        <button class="nav-item" data-view="agents"><span class="nav-icon">▧</span> Workflow Templates</button>
+        <button class="nav-item" data-view="audit"><span class="nav-icon">≋</span> Audit Trails</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="airgap-card"><div class="airgap-head"><span class="pulse-dot"></span> LOCAL ENVIRONMENT</div><div class="airgap-title">Local-first runtime</div><div class="airgap-desc">No external model API is required. Enforce egress isolation at the deployment network layer.</div></div>
@@ -233,7 +233,7 @@
       <div class="agent-editor-footer"><span id="agent-editor-feedback" role="status"></span><button type="button" class="secondary-btn" id="agent-editor-cancel">Cancel</button><button type="submit" class="primary-btn" id="agent-editor-save">Save agent</button></div>
     </form>
   </dialog>
-  <script src="/static/app.js"></script>
-  <script src="/static/company-graph.js"></script>
+  <script src="/static/app.js?v=20261119-navfix"></script>
+  <script src="/static/company-graph.js?v=20261119-navfix"></script>
 </body>
 </html>

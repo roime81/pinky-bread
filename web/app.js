@@ -7,9 +7,23 @@ function toast(message){const el=$('#toast');if(!el)return;el.textContent=messag
 function statusClass(status){return ({COMPLETED:'completed',PENDING_APPROVAL:'pending',REJECTED:'rejected',FAILED:'failed',RUNNING:'running'})[status]||'running'}
 function shortId(id){return (id||'').slice(0,8)}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function go(view){$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));$$('.nav-item').forEach(v=>v.classList.toggle('active',v.dataset.view===view));$('#breadcrumb-current').textContent=({overview:'Overview',workflows:'Workflows',agents:'Workflow templates','company-agents':'AI workforce',audit:'Audit trail','company-graph':'Company Graph'})[view]||'Overview';if(view==='workflows')loadWorkflows();if(view==='agents')loadAgents();if(view==='company-agents'&&window.loadCompanyAgents)window.loadCompanyAgents();if(view==='audit')loadAuditOptions();if(view==='company-graph'&&window.loadCompanyGraph)window.loadCompanyGraph()}
-$$$('.nav-item').forEach(btn=>btn.addEventListener('click',()=>go(btn.dataset.view)));
-$$('[data-goto]').forEach(btn=>btn.addEventListener('click',()=>go(btn.dataset.goto)));
+function go(view){
+ const labels={overview:'Overview',workflows:'Workflows',agents:'Workflow templates','company-agents':'AI Workforce',audit:'Audit Trails','company-graph':'Company Graph'};
+ const target=document.getElementById(`view-${view}`);
+ if(!target){toast(`The ${labels[view]||view} view is not available in this build.`);return;}
+ $$('.view').forEach(section=>section.classList.toggle('active',section===target));
+ $$('.nav-item').forEach(button=>{const active=button.dataset.view===view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+ const breadcrumb=$('#breadcrumb-current');if(breadcrumb)breadcrumb.textContent=labels[view]||'Workspace';
+ const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'company-graph':window.loadCompanyGraph};
+ const load=loaders[view];if(typeof load==='function'){try{Promise.resolve(load()).catch(error=>toast(`Could not load ${labels[view]||view}: ${error.message}`));}catch(error){toast(`Could not load ${labels[view]||view}: ${error.message}`);}}
+}
+window.pinkyBreadNavigate=go;
+document.addEventListener('click',event=>{
+ const element=event.target instanceof Element?event.target:null;
+ const button=element?.closest('.nav-item[data-view], [data-goto]');
+ if(!button)return;const view=button.dataset.view||button.dataset.goto;if(!view)return;
+ event.preventDefault();go(view);
+},true);
 $('#new-workflow-btn')?.addEventListener('click',()=>{go('overview');$('#prompt')?.focus();window.scrollTo({top:0,behavior:'smooth'})});
 $('#browse-btn')?.addEventListener('click',()=>$('#artifact-file')?.click());
 $('#artifact-file')?.addEventListener('change',e=>{for(const f of e.target.files){if(!['image/png','image/jpeg','application/pdf'].includes(f.type)){toast(`Unsupported file: ${f.name}`);continue}if(f.size>12*1024*1024){toast(`${f.name} exceeds 12 MB`);continue}selectedFiles.push(f)}renderSelectedFiles();e.target.value=''});

@@ -123,7 +123,7 @@ The existing graph, events, verification, artifacts and SSE endpoints remain ava
 
 ### Development simulation
 
-The default `MOCK_INFERENCE=true` works without a GPU or model server. It exercises state transitions, graph persistence, artifact storage and API behavior while clearly labelling generated text as a mock.
+Historical Alpha 2 note: this release initially used `MOCK_INFERENCE=true` for GPU-free simulation. From Alpha 4, the recommended Compose deployment defaults to live Ollama inference (`MOCK_INFERENCE=false`); use mock mode only when explicitly requested.
 
 ### Local model inference
 

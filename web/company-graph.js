@@ -52,6 +52,7 @@
         return;
       }
       state.company = state.companies[0];
+      setWorkspaceVisible(true);
       try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
       $("#graph-company-picker").value = state.company.id;
       await loadGraph(true);

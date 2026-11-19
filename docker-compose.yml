@@ -170,8 +170,8 @@ services:
     command: ["python", "-m", "app.model_bootstrap"]
     environment:
       MOCK_INFERENCE: "${MOCK_INFERENCE:-false}"
-      MODEL_PROVIDER: ollama
-      REASONING_API_URL: "http://ollama:11434/v1"
+      MODEL_PROVIDER: "${MODEL_PROVIDER:-ollama}"
+      REASONING_API_URL: "${REASONING_API_URL:-http://ollama:11434/v1}"
       REASONING_MODEL: "${REASONING_MODEL:-qwen2.5:3b}"
       VLLM_API_KEY: ollama
     depends_on:

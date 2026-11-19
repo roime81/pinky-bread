@@ -189,7 +189,7 @@ class AuthMiddleware:
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
-        protected = path.startswith("/v1/") or path.startswith("/v2/") or path == "/issuer"
+        protected = path.startswith("/v1/") or path.startswith("/v2/")
         if not protected:
             await self.app(scope, receive, send)
             return

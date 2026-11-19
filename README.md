@@ -261,7 +261,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 - OpenAPI JSON: <http://127.0.0.1:8888/openapi.json>
 - Health endpoint: <http://127.0.0.1:8888/api/healthz>
 
-The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker and internal MCP; Ollama is an optional profile. A GPU is not required for mock mode.
+The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker, MCP and Ollama by default. The Ollama model is downloaded during first startup. A GPU is not required for mock mode, though local inference performance depends on available CPU/RAM.
 
 ## Run with Docker Compose
 

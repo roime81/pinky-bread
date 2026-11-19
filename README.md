@@ -703,20 +703,23 @@ Review the reported YAML filename and schema error. Ensure each manifest include
 This repository includes the Apache License, Version 2.0 in [`LICENSE`](LICENSE). Review the full license text for the permissions, conditions, limitations, and attribution requirements that apply to this project.
 
 
-## Enable real AI inference
 
-Pinky Bread deliberately labels mock execution as a simulation. The default `MOCK_INFERENCE=true` keeps the application usable without a model server, but it does **not** generate AI responses. To enable real local inference with the bundled Ollama service:
+## Default live AI runtime
+
+The full-stack Docker Compose deployment starts Ollama by default, downloads `qwen2.5:3b` once into the persistent `ollama_data` volume, and only then starts the API and worker. The default Compose path uses live inference. It does not silently simulate company conversations.
 
 ```bash
-MOCK_INFERENCE=false REASONING_API_URL=http://ollama:11434/v1 docker compose --profile local-llm up --build -d
-docker compose exec ollama ollama pull llama3.1:8b
+cp .env.example .env
+# Check: MOCK_INFERENCE=false, MODEL_PROVIDER=ollama,
+# REASONING_API_URL=http://ollama:11434/v1, REASONING_MODEL=qwen2.5:3b
+docker compose down
+docker compose up --build -d
+docker compose ps
+docker compose logs -f ollama ollama-init api worker
 ```
 
-Then create or edit an AI employee and set:
-- Provider: **Ollama**
-- Model identifier: **llama3.1:8b**
-- API endpoint: **http://ollama:11434/v1**
+The first startup downloads the model and requires internet access, disk space and memory. Later restarts reuse the persistent model volume. To use a different Ollama model, change `REASONING_MODEL` in `.env`; the one-shot bootstrap pulls it before the API and worker start. Set `MOCK_INFERENCE=true` only when you intentionally want a GPU-free development simulation. Company chat will then state that live inference is disabled.
 
-The endpoint and model are stored with that employee and are used for founder conversations and delegated work. The first model download can take several minutes and requires sufficient disk space and memory. For a host-based vLLM or another OpenAI-compatible server, set `REASONING_API_URL` to an endpoint reachable from the API and worker containers, set `MOCK_INFERENCE=false`, and configure each employee's model identifier and optional endpoint accordingly.
+The Founder conversation panel displays live model connectivity and model installation status. Company chat uses MCP when `MCP_ENABLED=true`: coordinators receive the allow-listed planning and queue tools, while specialists receive read-only company context tools. Provider, model identifier and optional endpoint are stored per employee. An empty per-agent endpoint inherits the workspace endpoint.
 
-If mock mode remains enabled, the AI conversation endpoint returns a clear service-unavailable message instead of pretending a model answered. Do not expose the development endpoints or example credentials to the public internet.
+For host-based vLLM or another OpenAI-compatible server, set `MODEL_PROVIDER=vllm` or `openai-compatible`, configure `REASONING_API_URL`, `REASONING_MODEL` and `VLLM_API_KEY` in `.env`, and set each employee's model and optional endpoint. The endpoint must be reachable from the API and worker containers.

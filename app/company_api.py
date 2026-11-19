@@ -4,6 +4,7 @@ from typing import Any, Literal
 import asyncio
 import re
 import uuid
+import httpx
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
@@ -508,6 +509,54 @@ def download_company_artifact(
 
 
 
+@router.get("/runtime")
+async def company_runtime_status() -> dict[str, Any]:
+    settings = get_settings()
+    status: dict[str, Any] = {
+        "mock_inference": settings.mock_inference,
+        "provider": settings.model_provider,
+        "model": settings.reasoning_model,
+        "model_reachable": False,
+        "model_available": False,
+        "model_error": None,
+        "mcp_enabled": settings.mcp_enabled,
+        "mcp_configured": bool(settings.mcp_server_url and settings.mcp_api_token and settings.mcp_read_token),
+    }
+    if settings.mock_inference:
+        status["model_error"] = "MOCK_INFERENCE=true; live inference is disabled."
+        return status
+    endpoint = settings.reasoning_api_url.rstrip("/")
+    service_root = endpoint[:-3] if endpoint.endswith("/v1") else endpoint
+    is_ollama = settings.model_provider == "ollama" or "ollama" in endpoint.lower()
+    probe_url = f"{service_root}/api/tags" if is_ollama else f"{endpoint}/models"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
+            response = await client.get(probe_url, headers={"Authorization": f"Bearer {settings.vllm_api_key}"})
+            response.raise_for_status()
+            payload = response.json()
+        status["model_reachable"] = True
+        if is_ollama:
+            names = {
+                str(item.get("name") or item.get("model") or "")
+                for item in payload.get("models", [])
+                if isinstance(item, dict)
+            }
+            model_base = settings.reasoning_model.split(":")[0]
+            status["model_available"] = any(
+                name == settings.reasoning_model or name.split(":")[0] == model_base
+                for name in names
+            )
+        else:
+            entries = payload.get("data", []) if isinstance(payload, dict) else []
+            names = {str(item.get("id", "")) for item in entries if isinstance(item, dict)}
+            status["model_available"] = not names or settings.reasoning_model in names
+        if not status["model_available"]:
+            status["model_error"] = f"Model '{settings.reasoning_model}' is not present in the provider model list."
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        status["model_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+    return status
+
+
 @router.post("/companies/{company_id}/chat")
 async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) -> dict[str, Any]:
     graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
@@ -542,9 +591,18 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
         )
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Model or MCP request failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(502, f"AI runtime error: {str(exc)[:300]}") from exc
+    except Exception as exc:
+        # MCP SDK and provider adapters can surface transport/schema errors
+        # outside the httpx exception hierarchy. Return a visible, bounded
+        # diagnostic instead of leaving the founder with a generic 500.
+        raise HTTPException(502, f"AI runtime integration failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
     return {
         "reply": reply,
-        "mode": "LIVE_MODEL",
+        "mode": "LIVE_MODEL_WITH_MCP" if get_settings().mcp_enabled else "LIVE_MODEL",
         "agent": {
             "id": agent["id"],
             "name": agent["name"],

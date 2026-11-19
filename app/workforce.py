@@ -125,6 +125,15 @@ def _mock_plan(agents: list[dict[str, Any]], goal: dict[str, Any]) -> dict[str, 
 
 
 
+def _openai_compatible_base_url(value: str) -> str:
+    endpoint = value.strip().rstrip("/")
+    if endpoint.endswith("/chat/completions"):
+        endpoint = endpoint[: -len("/chat/completions")]
+    if not endpoint.endswith("/v1"):
+        endpoint = f"{endpoint}/v1"
+    return endpoint
+
+
 async def _chat_completion(
     *,
     system_prompt: str,
@@ -149,7 +158,7 @@ async def _chat_completion(
     }
     async with httpx.AsyncClient(timeout=180) as client:
         response = await client.post(
-            f"{(api_url or settings.reasoning_api_url).rstrip('/')}/chat/completions",
+            f"{_openai_compatible_base_url(api_url or settings.reasoning_api_url)}/chat/completions",
             json=payload,
             headers={"Authorization": f"Bearer {api_key or settings.vllm_api_key}"},
         )
@@ -205,6 +214,21 @@ async def chat_with_agent(
     settings_model = model_config.get("model_name") or settings.reasoning_model
     payload_history = "\n\n".join(f"{item['role'].upper()}: {item['content']}" for item in messages[:-1])
     prompt = (f"Conversation so far:\n{payload_history}\n\n" if payload_history else "") + message
+    if settings.mcp_enabled:
+        from .mcp_client import complete_with_mcp
+
+        is_coordinator = _is_coordinator(agent)
+        return await complete_with_mcp(
+            system_prompt=system,
+            user_prompt=prompt,
+            role="head_of_agents" if is_coordinator else "specialist",
+            company_id=company_id,
+            tenant_id=tenant_id,
+            agent_id=agent["id"],
+            max_tokens=int(model_config.get("max_tokens", 1800)),
+            model_name=str(settings_model),
+            api_url=endpoint,
+        )
     return await _chat_completion(
         system_prompt=system,
         user_prompt=prompt,

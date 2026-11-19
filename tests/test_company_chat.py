@@ -139,3 +139,63 @@ def test_mcp_client_exposes_safe_read_only_tools_to_specialists():
         "list_company_goals",
         "list_goal_work",
     }
+
+
+def test_coordinator_chat_uses_mcp_and_its_employee_model(monkeypatch):
+    import asyncio
+
+    from app.workforce import chat_with_agent
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", False)
+    monkeypatch.setattr(settings, "mcp_enabled", True)
+    captured = {}
+
+    async def fake_complete_with_mcp(**kwargs):
+        captured.update(kwargs)
+        return "I reviewed the company context and prepared the next steps."
+
+    monkeypatch.setattr("app.mcp_client.complete_with_mcp", fake_complete_with_mcp)
+    agent = {
+        "id": "coordinator-1",
+        "name": "Nora",
+        "description": "Company coordination",
+        "data": {
+            "role": "Company coordination",
+            "authority": "COORDINATOR",
+            "model_configuration": {
+                "provider": "ollama",
+                "model_name": "qwen2.5:3b",
+                "endpoint": "http://ollama:11434/v1",
+            },
+        },
+    }
+    company = {"name": "Test Co", "data": {"vision": "Build", "mission": "Serve"}}
+    answer = asyncio.run(chat_with_agent(
+        agent=agent,
+        company=company,
+        agents=[agent],
+        message="Review progress and suggest next actions.",
+        history=[{"role": "user", "content": "We have two goals."}],
+        company_id="company-2",
+        tenant_id="tenant-2",
+    ))
+    assert answer.startswith("I reviewed")
+    assert captured["role"] == "head_of_agents"
+    assert captured["agent_id"] == "coordinator-1"
+    assert captured["model_name"] == "qwen2.5:3b"
+    assert captured["api_url"] == "http://ollama:11434/v1"
+    assert "We have two goals." in captured["user_prompt"]
+
+
+def test_runtime_status_explains_mock_mode(monkeypatch):
+    init_db()
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", True)
+    with TestClient(app) as client:
+        response = client.get("/v2/runtime")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["mock_inference"] is True
+        assert payload["model_reachable"] is False
+        assert "MOCK_INFERENCE=true" in payload["model_error"]

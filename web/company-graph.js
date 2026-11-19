@@ -14,6 +14,7 @@
     jobs: [],
     coordination: null,
     loading: false,
+    reloadRequested: false,
     chatHistory: [],
     chatSending: false,
   };
@@ -51,10 +52,12 @@
         return;
       }
       state.company = state.companies[0];
+      setWorkspaceVisible(true);
       try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
       $("#graph-company-picker").value = state.company.id;
       await loadGraph(true);
       restoreChatHistory();
+      refreshAiRuntime();
     } catch (error) {
       setWorkspaceVisible(false);
       showError(`Company graph API unavailable: ${error.message}`);
@@ -110,7 +113,11 @@
   }
 
   async function loadGraph(reconnect = false) {
-    if (!state.company || state.loading) return;
+    if (!state.company) return;
+    if (state.loading) {
+      state.reloadRequested = true;
+      return;
+    }
     state.loading = true;
     try {
       state.graph = await api(`/v2/companies/${state.company.id}/graph?tenant_id=${encodeURIComponent(state.company.tenant_id)}`);
@@ -123,6 +130,10 @@
       showError(error.message);
     } finally {
       state.loading = false;
+      if (state.reloadRequested) {
+        state.reloadRequested = false;
+        window.setTimeout(() => loadGraph(), 0);
+      }
     }
   }
 
@@ -428,9 +439,21 @@
   }
 
   async function updateAgent(node, payload) {
-    await api(`/v2/companies/${state.company.id}/nodes/${node.id}`, {
+    const request = {
+      tenant_id: state.company.tenant_id,
+      actor_id: "founder",
+      ...(payload.name ? { name: payload.name } : {}),
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.data_patch?.role ? { role: payload.data_patch.role } : {}),
+      ...(payload.data_patch?.title ? { title: payload.data_patch.title } : {}),
+      ...(payload.data_patch?.model_configuration ? { model_configuration: payload.data_patch.model_configuration } : {}),
+      ...(payload.data_patch?.seniority_level ? { seniority_level: payload.data_patch.seniority_level } : {}),
+      ...(payload.data_patch?.authority ? { authority: payload.data_patch.authority } : {}),
+      ...(payload.status ? { status: payload.status } : {}),
+    };
+    await api(`/v2/companies/${state.company.id}/agents/${node.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder", ...payload }),
+      body: JSON.stringify(request),
     });
     await loadGraph();
     selectNode(node.id);
@@ -439,18 +462,27 @@
   async function editAgent(node) { openAgentEditor(node); }
 
   async function changeAgentRank(node, promote) {
-    const ranks = ["specialist", "lead", "executive"];
-    const current = ranks.indexOf(node.data?.rank || "specialist");
-    const next = ranks[Math.max(0, Math.min(ranks.length - 1, current + (promote ? 1 : -1)))];
-    const title = next === "executive" ? "Head of Agents" : next === "lead" ? "Team Lead" : "Specialist";
-    await updateAgent(node, { data_patch: { rank: next, title, role: next === "executive" ? "head_of_agents" : next } });
-    toast(`${node.name} is now ${title}`);
+    const action = promote ? "promote" : "demote";
+    const result = await api(`/v2/companies/${state.company.id}/agents/${node.id}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+    });
+    await loadGraph();
+    selectNode(node.id);
+    toast(`${node.name} seniority updated to level ${result.data?.seniority_level || "—"}`);
   }
 
   async function archiveAgent(node) {
-    if (!window.confirm(`Archive ${node.name}? This keeps its history but marks it inactive.`)) return;
-    await updateAgent(node, { status: "ARCHIVED", data_patch: { archived: true } });
-    toast("Agent archived");
+    if (!window.confirm(`Archive ${node.name}? Its work history and deliverables will be preserved.`)) return;
+    await api(`/v2/companies/${state.company.id}/agents/${node.id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ tenant_id: state.company.tenant_id, actor_id: "founder" }),
+    });
+    state.selectedId = null;
+    await loadGraph();
+    renderAgentDirectory();
+    renderChatAgentPicker();
+    toast("Agent archived; history preserved");
   }
 
   function selectNode(nodeId, rerender = true) {
@@ -589,6 +621,7 @@
       setWorkspaceVisible(true);
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
+      refreshAiRuntime();
       startJobsPolling();
       toast("Company created. Build the virtual team you want by adding your own agents.");
     } catch (error) {
@@ -637,25 +670,66 @@
     }
   }
 
-  async function addAgent() {
-    const name = askForName("Name this AI employee", "Product Agent");
-    if (!name) return;
-    const role = askForName("What is this agent responsible for?", "Product management") || "General specialist";
-    const provider = askForName("LLM provider (ollama, openai-compatible, anthropic, etc.)", "ollama") || "ollama";
-    const model = askForName("Model identifier", "llama3.1:8b") || "llama3.1:8b";
-    const leaders = state.graph.nodes.filter((node) => node.type === "agent");
-    const leaderOptions = ["Founder", ...leaders.map((node) => node.name)].join(", ");
-    const managerName = askForName(`Who should ${name} report to? Available: ${leaderOptions}`, leaders.find((node) => ["head_of_agents", "chief_of_staff"].includes(node.data?.role))?.name || "Founder") || "Founder";
-    const manager = leaders.find((node) => node.name.toLowerCase() === managerName.toLowerCase());
-    try {
-      await createNode("agent", name, role, {
-        role, rank: "specialist", title: "Specialist",
-        manager_id: manager?.id || state.company.id,
-        model_configuration: { provider, model_name: model },
-        runtime_status: "not_configured", assigned_goals: [],
-      }, "PROPOSED");
-      toast(`${name} added · reports to ${manager?.name || "Founder"} · ${provider}/${model}`);
-    } catch (error) { toast(error.message); }
+  function activeAgents() {
+    return (state.graph.nodes || []).filter((node) =>
+      node.type === "agent" && !["ARCHIVED", "DISABLED", "PAUSED"].includes(String(node.status || "").toUpperCase())
+    );
+  }
+
+  function _isCoordinatorForUi(agent) {
+    const data = agent?.data || {};
+    const authority = String(data.authority || "").trim().toUpperCase();
+    const role = String(data.role || "").trim().toLowerCase();
+    return authority === "COORDINATOR" || ["head_of_agents", "chief_of_staff", "chief-of-staff"].includes(role);
+  }
+
+  function renderAgentDirectory() {
+    const agents = activeAgents();
+    const managers = new Map(
+      (state.graph.edges || [])
+        .filter((edge) => edge.relationship === "reports_to")
+        .map((edge) => [edge.source, edge.target])
+    );
+    const agentById = new Map(agents.map((agent) => [agent.id, agent]));
+    const cards = agents.map((agent) => {
+      const data = agent.data || {};
+      const model = data.model_configuration || {};
+      const managerId = data.manager_id || managers.get(agent.id);
+      const manager = managerId ? agentById.get(managerId) : null;
+      const coordinator = _isCoordinatorForUi(agent);
+      const modelLabel = [model.provider || "workspace", model.model_name || "default model"].join(" · ");
+      const seniority = Number(data.seniority_level || 3);
+      return `
+        <article class="company-agent-card">
+          <div class="company-agent-card-top">
+            <span class="company-agent-avatar">${escapeHtml(agent.name.slice(0, 1).toUpperCase())}</span>
+            <span class="company-agent-state"><i></i> ${escapeHtml(agent.status || "ACTIVE")}</span>
+          </div>
+          <div class="company-agent-identity">
+            <strong>${escapeHtml(agent.name)}</strong>
+            <span>${escapeHtml(data.title || data.role || "AI employee")}</span>
+          </div>
+          <p class="company-agent-description">${escapeHtml(agent.description || "No role description yet.")}</p>
+          <div class="company-agent-meta">
+            <span class="company-agent-tag ${coordinator ? "coordinator" : ""}">${coordinator ? "COORDINATOR" : "SPECIALIST"}</span>
+            <span>Level ${Number.isFinite(seniority) ? seniority : 3}</span>
+          </div>
+          <div class="company-agent-model" title="${escapeHtml(modelLabel)}">MODEL · ${escapeHtml(modelLabel)}</div>
+          <div class="company-agent-manager">Reports to · <b>${escapeHtml(manager?.name || "Founder")}</b></div>
+          <div class="company-agent-actions">
+            <button type="button" class="secondary-btn" data-select-agent="${escapeHtml(agent.id)}">Inspect</button>
+            <button type="button" class="secondary-btn" data-edit-agent="${escapeHtml(agent.id)}">Edit</button>
+          </div>
+        </article>`;
+    }).join("");
+    const empty = '<div class="company-agent-empty"><strong>Your workforce starts here.</strong><span>Create your first AI employee, assign a model and define who they report to.</span></div>';
+    const markup = cards || empty;
+    const mainList = $("#company-agent-list");
+    const workspaceList = $("#workspace-agent-list");
+    if (mainList) mainList.innerHTML = markup;
+    if (workspaceList) workspaceList.innerHTML = markup;
+    const count = $("#workspace-agent-count");
+    if (count) count.textContent = `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`;
   }
 
   function renderChatAgentPicker() {
@@ -692,7 +766,7 @@
     $("#agent-editor-responsibilities").value = (data.responsibilities || []).join("\n");
     $("#agent-editor-prompt").value = data.system_prompt || "";
     $("#agent-editor-provider").value = model.provider || "ollama";
-    $("#agent-editor-model").value = model.model_name || "llama3.1:8b";
+    $("#agent-editor-model").value = model.model_name || "qwen2.5:3b";
     $("#agent-editor-endpoint").value = model.endpoint || "";
     const manager = $("#agent-editor-manager");
     manager.innerHTML = '<option value="">Reports directly to founder</option>' + activeAgents()
@@ -701,7 +775,9 @@
     const reporting = state.graph.edges.find((edge) => edge.source === agent?.id && edge.relationship === "reports_to");
     manager.value = data.manager_id || reporting?.target || "";
     $("#agent-editor-feedback").textContent = "";
-    $("#agent-editor-dialog").showModal();
+    const dialog = $("#agent-editor-dialog");
+    if (!dialog.open) dialog.showModal();
+    window.setTimeout(() => $("#agent-editor-name")?.focus(), 0);
   }
 
   async function saveAgent(event) {
@@ -740,6 +816,8 @@
       }
       $("#agent-editor-dialog").close();
       await loadGraph();
+      renderAgentDirectory();
+      renderChatAgentPicker();
       toast(id ? "Agent profile updated" : "AI employee created");
     } catch (error) {
       $("#agent-editor-feedback").textContent = error.message;
@@ -749,6 +827,10 @@
     }
   }
   async function addAgent() {
+    if (!state.company) {
+      toast("Create a company before adding AI employees.");
+      return;
+    }
     openAgentEditor();
   }
 
@@ -927,6 +1009,33 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  async function refreshAiRuntime() {
+    const indicator = $("#ai-runtime-status");
+    if (!indicator) return;
+    indicator.textContent = "CHECKING MODEL";
+    indicator.classList.remove("online", "offline", "mock");
+    try {
+      const status = await api("/v2/runtime");
+      if (status.mock_inference) {
+        indicator.textContent = "MOCK MODE";
+        indicator.classList.add("mock");
+        indicator.title = "Mock mode is enabled; live AI responses are disabled.";
+      } else if (status.model_reachable) {
+        indicator.textContent = status.model_available ? "MODEL ONLINE" : "MODEL REACHABLE · MODEL NOT FOUND";
+        indicator.classList.add(status.model_available ? "online" : "offline");
+        indicator.title = status.model_error || `${status.provider} · ${status.model}`;
+      } else {
+        indicator.textContent = "MODEL OFFLINE";
+        indicator.classList.add("offline");
+        indicator.title = status.model_error || "Model endpoint is unreachable";
+      }
+    } catch (error) {
+      indicator.textContent = "RUNTIME UNKNOWN";
+      indicator.classList.add("offline");
+      indicator.title = error.message;
+    }
+  }
+
   function appendConversationEntry(kind, title, message) {
     const log = $("#company-conversation");
     if (!log) return;
@@ -961,6 +1070,8 @@
     state.chatSending = true;
     const send = $("#company-command-send");
     if (send) { send.disabled = true; send.textContent = "Thinking…"; }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 190000);
     const pending = document.createElement("div");
     pending.className = "conversation-entry assistant pending";
     pending.textContent = "AI employee is thinking…";
@@ -975,6 +1086,7 @@
           message,
           history,
         }),
+        signal: controller.signal,
       });
       pending.remove();
       appendConversationEntry("assistant", result.agent?.name || "AI employee", result.reply || "The model returned an empty response.");
@@ -984,9 +1096,13 @@
       toast(`Response from ${result.agent?.name || "your AI employee"} · ${result.mode || "LIVE"}`);
     } catch (error) {
       pending.remove();
-      appendConversationEntry("system", "AI request failed", error.message);
-      toast(error.message);
+      const message = error.name === "AbortError"
+        ? "The model did not respond within 190 seconds. Check model availability and server logs."
+        : error.message;
+      appendConversationEntry("system", "AI request failed", message);
+      toast(message);
     } finally {
+      window.clearTimeout(timeout);
       state.chatSending = false;
       if (send) { send.disabled = false; send.innerHTML = 'Send <span>↗</span>'; }
     }
@@ -1093,6 +1209,7 @@
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
     await loadGraph(true);
     restoreChatHistory();
+    refreshAiRuntime();
     startJobsPolling();
   });
   $("#company-command-form")?.addEventListener("submit", handleCommand);

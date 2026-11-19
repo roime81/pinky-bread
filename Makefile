@@ -2,7 +2,7 @@
 install:
 	pip install -r requirements.txt
 run:
-	uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
+	uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 test:
 	pytest -q
 compose-up:

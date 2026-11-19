@@ -16,6 +16,8 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 ## Contents
 
 - [Pinky Bread 2.0 Alpha 4](#pinky-bread-20-alpha-4)
+- [Release notes](docs/releases/v2.0.0-alpha.4.md)
+- [Changelog](CHANGELOG.md)
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -361,7 +363,13 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 | `POST` | `/v2/companies` | Create a company charter |
 | `GET` | `/v2/companies` | List companies in a tenant context |
 | `GET` | `/v2/companies/{company_id}/graph` | Read the persisted company graph |
-| `GET` | `/v2/companies/{company_id}/agents` | List the company's user-defined agent roster |\n| `POST` | `/v2/companies/{company_id}/agents` | Create an agent with a custom role, persona, seniority and reporting line |\n| `PATCH` | `/v2/companies/{company_id}/agents/{agent_id}` | Edit identity, instructions, seniority, authority or manager |\n| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/promote` | Increase seniority by one level |\n| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/demote` | Decrease seniority by one level |\n| `DELETE` | `/v2/companies/{company_id}/agents/{agent_id}` | Archive an agent while preserving company history |\n| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Legacy-compatible roster discovery; does not create default agents |
+| `GET` | `/v2/companies/{company_id}/agents` | List the company's user-defined agent roster |
+| `POST` | `/v2/companies/{company_id}/agents` | Create an agent with a custom role, persona, seniority and reporting line |
+| `PATCH` | `/v2/companies/{company_id}/agents/{agent_id}` | Edit identity, instructions, seniority, authority or manager |
+| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/promote` | Increase seniority by one level |
+| `POST` | `/v2/companies/{company_id}/agents/{agent_id}/demote` | Decrease seniority by one level |
+| `DELETE` | `/v2/companies/{company_id}/agents/{agent_id}` | Archive an agent while preserving company history |
+| `POST` | `/v2/companies/{company_id}/workforce/bootstrap` | Legacy-compatible roster discovery; does not create default agents |
 | `POST` | `/v2/companies/{company_id}/goals/{goal_id}/plan` | Ask Head of Agents to decompose a goal into assignments |
 | `POST` | `/v2/companies/{company_id}/goals/{goal_id}/execute` | Execute goal assignments in dependency order |
 | `POST` | `/v2/companies/{company_id}/work/{work_id}/execute` | Execute or retry one work assignment |
@@ -588,6 +596,7 @@ pinky-bread/
 ├── data/
 │   └── uploads/          # Runtime artifact storage (not committed)
 ├── docs/
+│   ├── releases/          # Versioned release notes
 │   ├── ARCHITECTURE_2.0.md       # Company OS architecture
 │   ├── OPEN_SOURCE_STACK_2.0.md  # Open-source components and status
 │   ├── ROADMAP_2.0.md            # Phased delivery programme
@@ -603,6 +612,8 @@ pinky-bread/
 │   ├── index.html        # Dashboard markup
 │   └── styles.css        # Dashboard styling
 ├── .env.example          # Sample local environment settings
+├── CHANGELOG.md          # Version history
+├── .github/workflows/    # CI and release publishing
 ├── AGENTS.md             # Instructions for AI coding agents
 ├── CODEX_TASK.md         # Suggested next engineering task
 ├── Dockerfile

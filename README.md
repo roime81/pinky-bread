@@ -746,6 +746,7 @@ Start everything with:
 ```bash
 cp .env.example .env
 docker compose up --build -d
+docker compose config --quiet
 docker compose ps
 ```
 

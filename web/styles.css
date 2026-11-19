@@ -199,3 +199,24 @@ button:not(:disabled),.nav-item,[role="button"]{cursor:pointer;pointer-events:au
 .sidebar .nav-list{position:relative;z-index:31;pointer-events:auto}
 .sidebar .nav-item{position:relative;z-index:32;display:flex;width:100%;min-height:40px;pointer-events:auto;touch-action:manipulation}
 .sidebar .nav-item:focus-visible{outline:2px solid #7da58a;outline-offset:2px}
+
+
+/* Authentication gate */
+.auth-gate{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:rgba(245,248,246,.94);backdrop-filter:blur(18px)}
+.auth-gate[hidden]{display:none}
+.auth-card{width:min(100%,430px);padding:38px;border:1px solid #e5ebe6;border-radius:22px;background:#fff;box-shadow:0 24px 80px rgba(20,45,30,.12)}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:34px;font-size:11px;font-weight:800;letter-spacing:.14em;color:#35463b}
+.auth-brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#eaf5ed;color:#237a45;font-weight:800;letter-spacing:0}
+.auth-card h1{margin:8px 0;font-size:30px;letter-spacing:-.04em;color:#17231b}
+.auth-card>p{margin:0 0 24px;color:#718076;font-size:14px}
+.auth-form{display:grid;gap:9px}
+.auth-form label{font-size:12px;font-weight:650;color:#48564c}
+.auth-form input{width:100%;height:44px;padding:0 13px;border:1px solid #dfe7e1;border-radius:10px;background:#fbfdfb;color:#1d2b21}
+.auth-form .primary-btn{width:100%;justify-content:center;margin-top:8px}
+.auth-error{min-height:18px;color:#b42318;font-size:12px}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:15px 0;color:#9aa59d;font-size:10px;font-weight:700}
+.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:#edf1ee}
+.google-login-button{display:flex;align-items:center;justify-content:center;gap:10px;height:44px;border:1px solid #dfe7e1;border-radius:10px;color:#28372d;text-decoration:none;font-size:13px;font-weight:650}
+.google-g{font-size:17px;font-weight:800;color:#4285f4}
+.auth-footnote{margin-top:22px;color:#87938a;font-size:11px;line-height:1.6}
+.auth-footnote code{color:#4e5e53}

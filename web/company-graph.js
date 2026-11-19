@@ -821,27 +821,64 @@
     toast(`${name} created under ${manager?.name || "Founder"}`);
   }
 
-  function handleCommand() {
+  function appendConversationEntry(kind, title, message) {
+    const log = $("#company-conversation");
+    if (!log) return;
+    const entry = document.createElement("div");
+    entry.className = `conversation-entry ${kind}`;
+    const avatar = document.createElement("span");
+    avatar.className = "conversation-avatar";
+    avatar.textContent = kind === "founder" ? "YOU" : "PB";
+    const copy = document.createElement("div");
+    copy.className = "conversation-copy";
+    const heading = document.createElement("strong");
+    heading.textContent = title;
+    const body = document.createElement("p");
+    body.textContent = message;
+    copy.append(heading, body);
+    entry.append(avatar, copy);
+    log.append(entry);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function handleCommand(event) {
+    event?.preventDefault();
     const input = $("#company-command-input");
     const command = input.value.trim();
     if (!command) return;
     const lower = command.toLowerCase();
+    appendConversationEntry("founder", "Founder instruction", command);
     if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
+      appendConversationEntry("system", "Goal setup", "Opening the goal details flow. Complete the success-criteria prompt to add it to your company graph.");
       addGoal(command.split(":").slice(1).join(":").trim());
     } else if (lower.startsWith("plan:")) {
       const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
         || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
-      if (goal) planGoal(goal.id);
-      else toast("Select a goal dot or use plan: with an existing goal name");
+      if (goal) {
+        appendConversationEntry("system", "Planning requested", `Submitting a planning job for “${goal.name}”. Check Worker activity for its durable status.`);
+        planGoal(goal.id);
+      } else {
+        appendConversationEntry("system", "Goal not found", "Select a goal in the graph or use plan: followed by the exact name of an existing goal.");
+        toast("Select a goal dot or use plan: with an existing goal name");
+      }
     } else if (lower.startsWith("run:")) {
       const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
         || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
-      if (goal) runGoal(goal.id);
-      else toast("Select a goal dot or use run: with an existing goal name");
+      if (goal) {
+        appendConversationEntry("system", "Execution requested", `Submitting an execution job for “${goal.name}”. Follow its status in Worker activity.`);
+        runGoal(goal.id);
+      } else {
+        appendConversationEntry("system", "Goal not found", "Select a goal in the graph or use run: followed by the exact name of an existing goal.");
+        toast("Select a goal dot or use run: with an existing goal name");
+      }
     } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
       const name = command.split(":").slice(1).join(":").trim();
-      if (name) addAgentFromCommand(name).catch((error) => toast(error.message));
+      if (name) {
+        appendConversationEntry("system", "Agent setup", `Opening the agent creation flow for “${name}”. Configure its role, model and reporting line before saving.`);
+        addAgentFromCommand(name).catch((error) => { appendConversationEntry("system", "Action failed", error.message); toast(error.message); });
+      }
     } else {
+      appendConversationEntry("system", "Goal setup", "This alpha interprets free text as a new goal. Use goal: to make that action explicit, or agent:, plan: and run: for workforce commands.");
       addGoal(command);
     }
     input.value = "";
@@ -915,7 +952,7 @@
     await loadGraph(true);
     startJobsPolling();
   });
-  $("#company-command-send")?.addEventListener("click", handleCommand);
+  $("#company-command-form")?.addEventListener("submit", handleCommand);
   $("#company-command-input")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") handleCommand();
   });

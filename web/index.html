@@ -116,11 +116,21 @@
               <div class="graph-brief-stats"><span><b id="graph-goal-count">0</b> goals</span><span><b id="graph-agent-count">0</b> agents</span><span><b id="graph-work-count">0</b> work items</span></div>
             </section>
           </div>
-          <div class="company-command-bar">
-            <span class="command-spark">✳</span><div><strong>Founder command</strong><small>Describe a goal, create an agent, assign a manager or ask your leadership team to coordinate.</small></div>
-            <input id="company-command-input" aria-label="Founder instruction" placeholder="Tell your organization what to do… e.g. create agent: Product Lead" />
-            <button id="company-command-send" class="primary-btn">Send instruction ↗</button>
-          </div>
+          <section class="founder-console" aria-label="Founder command center">
+            <header class="founder-console-head">
+              <div><div class="eyebrow">FOUNDER / COMMAND CENTER</div><strong>Company conversation</strong><p>Issue structured instructions and review the actions Pinky Bread starts.</p></div>
+              <span class="console-mode"><i></i> WORKSPACE READY</span>
+            </header>
+            <div id="company-conversation" class="company-conversation" role="log" aria-live="polite">
+              <div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Start with a goal or create an AI employee. Actions and confirmations will appear here.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>
+            </div>
+            <form class="company-command-bar" id="company-command-form">
+              <span class="command-spark">✳</span>
+              <input id="company-command-input" aria-label="Founder instruction" placeholder="Give your company an instruction…" autocomplete="off" />
+              <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
+            </form>
+            <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Free text starts the goal creation flow.</div>
+          </section>
         </div>
       </section>
 

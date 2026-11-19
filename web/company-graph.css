@@ -14,7 +14,7 @@
 .graph-edge.is-muted{opacity:.18}
 .graph-edge-label{font:9px ui-monospace,monospace;fill:#7f8e83;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round;pointer-events:none}
 .graph-node{cursor:pointer;outline:none;pointer-events:all}
-.graph-node *{pointer-events:none}
+.graph-node .node-core,.graph-node .node-halo{pointer-events:visiblePainted}
 .graph-node .node-halo{fill:none;stroke-width:1.4;opacity:.25;transition:r .18s,opacity .18s}
 .graph-node .node-core{stroke:#fff;stroke-width:2.5;transition:r .18s,stroke-width .18s}
 .graph-node text{font:10px Inter,system-ui,sans-serif;fill:#536359;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}

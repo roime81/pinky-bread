@@ -29,6 +29,7 @@ from .workforce import (
     execute_task,
     convene_meeting,
     record_kpi_measurement,
+    chat_with_agent,
 )
 
 from .company_graph import (
@@ -102,6 +103,7 @@ class AgentCreateRequest(WorkforceAction):
     system_prompt: str = Field(default="", max_length=8000)
     seniority_level: int = Field(default=3, ge=1, le=10)
     authority: Literal["SPECIALIST", "COORDINATOR"] = "SPECIALIST"
+    model_configuration: dict[str, Any] = Field(default_factory=dict)
     manager_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
@@ -115,9 +117,16 @@ class AgentUpdateRequest(WorkforceAction):
     system_prompt: str | None = Field(default=None, max_length=8000)
     seniority_level: int | None = Field(default=None, ge=1, le=10)
     authority: Literal["SPECIALIST", "COORDINATOR"] | None = None
+    model_configuration: dict[str, Any] | None = None
     manager_id: str | None = Field(default=None, min_length=36, max_length=36)
     status: Literal["ACTIVE", "PAUSED"] | None = None
 
+
+
+class CompanyChatRequest(WorkforceAction):
+    agent_id: str | None = None
+    message: str = Field(min_length=1, max_length=12000)
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
 
 class WorkExecutionRequest(WorkforceAction):
     retry: bool = False
@@ -498,6 +507,52 @@ def download_company_artifact(
 
 
 
+
+@router.post("/companies/{company_id}/chat")
+async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agents = [
+        node for node in graph["nodes"]
+        if node["type"] == "agent" and node.get("status") not in {"ARCHIVED", "DISABLED", "PAUSED"}
+    ]
+    if not agents:
+        raise HTTPException(409, "Create an AI employee before starting a company conversation")
+    agent = next((item for item in agents if item["id"] == request.agent_id), None) if request.agent_id else None
+    if request.agent_id and agent is None:
+        raise HTTPException(404, "Selected AI employee is not active in this company")
+    if agent is None:
+        agent = next((item for item in agents if str((item.get("data") or {}).get("authority", "")).upper() == "COORDINATOR"), agents[0])
+    history = []
+    for item in request.history[-12:]:
+        role = item.get("role")
+        content = item.get("content", "")
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            history.append({"role": role, "content": content[:4000]})
+    try:
+        reply = await chat_with_agent(
+            agent=agent,
+            company=next(node for node in graph["nodes"] if node["type"] == "company"),
+            agents=agents,
+            message=request.message,
+            history=history,
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {
+        "reply": reply,
+        "mode": "LIVE_MODEL",
+        "agent": {
+            "id": agent["id"],
+            "name": agent["name"],
+            "role": (agent.get("data") or {}).get("role", "AI employee"),
+            "model": (agent.get("data") or {}).get("model_configuration", {}).get("model_name"),
+        },
+    }
+
 @router.get("/companies/{company_id}/agents")
 def list_company_agents_endpoint(
     company_id: str,
@@ -522,6 +577,7 @@ def create_company_agent_endpoint(company_id: str, request: AgentCreateRequest) 
         "authority": request.authority,
         "runtime_status": "READY",
         "created_via": "company_agent_management",
+        "model_configuration": request.model_configuration,
     }
     try:
         node = create_agent_node(
@@ -546,7 +602,7 @@ def update_company_agent_endpoint(
 ) -> dict[str, Any]:
     fields = request.model_fields_set
     patch: dict[str, Any] = {}
-    for key in ("role", "title", "skills", "responsibilities", "system_prompt", "seniority_level", "authority"):
+    for key in ("role", "title", "skills", "responsibilities", "system_prompt", "seniority_level", "authority", "model_configuration"):
         if key in fields:
             value = getattr(request, key)
             patch[key] = [item.strip() for item in value if item.strip()] if key in {"skills", "responsibilities"} and value is not None else (value.strip() if key in {"role", "title", "system_prompt"} and value is not None else value)

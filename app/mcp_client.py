@@ -93,7 +93,12 @@ async def complete_with_mcp(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    endpoint = f"{(api_url or settings.reasoning_api_url).rstrip('/')}/chat/completions"
+    base_endpoint = (api_url or settings.reasoning_api_url).strip().rstrip("/")
+    if base_endpoint.endswith("/chat/completions"):
+        base_endpoint = base_endpoint[: -len("/chat/completions")]
+    if not base_endpoint.endswith("/v1"):
+        base_endpoint = f"{base_endpoint}/v1"
+    endpoint = f"{base_endpoint}/chat/completions"
     model_tools: list[dict[str, Any]] = []
     async with httpx.AsyncClient(
         headers=headers,

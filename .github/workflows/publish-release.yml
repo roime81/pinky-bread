@@ -1,0 +1,38 @@
+name: Publish Alpha 4 release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/releases/v2.0.0-alpha.4.md
+      - .github/workflows/publish-release.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'roime81/pinky-bread'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Create GitHub prerelease and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v2.0.0-alpha.4
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; leaving it unchanged."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Pinky Bread 2.0.0 Alpha 4" \
+              --notes-file docs/releases/v2.0.0-alpha.4.md \
+              --prerelease
+          fi

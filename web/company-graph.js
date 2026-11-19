@@ -953,7 +953,6 @@
     startJobsPolling();
   });
   $("#company-command-form")?.addEventListener("submit", handleCommand);
-  $("#company-command-send")?.addEventListener("click", handleCommand);
   $("#company-command-input")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") handleCommand();
   });

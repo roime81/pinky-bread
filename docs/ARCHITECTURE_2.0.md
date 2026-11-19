@@ -188,7 +188,7 @@ The current feature branch implements:
 - LangGraph StateGraph job execution with PostgreSQL `AsyncPostgresSaver` checkpoints keyed by durable job ID.
 - PostgreSQL job leases, worker heartbeats, fencing, bounded retries/backoff, expired-lease recovery and cooperative cancellation.
 - Founder-controlled recurring company coordination in PLAN_ONLY or explicitly enabled AUTO_EXECUTE mode.
-- Local OpenAI-compatible model API through Ollama or vLLM-compatible runtimes; MOCK_INFERENCE remains the GPU-free default.
+- Local OpenAI-compatible model API through Ollama or vLLM-compatible runtimes; Ollama-backed live inference is the default in Docker Compose; set `MOCK_INFERENCE=true` for deliberate simulation.
 - Official MCP Python SDK v2 Streamable HTTP client/server, role tool allow-lists, trusted identity injection and scoped internal bearer credentials.
 - Replay-safe assignment deliverables and meeting minutes in the existing local/S3 object-storage adapter.
 - Turn-based multi-agent meetings and KPI measurement history.

@@ -11,7 +11,7 @@ The design goal is self-hosted operation without mandatory proprietary SaaS depe
 | Vector extension | pgvector | Semantic memory and document retrieval | Extension enabled; vector pipeline pending |
 | Live events | Valkey 9.1.3 | Pub/Sub notifications for the living graph | Implemented |
 | Object storage | SeaweedFS 4.53 S3 API | Company documents, generated deliverables, meeting minutes and workflow artifacts | Compose and adapter implemented |
-| Local LLM | Ollama 0.40.16 (optional Compose profile), vLLM or another OpenAI-compatible local server | Head-of-Agents planning, specialist execution and meeting turns | Alpha 3 supports local `/v1/chat/completions`; no model weights bundled |
+| Local LLM | Ollama 0.40.16 (default Compose service), vLLM or another OpenAI-compatible local server | Head-of-Agents planning, specialist execution and meeting turns | Alpha 3 supports local `/v1/chat/completions`; no model weights bundled |
 | Workforce planning and execution | FastAPI + company graph + local OpenAI-compatible inference | Head-of-Agents planning, specialist execution and stored deliverables | Implemented in Alpha 2 |
 | Durable job queue | PostgreSQL jobs, idempotency index, leases and retry policy | Worker claims, heartbeat, fencing, cancellation and crash recovery | Implemented in Alpha 3 |
 | Durable workflow orchestration | LangGraph StateGraph + AsyncPostgresSaver | Per-job checkpoint thread and restart replay | Implemented in Alpha 3 |
@@ -43,7 +43,7 @@ References:
 
 ## Local deployment profile
 
-The Compose profile pins Valkey 9.1.3 and SeaweedFS 4.53 based on upstream stable releases available on 18 November 2026. The default Compose profile uses:
+The Compose stack pins Valkey 9.1.3 and SeaweedFS 4.53. The default Compose deployment uses:
 
 - FastAPI application container
 - Horizontally scalable workforce worker container(s)
@@ -53,7 +53,7 @@ The Compose profile pins Valkey 9.1.3 and SeaweedFS 4.53 based on upstream stabl
 - SeaweedFS with S3 gateway enabled
 - Persistent Docker volumes for database, cache and objects
 
-The optional `local-llm` profile adds the Ollama 0.40.16 service and a persistent model volume. Set `REASONING_API_URL=http://ollama:11434/v1`, `MOCK_INFERENCE=false` and `REASONING_MODEL` to a model name, then pull the selected model separately. The image does not include model weights. Worker replicas use PostgreSQL row locks and leases; Valkey is only an acceleration layer.
+The default Compose stack starts Ollama 0.40.16 with a persistent model volume. `ollama-init` pulls `REASONING_MODEL` (default `qwen2.5:3b`) before API and worker services start. Containers call `http://ollama:11434/v1`; host processes call `http://127.0.0.1:11434/v1`. Model weights are not bundled in the image. Worker replicas use PostgreSQL row locks and leases; Valkey is only an acceleration layer.
 
 The Compose network is internal to the Docker deployment. It is not a complete air-gap or security boundary by itself. Host firewalling, ingress, secret management, TLS and image supply-chain controls remain deployment responsibilities.
 
@@ -68,6 +68,6 @@ Workflow state persists artifact ID, object key, storage URI, content type, file
 
 ## Open-source-only operating mode
 
-The target self-hosted mode uses Ollama or a vLLM-compatible local endpoint and open-source runtime components. A model is not bundled or downloaded automatically. The default Compose file retains mock inference so the application can start without GPU capacity; enable the optional Ollama profile or configure an internal reasoning endpoint to run actual inference. Open-weight model licences differ; review the selected model's terms before redistribution or business use.
+The default Compose mode uses a private Ollama service and live inference (`MOCK_INFERENCE=false`). The configured model is pulled automatically on first startup and persisted in the `ollama_data` volume. Mock inference remains available only when deliberately enabled with `MOCK_INFERENCE=true`. Open-weight model licences differ; review the selected model's terms before redistribution or business use.
 
 Optional commercial model APIs may be introduced as adapters, but the core company graph, persistence, files, event delivery, orchestration and tools must continue to function without them.

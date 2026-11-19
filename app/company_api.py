@@ -157,7 +157,7 @@ class TargetJobRequest(WorkforceAction):
 @router.get("/capabilities")
 def company_graph_capabilities() -> dict[str, Any]:
     return {
-        "version": "2.0.0-alpha.3",
+        "version": "2.0.0-alpha.4",
         "node_types": sorted(NODE_TYPES | {"company"}),
         "relationships": sorted(RELATIONSHIPS),
         "persistence": "PostgreSQL/SQLAlchemy graph records and event history",

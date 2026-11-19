@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "Pinky Bread"
     app_env: str = "development"
     dev_mode: bool = True
-    mock_inference: bool = True
+    mock_inference: bool = False
     database_url: str = "sqlite:///./data/pinky_bread.db"
     auto_create_schema: bool = True
     redis_url: str = "redis://localhost:6379/0"

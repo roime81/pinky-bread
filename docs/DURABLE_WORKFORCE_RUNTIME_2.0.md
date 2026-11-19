@@ -20,7 +20,7 @@ The system is designed to remain usable if Valkey is unavailable. A missed notif
 | Worker | Claims a job, runs its LangGraph thread, renews its lease, stores result/failure | Can be scaled horizontally |
 | MCP service | Exposes company/workforce tools over Streamable HTTP | Internal service; bearer scopes checked per tool |
 | SeaweedFS S3 API | Documents, assignment outputs, meeting minutes | Bytes live in object storage; PostgreSQL owns metadata |
-| Ollama (optional profile) | Self-hosted open-weight model runtime with OpenAI-compatible API | Model weights are stored in its own persistent volume |
+| Ollama (default Compose service) | Self-hosted open-weight model runtime with OpenAI-compatible API | Model weights are stored in its own persistent volume |
 
 ### PostgreSQL job state
 
@@ -80,42 +80,38 @@ Founder-triggered goal/work/meeting actions also enqueue durable jobs. They no l
 Pinky Bread calls a local OpenAI-compatible `/v1/chat/completions` endpoint. The same adapter is used for Head-of-Agents planning, specialist assignments and meeting discussion. Commercial APIs are not required.
 
 Supported self-hosted options:
-- **Ollama** — optional Compose profile, pinned to stable `0.40.16` for this Alpha 3 branch. It exposes `http://ollama:11434/v1` to containers on the private application network.
+- **Ollama** — default Compose service, pinned to `0.40.16`. It exposes `http://ollama:11434/v1` to containers on the private application network and `http://127.0.0.1:11434` to the host.
 - **vLLM** — point `REASONING_API_URL` at a reachable OpenAI-compatible vLLM endpoint.
 - **Other compatible runtimes** — any self-hosted server that honours the chat-completions contract and supports tool calls when MCP is enabled.
 
-To use Ollama from Compose:
-
-```bash
-docker compose --profile local-llm up -d
-docker compose exec ollama ollama pull <model-name>
-```
+Compose starts Ollama automatically. Set `REASONING_MODEL` in `.env` to select a model; the one-shot `ollama-init` service pulls it into the persistent volume before API and worker startup. Start with `docker compose up --build -d`.
 
 Set these in `.env` before starting the stack:
 
 ```dotenv
 MOCK_INFERENCE=false
 MODEL_PROVIDER=ollama
-REASONING_API_URL=http://ollama:11434/v1
+REASONING_API_URL=http://127.0.0.1:11434/v1
+REASONING_CONTAINER_API_URL=http://ollama:11434/v1
 REASONING_MODEL=<model-name>
 MCP_ENABLED=true
 MCP_API_TOKEN=<long-random-secret>
 ```
 
-Then start/recreate the API and workers:
+Then start the complete stack; the API and worker wait for the migration and model-bootstrap services:
 
 ```bash
-docker compose up -d --force-recreate api worker
+docker compose up --build -d
 ```
 
-The Compose example uses a separate egress network for the optional Ollama service so it can pull model files. The default application network remains marked internal. In an air-gapped installation, preload the model volume from an approved offline source and remove Ollama's egress network. Model licences, redistribution terms, memory requirements and hardware support vary; Pinky Bread does not bundle model weights or automatically choose a model.
+The Compose example attaches Ollama to a separate model-download network so the first-start bootstrap can pull model files while the application network remains internal. In an air-gapped installation, preload the model volume from an approved offline source and remove Ollama's egress network. Model licences, redistribution terms, memory requirements and hardware support vary; model weights are not bundled in the container image.
 
-The default `MOCK_INFERENCE=true` is intentionally safe for GPU-free development. It exercises the job lifecycle but does not produce genuine model reasoning.
+The default full-stack Compose configuration uses `MOCK_INFERENCE=false` and live Ollama inference. Set `MOCK_INFERENCE=true` only when intentionally running a GPU-free simulation; no genuine model reasoning is performed in mock mode.
 
 ## MCP integration
 
-Alpha 3 uses the official MCP Python SDK v2.x and Streamable HTTP:
-- Dedicated `mcp` service runs `app.mcp_server` and is exposed only inside the Compose network (port 8090 is not published to the host by default).
+The runtime uses the official MCP Python SDK v2.x and Streamable HTTP:
+- Dedicated `mcp` service runs `app.mcp_server` on container port 8090 and is published as host port 8060 for private local integration.
 - The local model adapter connects with the MCP v2 `Client` and `streamable_http_client`, passing auth through its `httpx2.AsyncClient`.
 - MCP tool definitions are exposed to the model only through an agent-role allow-list.
 - The caller's company ID, tenant ID and agent identity are injected by the runtime; the model cannot override those trusted fields in tool arguments.
@@ -129,7 +125,7 @@ The current internal MCP verifier uses two static development bearer tokens:
 - `MCP_API_TOKEN`: `company:read` plus `workforce:enqueue`; used only by the Head of Agents.
 - `MCP_READ_TOKEN`: `company:read` only; used by specialist agents.
 
-This is a scoped internal-development verifier, **not a production OAuth 2.1 identity provider or Keycloak integration**. The configured issuer URL is only the resource-server metadata value for this static verifier; it does not issue or validate Keycloak-signed JWTs. Keep the service on the private network, replace both default tokens with long random secrets, and do not publish port 8090 directly. Keycloak/OIDC JWT/JWKS or introspection validation, company membership claims, short-lived tokens, per-agent grants and audited tool receipts remain required before shared or internet-facing operation.
+This is a scoped internal-development verifier, **not a production OAuth 2.1 identity provider or Keycloak integration**. The configured issuer URL is only the resource-server metadata value for this static verifier; it does not issue or validate Keycloak-signed JWTs. Keep the service on the private network, replace both default tokens with long random secrets, and keep host port 8060 private and do not expose it to untrusted networks. Keycloak/OIDC JWT/JWKS or introspection validation, company membership claims, short-lived tokens, per-agent grants and audited tool receipts remain required before shared or internet-facing operation.
 
 ## API additions
 
@@ -157,7 +153,7 @@ The Compose profile contains:
 - `postgres`: pgvector PostgreSQL 16 and job/checkpoint database
 - `valkey`: AOF-enabled notification broker
 - `seaweedfs`: S3-compatible object storage
-- `ollama`: optional `local-llm` profile
+- `ollama`: default local inference service
 
 To scale workers:
 
@@ -174,7 +170,7 @@ PostgreSQL row locks, the active-job unique index and lease fencing coordinate w
 - The worker retries jobs and recovers expired leases. A model request is not forcibly interrupted; cancellation is checked at safe boundaries.
 - LangGraph checkpoints and the queue are PostgreSQL-backed, but an Alembic migration programme, backup/restore drills and disaster-recovery automation are not complete.
 - Job and task idempotency is implemented for current goal/task/meeting outputs. External MCP side effects are not enabled.
-- The optional Ollama service is a model host, not a preloaded model. The model must be pulled or installed separately.
+- The Ollama service is a model host. The `ollama-init` bootstrap pulls the configured model automatically on first startup; model weights are persisted separately from the container image.
 - pgvector remains enabled but the semantic embedding/retrieval pipeline is not yet implemented.
 - Event hash links are tamper-evident, not WORM or independently immutable.
 - Metrics, distributed tracing, alerting, budgets, rate limits, model/prompt version rollback and production policy enforcement remain future work.

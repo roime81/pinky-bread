@@ -249,7 +249,7 @@ def _chat_agent_matches(agent: dict[str, Any], message: str) -> bool:
         value = str(label or "").strip()
         if len(value) < 2:
             continue
-        if re.search(rf"(?<![\\w])@?{re.escape(value)}(?![\\w])", message, re.IGNORECASE):
+        if re.search(rf"(?<![\w])@?{re.escape(value)}(?![\w])", message, re.IGNORECASE):
             return True
     return False
 
@@ -272,7 +272,7 @@ def _chat_relevance_score(agent: dict[str, Any], message: str) -> int:
         return 0
     score = 0
     for word in words:
-        if re.search(rf"\\b{re.escape(word)}\\b", profile):
+        if re.search(rf"\b{re.escape(word)}\b", profile):
             score += 2
     # A specialist's configured responsibility/skill match is stronger than a generic prompt match.
     specialist_text = " ".join(map(str, data.get("skills") or [])) + " " + " ".join(map(str, data.get("responsibilities") or []))

@@ -7,23 +7,63 @@ function toast(message){const el=$('#toast');if(!el)return;el.textContent=messag
 function statusClass(status){return ({COMPLETED:'completed',PENDING_APPROVAL:'pending',REJECTED:'rejected',FAILED:'failed',RUNNING:'running'})[status]||'running'}
 function shortId(id){return (id||'').slice(0,8)}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function go(view){
- const labels={overview:'Overview',workflows:'Workflows',agents:'Workflow templates','company-agents':'AI Workforce',audit:'Audit Trails','company-graph':'Company Graph'};
+function go(view, section = null){
+ const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce',audit:'Audit Trails','company-graph':'Company graph'};
+ const sectionLabels={'workforce-runtime-panel':'Durable Workforce','agent-management-panel':'Your Virtual Team','graph-activity-panel':'Company Event Log','graph-brief-panel':'Founder View'};
+ const previousView=$('.view.active')?.id?.replace(/^view-/,'')||null;
  const target=document.getElementById(`view-${view}`);
  if(!target){toast(`The ${labels[view]||view} view is not available in this build.`);return;}
- $$('.view').forEach(section=>section.classList.toggle('active',section===target));
- $$('.nav-item').forEach(button=>{const active=button.dataset.view===view;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
- const breadcrumb=$('#breadcrumb-current');if(breadcrumb)breadcrumb.textContent=labels[view]||'Workspace';
+ $$('.view').forEach(item=>item.classList.toggle('active',item===target));
+ $$('.nav-item').forEach(button=>{
+   const active=section ? button.dataset.section===section : (!button.dataset.section && button.dataset.view===view);
+   button.classList.toggle('active',active);
+   if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ });
+ const breadcrumb=$('#breadcrumb-current');if(breadcrumb)breadcrumb.textContent=sectionLabels[section]||labels[view]||'Workspace';
  const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'company-graph':window.loadCompanyGraph};
- const load=loaders[view];if(typeof load==='function'){try{Promise.resolve(load()).catch(error=>toast(`Could not load ${labels[view]||view}: ${error.message}`));}catch(error){toast(`Could not load ${labels[view]||view}: ${error.message}`);}}
+ const load=loaders[view];
+ let loadPromise=null;
+ const sectionTarget=section?document.getElementById(section):null;
+ const sectionNeedsLoad=Boolean(section&&sectionTarget?.closest('[hidden]'));
+ if(typeof load==='function'&&(previousView!==view||sectionNeedsLoad)){
+   try{loadPromise=Promise.resolve(load());loadPromise.catch(error=>toast(`Could not load ${labels[view]||view}: ${error.message}`));}
+   catch(error){toast(`Could not load ${labels[view]||view}: ${error.message}`);}
+ }
+ if(section){
+   const scrollToSection=()=>{
+     const anchor=document.getElementById(section);
+     if(!anchor){toast(`${sectionLabels[section]||'This section'} is not available in this build.`);return;}
+     if(anchor.closest('[hidden]')){toast('Create or select a company first to open this company section.');return;}
+     anchor.scrollIntoView({behavior:'smooth',block:'start'});
+   };
+   if(loadPromise)loadPromise.then(()=>window.requestAnimationFrame(scrollToSection));
+   else window.requestAnimationFrame(scrollToSection);
+ }
 }
 window.pinkyBreadNavigate=go;
 document.addEventListener('click',event=>{
  const element=event.target instanceof Element?event.target:null;
  const button=element?.closest('.nav-item[data-view], [data-goto]');
- if(!button)return;const view=button.dataset.view||button.dataset.goto;if(!view)return;
- event.preventDefault();go(view);
+ if(!button)return;
+ const view=button.dataset.view||button.dataset.goto;
+ if(!view)return;
+ event.preventDefault();
+ go(view,button.dataset.section||null);
 },true);
+const sidebarToggle=$('#sidebar-toggle');
+const appShell=$('.app-shell');
+function setSidebarHidden(hidden,persist=true){
+ if(!appShell||!sidebarToggle)return;
+ appShell.classList.toggle('sidebar-hidden',hidden);
+ sidebarToggle.setAttribute('aria-expanded',String(!hidden));
+ sidebarToggle.setAttribute('aria-label',hidden?'Show sidebar':'Hide sidebar');
+ sidebarToggle.title=hidden?'Show sidebar':'Hide sidebar';
+ if(persist){try{localStorage.setItem('pinky-sidebar-hidden',hidden?'true':'false');}catch{}}
+}
+let initiallyHidden=false;
+try{initiallyHidden=localStorage.getItem('pinky-sidebar-hidden')==='true';}catch{}
+setSidebarHidden(initiallyHidden,false);
+sidebarToggle?.addEventListener('click',()=>setSidebarHidden(!appShell?.classList.contains('sidebar-hidden')));
 $('#new-workflow-btn')?.addEventListener('click',()=>{go('overview');$('#prompt')?.focus();window.scrollTo({top:0,behavior:'smooth'})});
 $('#browse-btn')?.addEventListener('click',()=>$('#artifact-file')?.click());
 $('#artifact-file')?.addEventListener('change',e=>{for(const f of e.target.files){if(!['image/png','image/jpeg','application/pdf'].includes(f.type)){toast(`Unsupported file: ${f.name}`);continue}if(f.size>12*1024*1024){toast(`${f.name} exceeds 12 MB`);continue}selectedFiles.push(f)}renderSelectedFiles();e.target.value=''});

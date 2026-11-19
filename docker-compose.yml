@@ -33,7 +33,7 @@ services:
       S3_SECRET_KEY: pinky_bread_dev_secret_change_me
       AGENT_CONFIG_DIR: /opt/pinky-bread/config/agents
       UPLOAD_DIR: /opt/pinky-bread/data/uploads
-      REASONING_API_URL: "${REASONING_API_URL:-http://ollama:11434/v1}"
+      REASONING_API_URL: "${REASONING_CONTAINER_API_URL:-http://ollama:11434/v1}"
       REASONING_MODEL: "${REASONING_MODEL:-qwen2.5:3b}"
       VLLM_API_KEY: "${VLLM_API_KEY:-local-dev-key}"
       WORKER_POLL_SECONDS: "1.5"
@@ -86,7 +86,7 @@ services:
       S3_SECRET_KEY: pinky_bread_dev_secret_change_me
       AGENT_CONFIG_DIR: /opt/pinky-bread/config/agents
       UPLOAD_DIR: /opt/pinky-bread/data/uploads
-      REASONING_API_URL: "${REASONING_API_URL:-http://ollama:11434/v1}"
+      REASONING_API_URL: "${REASONING_CONTAINER_API_URL:-http://ollama:11434/v1}"
       REASONING_MODEL: "${REASONING_MODEL:-qwen2.5:3b}"
       VLLM_API_KEY: "${VLLM_API_KEY:-local-dev-key}"
       WORKER_POLL_SECONDS: "1.5"
@@ -175,7 +175,7 @@ services:
     environment:
       MOCK_INFERENCE: "${MOCK_INFERENCE:-false}"
       MODEL_PROVIDER: "${MODEL_PROVIDER:-ollama}"
-      REASONING_API_URL: "${REASONING_API_URL:-http://ollama:11434/v1}"
+      REASONING_API_URL: "${REASONING_CONTAINER_API_URL:-http://ollama:11434/v1}"
       REASONING_MODEL: "${REASONING_MODEL:-qwen2.5:3b}"
       VLLM_API_KEY: ollama
     depends_on:

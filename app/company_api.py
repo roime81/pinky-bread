@@ -30,7 +30,6 @@ from .workforce import (
     execute_task,
     convene_meeting,
     record_kpi_measurement,
-    chat_with_agent,
     chat_with_workforce,
 )
 

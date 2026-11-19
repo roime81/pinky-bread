@@ -41,17 +41,22 @@ def _agent(client: TestClient, company_id: str, tenant: str) -> dict:
     return response.json()
 
 
-def test_company_chat_uses_selected_company_agent_and_history(monkeypatch):
+def test_company_chat_routes_to_workforce_and_shares_history(monkeypatch):
     init_db()
     settings = get_settings()
     monkeypatch.setattr(settings, "mock_inference", False)
     captured = {}
 
-    async def fake_chat_with_agent(**kwargs):
+    async def fake_chat_with_workforce(**kwargs):
         captured.update(kwargs)
-        return "Here is the product strategy."
+        return [{
+            "agent_id": kwargs["agents"][0]["id"],
+            "name": "Mira",
+            "role": "Product strategy",
+            "reply": "Here is the product strategy.",
+        }]
 
-    monkeypatch.setattr("app.company_api.chat_with_agent", fake_chat_with_agent)
+    monkeypatch.setattr("app.company_api.chat_with_workforce", fake_chat_with_workforce)
     with TestClient(app) as client:
         tenant = "company-chat-live-test"
         company = _company(client, tenant)
@@ -59,16 +64,16 @@ def test_company_chat_uses_selected_company_agent_and_history(monkeypatch):
         response = client.post(f"/v2/companies/{company['id']}/chat", json={
             "tenant_id": tenant,
             "actor_id": "founder",
-            "agent_id": agent["id"],
             "message": "Help me prioritise our first release.",
             "history": [{"role": "user", "content": "We are a small startup."}],
         })
         assert response.status_code == 200, response.text
         payload = response.json()
-        assert payload["reply"] == "Here is the product strategy."
+        assert payload["responses"][0]["reply"] == "Here is the product strategy."
+        assert "Mira" in payload["reply"]
         assert payload["mode"] == "LIVE_MODEL"
         assert payload["agent"]["name"] == "Mira"
-        assert captured["agent"]["id"] == agent["id"]
+        assert captured["agents"][0]["id"] == agent["id"]
         assert captured["history"][0]["content"] == "We are a small startup."
 
 

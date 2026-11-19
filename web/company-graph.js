@@ -54,6 +54,7 @@
       try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
       $("#graph-company-picker").value = state.company.id;
       await loadGraph(true);
+      restoreChatHistory();
     } catch (error) {
       setWorkspaceVisible(false);
       showError(`Company graph API unavailable: ${error.message}`);
@@ -901,6 +902,30 @@
     toast(`${name} created under ${manager?.name || "Founder"}`);
   }
 
+  function restoreChatHistory() {
+    const log = $("#company-conversation");
+    if (!log) return;
+    if (!state.chatHistory.length) return;
+    log.innerHTML = "";
+    state.chatHistory.forEach((item) => {
+      const entry = document.createElement("div");
+      entry.className = `conversation-entry ${item.role === "user" ? "founder" : "assistant"}`;
+      const avatar = document.createElement("span");
+      avatar.className = "conversation-avatar";
+      avatar.textContent = item.role === "user" ? "YOU" : "AI";
+      const copy = document.createElement("div");
+      copy.className = "conversation-copy";
+      const heading = document.createElement("strong");
+      heading.textContent = item.role === "user" ? "Founder" : "AI employee";
+      const body = document.createElement("p");
+      body.textContent = item.content;
+      copy.append(heading, body);
+      entry.append(avatar, copy);
+      log.append(entry);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
   function appendConversationEntry(kind, title, message) {
     const log = $("#company-conversation");
     if (!log) return;
@@ -1066,6 +1091,7 @@
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
     await loadGraph(true);
+    restoreChatHistory();
     startJobsPolling();
   });
   $("#company-command-form")?.addEventListener("submit", handleCommand);

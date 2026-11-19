@@ -1,37 +1,37 @@
 name: Publish Alpha 4 release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - docs/releases/v2.0.0-alpha.4.md
-      - .github/workflows/publish-release.yml
+  workflow_run:
+    workflows:
+      - Tests
+    types:
+      - completed
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    if: github.repository == 'roime81/pinky-bread'
+    if: github.repository == 'roime81/pinky-bread' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out release commit
+      - name: Check out tested main commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Create GitHub prerelease and tag
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v2.0.0-alpha.4
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG already exists; leaving it unchanged."
           else
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
+              --target "$RELEASE_COMMIT" \
               --title "Pinky Bread 2.0.0 Alpha 4" \
               --notes-file docs/releases/v2.0.0-alpha.4.md \
               --prerelease

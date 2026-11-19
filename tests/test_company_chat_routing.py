@@ -40,9 +40,11 @@ def test_explicitly_called_agents_all_get_a_turn(monkeypatch):
         _agent("lee", "Lee", "Engineer", ["software"]),
     ]
     called = []
+    observed_histories = []
 
     async def fake_chat_with_agent(**kwargs):
         called.append(kwargs["agent"]["id"])
+        observed_histories.append(list(kwargs["history"]))
         return f"Reply from {kwargs['agent']['name']}"
 
     monkeypatch.setattr(workforce, "chat_with_agent", fake_chat_with_agent)
@@ -57,3 +59,4 @@ def test_explicitly_called_agents_all_get_a_turn(monkeypatch):
     assert called == ["maya", "amir"]
     assert [item["agent_id"] for item in result] == called
     assert len(result) == 2
+    assert observed_histories[1][-1]["content"] == "Maya Chen (Marketing Lead): Reply from Maya Chen"

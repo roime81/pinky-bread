@@ -119,7 +119,7 @@
           <section class="founder-console" aria-label="Founder command center">
             <header class="founder-console-head">
               <div><div class="eyebrow">FOUNDER / COMMAND CENTER</div><strong>Company conversation</strong><p>Issue structured instructions and review the actions Pinky Bread starts.</p></div>
-              <span class="console-mode"><i></i> WORKSPACE READY</span>
+              <span class="console-mode" id="ai-runtime-status" role="status" aria-live="polite"><i></i> CHECKING MODEL</span>
             </header>
             <div id="company-conversation" class="company-conversation" role="log" aria-live="polite">
               <div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Start with a goal or create an AI employee. Actions and confirmations will appear here.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>
@@ -221,8 +221,8 @@
         <label>Position title<input id="agent-editor-title" required maxlength="160" placeholder="e.g. Senior Customer Researcher" /></label>
         <label>Seniority level <span class="agent-field-hint">1 = entry · 10 = highest</span><input id="agent-editor-level" type="number" min="1" max="10" value="3" required /></label>
         <label>LLM provider<select id="agent-editor-provider"><option value="ollama">Ollama</option><option value="vllm">vLLM</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
-        <label>Model identifier<input id="agent-editor-model" required maxlength="160" value="llama3.1:8b" placeholder="e.g. llama3.1:8b" /></label>
-        <label class="agent-editor-wide">Model API endpoint <span class="agent-field-hint">Optional · defaults to workspace endpoint</span><input id="agent-editor-endpoint" maxlength="500" placeholder="http://ollama:11434/v1" /></label>
+        <label>Model identifier<input id="agent-editor-model" required maxlength="160" value="qwen2.5:3b" placeholder="e.g. qwen2.5:3b" /></label>
+        <label class="agent-editor-wide">Model API endpoint <span class="agent-field-hint">Optional · defaults to workspace endpoint</span><input id="agent-editor-endpoint" maxlength="500" placeholder="Workspace default (http://ollama:11434/v1)" /></label>
         <label>Authority<select id="agent-editor-authority"><option value="SPECIALIST">Specialist · assigned work</option><option value="COORDINATOR">Coordinator · plans and delegates</option></select></label>
         <label>Reports to<select id="agent-editor-manager"><option value="">No manager / direct to company</option></select></label>
         <label class="agent-editor-wide">Scope and description<textarea id="agent-editor-description" rows="2" maxlength="4000" placeholder="What is this agent accountable for?"></textarea></label>

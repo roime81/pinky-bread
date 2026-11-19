@@ -256,10 +256,10 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 
 ### Open the application
 
-- Web console: <http://127.0.0.1:8080>
-- Interactive API docs: <http://127.0.0.1:8080/docs>
-- OpenAPI JSON: <http://127.0.0.1:8080/openapi.json>
-- Health endpoint: <http://127.0.0.1:8080/api/healthz>
+- Web console: <http://127.0.0.1:8888>
+- Interactive API docs: <http://127.0.0.1:8888/docs>
+- OpenAPI JSON: <http://127.0.0.1:8888/openapi.json>
+- Health endpoint: <http://127.0.0.1:8888/api/healthz>
 
 The default local Python configuration uses SQLite, local filesystem object storage and mock inference. Durable workers and LangGraph PostgreSQL checkpoints require PostgreSQL. Docker Compose runs PostgreSQL/pgvector, Valkey, SeaweedFS, API, worker and internal MCP; Ollama is an optional profile. A GPU is not required for mock mode.
 
@@ -271,7 +271,7 @@ Start the full local container stack:
 docker compose up --build
 ```
 
-Open <http://localhost:8080>.
+Open <http://127.0.0.1:8888>.
 
 Useful commands:
 
@@ -369,7 +369,7 @@ model_configuration:
 
 ## Try the demo workflow
 
-1. Start the application and open <http://127.0.0.1:8080>.
+1. Start the application and open <http://127.0.0.1:8888>.
 2. In **Start a workflow**, enter:
 
    ```text
@@ -435,7 +435,7 @@ The service publishes an interactive OpenAPI document at `/docs` when running. T
 ### Invoke a workflow with curl
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/workflows/invoke \
+curl -X POST http://127.0.0.1:8888/v1/workflows/invoke \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Review a cancelled flight and prepare a refund proposal for RM450."}'
 ```
@@ -445,7 +445,7 @@ curl -X POST http://127.0.0.1:8080/v1/workflows/invoke \
 Replace `<THREAD_ID>` with the `thread_id` returned by the invoke endpoint:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/workflows/<THREAD_ID>/approve \
+curl -X POST http://127.0.0.1:8888/v1/workflows/<THREAD_ID>/approve \
   -H 'Content-Type: application/json' \
   -d '{"approver_id":"finance.manager","decision":"APPROVED","notes":"Reviewed for MVP simulation"}'
 ```

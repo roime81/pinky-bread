@@ -87,3 +87,55 @@ def test_company_chat_reports_mock_mode_instead_of_faking_an_ai_reply(monkeypatc
         })
         assert response.status_code == 503
         assert "MOCK_INFERENCE=true" in response.json()["detail"]
+
+
+def test_founder_chat_uses_agent_specific_model_endpoint(monkeypatch):
+    import asyncio
+
+    from app.workforce import chat_with_agent
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", False)
+    captured = {}
+
+    async def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return "Model-specific answer"
+
+    monkeypatch.setattr("app.workforce._chat_completion", fake_completion)
+    agent = {
+        "id": "agent-1",
+        "name": "Mira",
+        "description": "Product strategy",
+        "data": {
+            "role": "Product strategist",
+            "model_configuration": {
+                "provider": "ollama",
+                "model_name": "qwen2.5:7b",
+                "endpoint": "http://ollama:11434/v1",
+            },
+        },
+    }
+    company = {"name": "Test Co", "data": {"vision": "Build", "mission": "Serve"}}
+    result = asyncio.run(chat_with_agent(
+        agent=agent,
+        company=company,
+        agents=[agent],
+        message="What is our next move?",
+        history=[],
+        company_id="company-1",
+        tenant_id="tenant-1",
+    ))
+    assert result == "Model-specific answer"
+    assert captured["model_name"] == "qwen2.5:7b"
+    assert captured["api_url"] == "http://ollama:11434/v1"
+
+
+def test_mcp_client_exposes_safe_read_only_tools_to_specialists():
+    from app.mcp_client import ROLE_TOOL_ALLOWLIST
+
+    assert ROLE_TOOL_ALLOWLIST["specialist"] == {
+        "company_graph_snapshot",
+        "list_company_goals",
+        "list_goal_work",
+    }

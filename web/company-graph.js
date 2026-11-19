@@ -621,6 +621,7 @@
       setWorkspaceVisible(true);
       $("#graph-company-picker").value = company.id;
       await loadGraph(true);
+      restoreChatHistory();
       refreshAiRuntime();
       startJobsPolling();
       toast("Company created. Build the virtual team you want by adding your own agents.");
@@ -988,7 +989,10 @@
   function restoreChatHistory() {
     const log = $("#company-conversation");
     if (!log) return;
-    if (!state.chatHistory.length) return;
+    if (!state.chatHistory.length) {
+      log.innerHTML = '<div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Create or select a company, then start a conversation with your AI workforce.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>';
+      return;
+    }
     log.innerHTML = "";
     state.chatHistory.forEach((item) => {
       const entry = document.createElement("div");
@@ -1161,6 +1165,8 @@
   $("#company-create-form")?.addEventListener("submit", createCompany);
   $("#graph-create-company-shortcut")?.addEventListener("click", () => {
     state.company = null;
+    state.chatHistory = [];
+    restoreChatHistory();
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
     if (state.pollHandle) { window.clearInterval(state.pollHandle); state.pollHandle = null; }
     stopJobsPolling();

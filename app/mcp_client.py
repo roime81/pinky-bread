@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx2
+import httpx
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
@@ -25,6 +25,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, set[str]] = {
     "marketing": {"company_graph_snapshot", "list_company_goals", "list_goal_work"},
     "operations": {"company_graph_snapshot", "list_company_goals", "list_goal_work"},
     "finance": {"company_graph_snapshot", "list_company_goals", "list_goal_work"},
+    "specialist": {"company_graph_snapshot", "list_company_goals", "list_goal_work"},
 }
 
 
@@ -69,6 +70,9 @@ async def complete_with_mcp(
     tenant_id: str,
     agent_id: str,
     max_tokens: int = 2400,
+    model_name: str | None = None,
+    api_url: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     """Call a local OpenAI-compatible model and route only role-allow-listed tools over MCP."""
     settings = get_settings()
@@ -89,11 +93,11 @@ async def complete_with_mcp(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    endpoint = f"{settings.reasoning_api_url.rstrip('/')}/chat/completions"
+    endpoint = f"{(api_url or settings.reasoning_api_url).rstrip('/')}/chat/completions"
     model_tools: list[dict[str, Any]] = []
-    async with httpx2.AsyncClient(
+    async with httpx.AsyncClient(
         headers=headers,
-        timeout=httpx2.Timeout(30.0, read=300.0),
+        timeout=httpx.Timeout(30.0, read=300.0),
     ) as http_client:
         transport = streamable_http_client(
             url=settings.mcp_server_url,
@@ -120,7 +124,7 @@ async def complete_with_mcp(
             async with httpx.AsyncClient(timeout=180) as client:
                 for _ in range(max(1, min(settings.mcp_max_tool_rounds, 8))):
                     payload: dict[str, Any] = {
-                        "model": settings.reasoning_model,
+                        "model": model_name or settings.reasoning_model,
                         "messages": messages,
                         "temperature": 0.25,
                         "max_tokens": max_tokens,
@@ -130,7 +134,7 @@ async def complete_with_mcp(
                     response = await client.post(
                         endpoint,
                         json=payload,
-                        headers={"Authorization": f"Bearer {settings.vllm_api_key}"},
+                        headers={"Authorization": f"Bearer {api_key or settings.vllm_api_key}"},
                     )
                     response.raise_for_status()
                     body = response.json()

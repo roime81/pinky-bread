@@ -131,12 +131,15 @@ async def _chat_completion(
     user_prompt: str,
     temperature: float = 0.2,
     max_tokens: int = 1600,
+    model_name: str | None = None,
+    api_url: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     settings = get_settings()
     if settings.mock_inference:
         raise RuntimeError("Local model inference is disabled while MOCK_INFERENCE=true")
     payload = {
-        "model": settings.reasoning_model,
+        "model": model_name or settings.reasoning_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -146,9 +149,9 @@ async def _chat_completion(
     }
     async with httpx.AsyncClient(timeout=180) as client:
         response = await client.post(
-            f"{settings.reasoning_api_url.rstrip('/')}/chat/completions",
+            f"{(api_url or settings.reasoning_api_url).rstrip('/')}/chat/completions",
             json=payload,
-            headers={"Authorization": f"Bearer {settings.vllm_api_key}"},
+            headers={"Authorization": f"Bearer {api_key or settings.vllm_api_key}"},
         )
         response.raise_for_status()
         body = response.json()
@@ -161,6 +164,55 @@ async def _chat_completion(
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Local model returned an empty response")
     return content.strip()
+
+
+
+async def chat_with_agent(
+    *,
+    agent: dict[str, Any],
+    company: dict[str, Any],
+    agents: list[dict[str, Any]],
+    message: str,
+    history: list[dict[str, str]],
+    company_id: str,
+    tenant_id: str,
+) -> str:
+    settings = get_settings()
+    if settings.mock_inference:
+        raise RuntimeError("AI chat is disabled because MOCK_INFERENCE=true. Configure a model endpoint and set MOCK_INFERENCE=false.")
+    data = agent.get("data") or {}
+    model_config = data.get("model_configuration") or {}
+    model_name = str(model_config.get("model_name") or settings.reasoning_model)
+    endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)
+    if not endpoint.startswith(("http://", "https://")):
+        raise RuntimeError("The selected agent model endpoint must be an HTTP(S) URL.")
+    role = _agent_role(agent)
+    responsibilities = data.get("responsibilities") or []
+    skills = data.get("skills") or []
+    system = str(data.get("system_prompt") or (
+        f"You are {agent['name']}, an AI employee of {company['name']}. Your role is {role}. "
+        f"Responsibilities: {responsibilities}. Skills: {skills}. "
+        "Answer the founder directly, be candid about uncertainty, and distinguish facts from assumptions. "
+        "You may discuss plans and propose actions, but never claim you executed tools, changed records, "
+        "sent messages, spent money or completed work unless the platform confirms that action."
+    ))
+    system += (
+        f"\n\nCompany vision: {(company.get('data') or {}).get('vision', '')}"
+        f"\nCompany mission: {(company.get('data') or {}).get('mission', '')}"
+        f"\nOther active employees: {json.dumps([{'name': item['name'], 'role': _agent_role(item)} for item in agents if item['id'] != agent['id']], ensure_ascii=False)}"
+    )
+    messages = history[-12:] + [{"role": "user", "content": message}]
+    settings_model = model_config.get("model_name") or settings.reasoning_model
+    payload_history = "\n\n".join(f"{item['role'].upper()}: {item['content']}" for item in messages[:-1])
+    prompt = (f"Conversation so far:\n{payload_history}\n\n" if payload_history else "") + message
+    return await _chat_completion(
+        system_prompt=system,
+        user_prompt=prompt,
+        temperature=float(model_config.get("temperature", 0.25)),
+        max_tokens=int(model_config.get("max_tokens", 1800)),
+        model_name=str(settings_model),
+        api_url=endpoint,
+    )
 
 
 def _parse_plan(content: str, allowed_agent_ids: set[str]) -> list[dict[str, Any]]:
@@ -282,6 +334,8 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 tenant_id=tenant_id,
                 agent_id=coordinator["id"],
                 max_tokens=3000,
+                model_name=str((coordinator.get("data") or {}).get("model_configuration", {}).get("model_name") or settings.reasoning_model),
+                api_url=str((coordinator.get("data") or {}).get("model_configuration", {}).get("endpoint") or settings.reasoning_api_url),
             )
         else:
             plan_response = await _chat_completion(
@@ -386,8 +440,21 @@ async def _execute_prompt(
             tenant_id=tenant_id,
             agent_id=agent["id"],
             max_tokens=2400,
+            model_name=str((data.get("model_configuration") or {}).get("model_name") or settings.reasoning_model),
+            api_url=str((data.get("model_configuration") or {}).get("endpoint") or settings.reasoning_api_url),
         )
-    return await _chat_completion(system_prompt=system, user_prompt=prompt, temperature=0.25, max_tokens=2400)
+    model_config = data.get("model_configuration") or {}
+    endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)
+    if not endpoint.startswith(("http://", "https://")):
+        raise RuntimeError("The selected agent model endpoint must be an HTTP(S) URL.")
+    return await _chat_completion(
+        system_prompt=system,
+        user_prompt=prompt,
+        temperature=float(model_config.get("temperature", 0.25)),
+        max_tokens=int(model_config.get("max_tokens", 2400)),
+        model_name=str(model_config.get("model_name") or settings.reasoning_model),
+        api_url=endpoint,
+    )
 
 
 

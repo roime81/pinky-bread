@@ -101,3 +101,112 @@ def test_provider_status_never_returns_secret_values():
     serialized = repr(status)
     assert "sk-do-not-return" not in serialized
     assert "gemini-do-not-return" not in serialized
+
+
+def test_agent_chat_uses_its_openai_credentials_and_model(monkeypatch):
+    import asyncio
+
+    from app.settings import get_settings
+    from app.workforce import chat_with_agent
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", False)
+    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "openai_api_key", "sk-openai-agent-test")
+
+    captured = {}
+
+    async def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return "OpenAI agent response"
+
+    monkeypatch.setattr("app.workforce._chat_completion", fake_completion)
+    agent = {
+        "id": "openai-agent",
+        "name": "Mira",
+        "data": {
+            "role": "Research analyst",
+            "model_configuration": {"provider": "openai", "model_name": "gpt-4.1-mini"},
+        },
+    }
+    result = asyncio.run(chat_with_agent(
+        agent=agent,
+        company={"name": "Test Co", "data": {}},
+        agents=[agent],
+        message="Summarise the market.",
+        history=[],
+        company_id="company-openai",
+        tenant_id="tenant-openai",
+    ))
+    assert result == "OpenAI agent response"
+    assert captured["model_name"] == "gpt-4.1-mini"
+    assert captured["api_url"] == "https://api.openai.com/v1"
+    assert captured["api_key"] == "sk-openai-agent-test"
+
+
+def test_agent_chat_passes_gemini_credentials_through_mcp_tool_runtime(monkeypatch):
+    import asyncio
+
+    from app.settings import get_settings
+    from app.workforce import chat_with_agent
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", False)
+    monkeypatch.setattr(settings, "mcp_enabled", True)
+    monkeypatch.setattr(settings, "gemini_api_key", "gemini-agent-test")
+    captured = {}
+
+    async def fake_complete_with_mcp(**kwargs):
+        captured.update(kwargs)
+        return "Gemini agent response"
+
+    monkeypatch.setattr("app.mcp_client.complete_with_mcp", fake_complete_with_mcp)
+    agent = {
+        "id": "gemini-agent",
+        "name": "Nora",
+        "data": {
+            "role": "Company coordinator",
+            "authority": "COORDINATOR",
+            "model_configuration": {"provider": "gemini", "model_name": "gemini-4-hydrogen"},
+        },
+    }
+    result = asyncio.run(chat_with_agent(
+        agent=agent,
+        company={"name": "Test Co", "data": {}},
+        agents=[agent],
+        message="Plan this week's priorities.",
+        history=[],
+        company_id="company-gemini",
+        tenant_id="tenant-gemini",
+    ))
+    assert result == "Gemini agent response"
+    assert captured["model_name"] == "gemini-4-hydrogen"
+    assert captured["api_url"] == "https://generativelanguage.googleapis.com/v1beta/openai"
+    assert captured["api_key"] == "gemini-agent-test"
+
+
+def test_provider_status_does_not_expose_api_keys():
+    from app import company_api
+
+    settings = get_settings()
+    settings.openai_api_key = "sk-never-expose-this"
+    settings.gemini_api_key = "AIza-never-expose-this"
+    result = company_api.model_providers_endpoint()
+    assert result["providers"]["openai"]["configured"] is True
+    assert result["providers"]["gemini"]["configured"] is True
+    assert "sk-never-expose-this" not in repr(result)
+    assert "AIza-never-expose-this" not in repr(result)
+
+
+def test_agent_model_configuration_rejects_api_keys_in_agent_payload():
+    from fastapi import HTTPException
+    from app.company_api import _validated_model_configuration
+
+    with pytest.raises(HTTPException) as raised:
+        _validated_model_configuration({
+            "provider": "openai",
+            "model_name": "gpt-4.1-mini",
+            "api_key": "sk-this-should-not-be-stored",
+        })
+    assert raised.value.status_code == 422
+    assert "server in .env" in raised.value.detail

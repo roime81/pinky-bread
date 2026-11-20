@@ -447,3 +447,19 @@
     padding: 17px;
   }
 }
+
+
+/* Preserve compact navigation widths while panels are collapsed on smaller screens. */
+@media(max-width:1180px) {
+  .app-shell.sidebar-hidden {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .app-shell.chat-hidden:not(.sidebar-hidden) {
+    grid-template-columns: 200px minmax(0, 1fr) !important;
+  }
+}
+@media(max-width:960px) {
+  .app-shell.chat-hidden:not(.sidebar-hidden) {
+    grid-template-columns: 68px minmax(0, 1fr) !important;
+  }
+}

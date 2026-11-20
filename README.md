@@ -20,6 +20,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - [Changelog](CHANGELOG.md)
 - [Overview](#overview)
 - [Features](#features)
+- [Modern frontend and document-aware chat](docs/FRONTEND_AND_DOCUMENTS.md)
 - [Architecture](#architecture)
 - [Technology stack](#technology-stack)
 - [Requirements](#requirements)
@@ -55,6 +56,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
 - **Agent-to-agent conversations (new feature branch):** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
+- **React founder composer and document-aware chat:** attach multiple PDF/Office/text documents by browse or drag-and-drop, import public HTTPS cloud-share links, store sources in the existing company object store, extract supported document text and pass company-scoped source context to the workforce. See [frontend and document ingestion guide](docs/FRONTEND_AND_DOCUMENTS.md). Private cloud accounts still require authenticated OAuth connectors; image OCR is not included.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
 - **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.

@@ -231,6 +231,7 @@ def company_graph_capabilities() -> dict[str, Any]:
         "coordination": "Founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE schedules",
         "mcp": "Official MCP Python SDK v2 Streamable HTTP; bearer scopes for development/internal use",
         "source_of_truth": "PostgreSQL; Valkey is only a best-effort coordination signal",
+        "max_upload_mb": get_settings().max_upload_mb,
     }
 
 

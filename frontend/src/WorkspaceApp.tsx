@@ -97,29 +97,29 @@ function errorText(reason: unknown) {
 }
 
 const navGroups = [
+  { label: "HOME", items: [{ id: "overview", label: "Overview", icon: LayoutDashboard }] },
   {
     label: "COMPANY",
     items: [
       { id: "company-graph", label: "Company graph", icon: Network },
       { id: "company-events", label: "Company Event Log", icon: Activity },
-      { id: "founder-view", label: "Founder View", icon: LayoutDashboard },
+      { id: "founder-view", label: "Founder View", icon: Building2 },
     ],
   },
   {
-    label: "WORKSPACE",
+    label: "TEAM",
     items: [
       { id: "company-agents", label: "AI Workforce", icon: Users },
-      { id: "durable-workforce", label: "Durable Workforce", icon: Zap },
       { id: "agent-messaging", label: "Agent Conversations", icon: MessageSquare },
-      { id: "model-providers", label: "Model Providers", icon: Settings2 },
+      { id: "durable-workforce", label: "Durable Workforce", icon: Zap },
     ],
   },
   {
     label: "OPERATIONS",
     items: [
-      { id: "overview", label: "Overview", icon: LayoutDashboard },
       { id: "workflows", label: "Workflows", icon: Workflow },
       { id: "agents", label: "Workflow Templates", icon: Bot },
+      { id: "model-providers", label: "Model Providers", icon: Settings2 },
       { id: "audit", label: "Audit Trails", icon: ShieldCheck },
     ],
   },
@@ -278,7 +278,7 @@ export default function WorkspaceApp() {
   const [runtime, setRuntime] = useState<Record<string, any>>({});
   const [workflows, setWorkflows] = useState<WorkflowRun[]>([]);
   const [templates, setTemplates] = useState<AgentManifest[]>([]);
-  const [activeView, setActiveView] = useState("company-graph");
+  const [activeView, setActiveView] = useState("overview");
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [agentEditor, setAgentEditor] = useState<{ agent: GraphNode | null; draft: AgentDraft } | null>(null);
   const [companyName, setCompanyName] = useState("");
@@ -712,6 +712,7 @@ export default function WorkspaceApp() {
           </div>
           <div className="pb-topbar-actions">
             <label className="pb-company-picker"><span>COMPANY</span><select id="graph-company-picker" aria-label="Select company" value={companyId} onChange={(event) => setCompanyId(event.target.value)}><option value="">Select company…</option>{companies.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={13} /></label>
+            <button className="pb-button primary pb-new-company-button" onClick={() => { setCompanyId(""); setCompanyName(""); setActiveView("company-graph"); setShowCompanyForm(true); }}><Plus size={14} /><span>New company</span></button>
             <span className="pb-environment"><i />{String(health.environment || "development").toUpperCase()}</span>
             <button className="pb-icon-button" onClick={() => void reloadCompany().catch((reason) => setError(errorText(reason)))} title="Refresh workspace" aria-label="Refresh workspace"><RefreshCw size={16} className={refreshing ? "pb-spin" : ""} /></button>
             <button className="pb-icon-button" onClick={() => setChatHidden((value) => !value)} title={chatHidden ? "Show founder chat" : "Hide founder chat"} aria-label={chatHidden ? "Show founder chat" : "Hide founder chat"}>
@@ -871,13 +872,69 @@ export default function WorkspaceApp() {
           )}
 
           {!loading && activeView === "overview" && (
-            <section className="pb-page">
-              <PageHeading eyebrow="CONTROL PLANE / OVERVIEW" title="Good morning, Founder." description="A live snapshot of your AI company, execution pipeline and operating health." actions={<button className="pb-button primary" onClick={() => setActiveView("workflows")}><Plus size={15} /> Start workflow</button>} />
-              <div className="pb-stat-grid"><StatCard label="Registered templates" value={templates.length} detail="Workflow manifests loaded" icon={Bot} /><StatCard label="Workflow runs" value={workflowCount} detail="Persisted execution threads" icon={Workflow} /><StatCard label="Awaiting approval" value={pendingCount} detail="Human-in-the-loop gates" icon={Clock3} /><StatCard label="Inference mode" value={health.mock_inference ? "MOCK" : String(runtime.provider || "LOCAL").toUpperCase()} detail={health.mock_inference ? "Development simulation" : "Runtime configuration"} icon={Zap} /></div>
-              <div className="pb-two-column">
-                <section className="pb-section-card"><div className="pb-section-card-heading"><div><span className="pb-eyebrow">WORKFORCE</span><h2>Company health</h2></div><span className="pb-live-pill"><i /> API {health.status || "unknown"}</span></div><div className="pb-health-row"><span>Company</span><strong>{company?.name || "Not established"}</strong></div><div className="pb-health-row"><span>Active AI employees</span><strong>{activeAgents.length}</strong></div><div className="pb-health-row"><span>Model reachable</span><strong>{runtime.mock_inference ? "Mock mode" : runtime.model_reachable ? "Connected" : "Not confirmed"}</strong></div><div className="pb-health-row"><span>MCP</span><strong>{runtime.mcp_enabled ? runtime.mcp_configured ? "Configured" : "Enabled · not configured" : "Disabled"}</strong></div></section>
-                <section className="pb-section-card"><div className="pb-section-card-heading"><div><span className="pb-eyebrow">RECENT EXECUTIONS</span><h2>Workflow activity</h2></div><button className="pb-text-button" onClick={() => setActiveView("workflows")}>View all <ArrowUpRight size={13} /></button></div>{workflows.slice(0, 5).map((item) => <button className="pb-workflow-row" key={item.thread_id} onClick={() => void openAudit(item.thread_id)}><span className="pb-workflow-symbol"><Workflow size={15} /></span><span><strong>{item.prompt || "Workflow execution"}</strong><small>{shortId(item.thread_id)} · {dateTime(item.created_at)}</small></span><em className={"pb-status " + (item.status || "").toLowerCase()}>{(item.status || "UNKNOWN").replace(/_/g, " ")}</em></button>)}{!workflows.length && <p className="pb-muted-copy">No workflows yet. Start one to see activity here.</p>}</section>
+            <section className="pb-page pb-overview-page">
+              <div className="pb-overview-hero">
+                <div className="pb-overview-hero-copy">
+                  <div className="pb-hero-kicker"><span className="pb-hero-kicker-dot" /> THE FOUNDER'S CONTROL ROOM</div>
+                  <h1>{company ? <>Good to see you, Founder.<br /><em>{company.name}</em> is in motion.</> : <>One founder.<br /><em>A whole company.</em></>}</h1>
+                  <p>{company ? "Your virtual team, operating priorities and execution pipeline — connected in one living workspace." : "Create your company, bring your first AI employees on board, and turn ideas into coordinated work."}</p>
+                  <div className="pb-hero-actions">
+                    {company ? <>
+                      <button className="pb-button primary" onClick={() => editAgent(null)}><Plus size={15} /> Add AI employee</button>
+                      <button className="pb-hero-secondary" onClick={() => setActiveView("company-graph")}>Explore company graph <ArrowRight size={15} /></button>
+                    </> : <button className="pb-button primary" onClick={() => { setActiveView("company-graph"); setShowCompanyForm(true); }}><Plus size={15} /> Create your company</button>}
+                  </div>
+                  <div className="pb-hero-meta"><span><i /> {health.status === "ok" ? "Platform operational" : "Workspace connected"}</span><b />{company ? activeAgents.length + " active AI employees" : "Your AI company starts with a name and a mission"}</div>
+                </div>
+                <div className="pb-hero-visual" aria-hidden="true">
+                  <div className="pb-hero-orbit pb-hero-orbit-one" />
+                  <div className="pb-hero-orbit pb-hero-orbit-two" />
+                  <div className="pb-hero-orbit pb-hero-orbit-three" />
+                  <span className="pb-hero-satellite satellite-one"><Bot size={17} /></span>
+                  <span className="pb-hero-satellite satellite-two"><Workflow size={16} /></span>
+                  <span className="pb-hero-satellite satellite-three"><Activity size={16} /></span>
+                  <div className="pb-hero-core"><div className="pb-hero-core-mark"><span /><span /><span /></div><small>YOUR COMPANY</small></div>
+                  <span className="pb-hero-node-label label-one">PEOPLE</span>
+                  <span className="pb-hero-node-label label-two">WORK</span>
+                  <span className="pb-hero-node-label label-three">INTELLIGENCE</span>
+                </div>
+                <div className="pb-hero-glow" />
               </div>
+
+              {company ? <>
+                <div className="pb-overview-section-heading"><div><span className="pb-eyebrow">OPERATING SNAPSHOT</span><h2>Company at a glance</h2></div><button className="pb-text-button" onClick={() => void refreshAll()}>Refresh data <RefreshCw size={13} className={refreshing ? "pb-spin" : ""} /></button></div>
+                <div className="pb-stat-grid pb-overview-stats">
+                  <StatCard label="AI employees" value={activeAgents.length} detail={agents.length + " on the company graph"} icon={Users} />
+                  <StatCard label="Strategic goals" value={goals.length} detail="Objectives being pursued" icon={Command} />
+                  <StatCard label="Active jobs" value={activeJobCount} detail="Queued or executing now" icon={Zap} />
+                  <StatCard label="Workflow runs" value={workflowCount} detail={pendingCount + " awaiting approval"} icon={Workflow} />
+                </div>
+                <div className="pb-overview-grid">
+                  <section className="pb-section-card pb-operating-card">
+                    <div className="pb-section-card-heading"><div><span className="pb-eyebrow">SYSTEM HEALTH</span><h2>Operating pulse</h2></div><span className="pb-live-pill"><i /> LIVE STATUS</span></div>
+                    <div className="pb-operating-main"><div className="pb-operating-score"><strong>{health.status === "ok" ? "All systems" : "Workspace"}</strong><span>{health.status === "ok" ? "operational" : "connected"}</span></div><div className="pb-operating-ring"><div><Activity size={21} /><strong>{activeAgents.length}</strong><small>ACTIVE</small></div></div></div>
+                    <div className="pb-operating-checks">
+                      <div><span className="pb-health-dot good" /><span><strong>API service</strong><small>Application endpoint</small></span><b>{health.status || "unknown"}</b></div>
+                      <div><span className={"pb-health-dot " + (runtime.model_reachable || health.mock_inference ? "good" : "neutral")} /><span><strong>Model runtime</strong><small>{runtime.mock_inference ? "Development simulation" : runtime.provider || "Configured provider"}</small></span><b>{runtime.model_reachable ? "Reachable" : health.mock_inference ? "Mock mode" : "Not confirmed"}</b></div>
+                      <div><span className={"pb-health-dot " + (eventVerification?.valid ? "good" : "neutral")} /><span><strong>Event integrity</strong><small>{eventVerification?.checked_events || 0} records checked</small></span><b>{eventVerification ? eventVerification.valid ? "Verified" : "Review needed" : "Not checked"}</b></div>
+                    </div>
+                  </section>
+                  <section className="pb-section-card pb-activity-card">
+                    <div className="pb-section-card-heading"><div><span className="pb-eyebrow">COMPANY MEMORY</span><h2>Recent activity</h2></div><button className="pb-text-button" onClick={() => setActiveView("company-events")}>View event log <ArrowUpRight size={13} /></button></div>
+                    {events.length ? <div className="pb-overview-activity-list">{events.slice(-5).reverse().map((event) => <article className="pb-overview-activity" key={event.id}><span className="pb-activity-marker"><Activity size={14} /></span><div><strong>{String(event.type || "Company activity").replace(/_/g, " ")}</strong><p>{String(event.payload?.name || event.payload?.description || event.payload?.node_type || "A company record was updated.")}</p><small>{event.actor_id || "System"} · {dateTime(event.occurred_at)}</small></div><span className="pb-activity-number">#{event.event_no}</span></article>)}</div> : <EmptyState icon={Activity} title="Your company story starts here" description="As you add people, goals and work, a verifiable activity timeline will appear here." action={<button className="pb-button secondary small" onClick={() => setActiveView("company-graph")}>Open company graph</button>} />}
+                  </section>
+                </div>
+                <div className="pb-overview-section-heading"><div><span className="pb-eyebrow">MOVE THE COMPANY FORWARD</span><h2>Quick actions</h2></div></div>
+                <div className="pb-quick-actions">
+                  <button onClick={() => editAgent(null)}><span className="pb-quick-icon green"><Users size={18} /></span><span><strong>Hire an AI employee</strong><small>Define a new role and capability</small></span><ArrowUpRight size={15} /></button>
+                  <button onClick={() => setActiveView("workflows")}><span className="pb-quick-icon violet"><Workflow size={18} /></span><span><strong>Launch a workflow</strong><small>Delegate a task to your workforce</small></span><ArrowUpRight size={15} /></button>
+                  <button onClick={() => setActiveView("agent-messaging")}><span className="pb-quick-icon amber"><MessageSquare size={18} /></span><span><strong>Host an agent discussion</strong><small>Let employees exchange perspectives</small></span><ArrowUpRight size={15} /></button>
+                </div>
+              </> : <div className="pb-first-run-grid">
+                <section className="pb-first-run-card pb-first-run-primary"><span className="pb-first-run-number">01 / ESTABLISH</span><div className="pb-first-run-icon"><Building2 size={20} /></div><h2>Give your company a name.</h2><p>Start with the organisation you want to build. Your company becomes the home for its people, goals, decisions and work.</p><button className="pb-button primary" onClick={() => { setActiveView("company-graph"); setShowCompanyForm(true); }}>Establish your company <ArrowRight size={15} /></button></section>
+                <section className="pb-first-run-card"><span className="pb-first-run-number">02 / ASSEMBLE</span><div className="pb-first-run-icon violet"><Users size={20} /></div><h2>Build your virtual team.</h2><p>Create AI employees with clear responsibilities, skills, seniority, authority and their own model configuration.</p><button className="pb-first-run-link" onClick={() => { setActiveView("company-graph"); setShowCompanyForm(true); }}>Start with your company <ArrowUpRight size={14} /></button></section>
+                <section className="pb-first-run-card"><span className="pb-first-run-number">03 / DELEGATE</span><div className="pb-first-run-icon amber"><Workflow size={20} /></div><h2>Turn goals into action.</h2><p>Connect people, objectives and work. Delegate assignments and follow every execution from one control room.</p><button className="pb-first-run-link" onClick={() => setActiveView("workflows")}>Explore workflows <ArrowUpRight size={14} /></button></section>
+              </div>}
             </section>
           )}
 
@@ -920,7 +977,7 @@ export default function WorkspaceApp() {
         <div className="pb-chat-header"><div><span className="pb-eyebrow">FOUNDER / COMMAND</span><h2>Talk to your company</h2></div><button className="pb-icon-button" onClick={() => setChatHidden(true)} aria-label="Hide founder chat" title="Hide founder chat"><X size={17} /></button></div>
         <div className="pb-chat-context"><span className="pb-company-avatar"><Sparkles size={15} /></span><span><strong>{company?.name || "No company selected"}</strong><small>{chatBusy ? "Your AI workforce is responding…" : "Your instruction will be routed to the team"}</small></span><i className={chatBusy ? "busy" : ""} /></div>
         <div className="pb-chat-transcript">
-          {!chatMessages.length ? <div className="pb-chat-empty"><div><Sparkles size={24} /></div><strong>Your virtual team is ready.</strong><p>Give your agents a task, ask a question or ask two employees to discuss an issue together.</p><div className="pb-chat-suggestions"><button onClick={() => void sendFounderInstruction("Review our company goals and recommend the next three priorities.", [])}>Review company priorities</button><button onClick={() => void sendFounderInstruction("Ask my coordinator to organise a team alignment discussion.", [])}>Arrange an alignment</button></div></div> : chatMessages.map((item, index) => <article className={"pb-chat-message " + item.role} key={index}><small>{item.name} · {dateTime(item.created_at)}</small><p>{item.content}</p></article>)}
+          {!company ? <div className="pb-chat-empty pb-chat-empty-setup"><div><Building2 size={23} /></div><strong>Your company comes first.</strong><p>Create your organisation and add your first AI employee. Then you can delegate work or start a conversation here.</p><button className="pb-button primary" onClick={() => { setActiveView("company-graph"); setShowCompanyForm(true); }}>Create a company <ArrowRight size={14} /></button></div> : !chatMessages.length ? <div className="pb-chat-empty"><div><Sparkles size={24} /></div><strong>Your virtual team is ready.</strong><p>Give your agents a task, ask a question or ask two employees to discuss an issue together.</p><div className="pb-chat-suggestions"><button onClick={() => void sendFounderInstruction("Review our company goals and recommend the next three priorities.", [])}>Review company priorities</button><button onClick={() => void sendFounderInstruction("Ask my coordinator to organise a team alignment discussion.", [])}>Arrange an alignment</button></div></div> : chatMessages.map((item, index) => <article className={"pb-chat-message " + item.role} key={index}><small>{item.name} · {dateTime(item.created_at)}</small><p>{item.content}</p></article>)}
         </div>
         <div className="pb-chat-compose">
           <FounderComposer companyId={company?.id || ""} tenantId={company?.tenant_id || TENANT} onSend={sendFounderInstruction} />

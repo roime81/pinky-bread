@@ -756,7 +756,8 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
             ],
             "conversation_id": complete.get("conversation_id") if complete else None,
             "conversation": complete,
-            "documents": document_names,\n            "mode": "LIVE_AGENT_TO_AGENT",
+            "documents": document_names,
+            "mode": "LIVE_AGENT_TO_AGENT",
             "agent": {"id": discussion["initiator"]["id"], "name": discussion["initiator"]["name"], "role": discussion["initiator"].get("data", {}).get("role", "AI employee")},
         }
 

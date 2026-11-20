@@ -6,7 +6,7 @@ Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led
 
 Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime: Ollama starts by default, the selected model is pulled automatically, API and MCP have dedicated host ports, and Docker service DNS keeps container-to-container calls predictable. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
 
-> **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), the [changelog](CHANGELOG.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md).
+> **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), the [changelog](CHANGELOG.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [2.0 delivery roadmap](docs/ROADMAP_2.0.md) plus the [3.0 future pipeline](docs/ROADMAP_3.0.md).
 
 > [!IMPORTANT]
 > **MVP / demonstration software.** Docker Compose uses live local Ollama inference by default; mock inference is available only when explicitly enabled and does not inspect image pixels. The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Local development sign-in and Google OAuth sign-in are available, but enterprise RBAC, company membership/tenant isolation, production identity lifecycle, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
@@ -800,6 +800,8 @@ Pinky Bread is a prototype. Before any enterprise or regulated deployment, addre
 No regulatory certification, security assurance, production air-gap verification, or immutable-audit claim is made by this repository.
 
 ## Roadmap
+
+Pinky Bread 2.0 is the active delivery target. Complete identity/company isolation, durable agent collaboration, agent/model governance, company memory, MCP approvals and operational readiness before introducing the separate 3.0 AI infrastructure pipeline. See the [2.0 delivery roadmap](docs/ROADMAP_2.0.md) and [3.0 future pipeline](docs/ROADMAP_3.0.md).
 
 See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
 

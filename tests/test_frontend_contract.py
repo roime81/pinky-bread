@@ -55,6 +55,7 @@ def test_react_company_graph_supports_relationship_inspection_and_node_creation(
     assert '"/nodes"' in app
     assert "addGraphNode" in app
     assert "connectGraphNodes" in app
+    assert "recordKpiMeasurement" in app
     assert "/edges" in app
 
 
@@ -110,6 +111,8 @@ def test_left_and_right_panels_are_independently_collapsible_and_persistent():
     assert "is-left-collapsed" in styles
     assert "is-chat-collapsed" in styles
     assert "@media(max-width:680px)" in styles
+    assert "pb-mobile-backdrop" in app
+    assert "position:fixed" in styles
 
 
 def test_model_provider_status_does_not_expose_provider_secrets():

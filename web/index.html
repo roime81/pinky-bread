@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Pinky Bread · Autonomous Organization</title>
   <link rel="stylesheet" href="/static/styles.css?v=20261119-chat-rail1" />
-  <link rel="stylesheet" href="/static/company-graph.css?v=20261120-panels-drag1" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261120-commercial-llm1" />
   <link rel="stylesheet" href="/static/a2a/agent-workspace.css?v=20261120-a2a1" />
 </head>
 <body>
@@ -26,6 +26,7 @@
         </div>
         <div class="workspace-label nav-workspace-heading">WORKSPACE</div>
         <button class="nav-item" data-view="company-agents" title="AI Workforce"><span class="nav-icon">◇</span><span class="nav-label">AI Workforce</span></button>
+        <button class="nav-item" data-view="model-providers" title="Model Providers"><span class="nav-icon">⌁</span><span class="nav-label">Model Providers</span></button>
         <button class="nav-item" data-view="agent-messaging" title="Agent Conversations"><span class="nav-icon">⇄</span><span class="nav-label">Agent Conversations</span></button>
         <button class="nav-item" data-view="overview" title="Overview"><span class="nav-icon">◫</span><span class="nav-label">Overview</span></button>
         <button class="nav-item" data-view="workflows" title="Workflow"><span class="nav-icon">⌘</span><span class="nav-label">Workflow</span><span class="nav-count" id="nav-workflow-count">0</span></button>
@@ -142,6 +143,26 @@
         </section>
       </section>
 
+      <section class="view" id="view-model-providers">
+        <div class="page-heading">
+          <div><div class="eyebrow">AI RUNTIME / CONFIGURATION</div><h1>Model providers</h1><p>Connect your virtual employees to local models or commercial LLM APIs. Choose a provider and model per agent.</p></div>
+          <button class="secondary-btn" type="button" id="model-providers-refresh">↻ Refresh status</button>
+        </div>
+        <section class="model-provider-grid" id="model-provider-list">
+          <article class="model-provider-card"><div class="eyebrow">PROVIDER STATUS</div><strong>Loading model provider configuration…</strong></article>
+        </section>
+        <section class="model-provider-setup">
+          <div class="eyebrow">SERVER-SIDE CREDENTIALS</div>
+          <h2>Connect your API keys</h2>
+          <p>Put provider credentials in the project <code>.env</code> file. Pinky Bread passes them from the server to the selected provider; API keys are never saved in an agent profile or exposed to the browser.</p>
+          <pre><code>OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-google-ai-studio-api-key</code></pre>
+          <p>Optional custom gateways can use <code>OPENAI_COMPATIBLE_API_KEY</code>. After changing credentials, recreate the API and worker containers:</p>
+          <pre><code>docker compose up -d --force-recreate api worker</code></pre>
+          <p class="model-provider-security">Commercial API usage may incur charges under your provider account. Set billing limits and monitor usage in the provider console.</p>
+        </section>
+      </section>
+
       <section class="view" id="view-agent-messaging">
         <div id="a2a-workspace-root"></div>
       </section>
@@ -238,9 +259,10 @@
         <label>Role / function<input id="agent-editor-role" required maxlength="160" placeholder="e.g. Customer research and insights" /></label>
         <label>Position title<input id="agent-editor-title" required maxlength="160" placeholder="e.g. Senior Customer Researcher" /></label>
         <label>Seniority level <span class="agent-field-hint">1 = entry · 10 = highest</span><input id="agent-editor-level" type="number" min="1" max="10" value="3" required /></label>
-        <label>LLM provider<select id="agent-editor-provider"><option value="ollama">Ollama</option><option value="vllm">vLLM</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
+        <label>LLM provider<select id="agent-editor-provider"><option value="ollama">Ollama · local</option><option value="vllm">vLLM · self-hosted</option><option value="openai-compatible">OpenAI-compatible gateway</option><option value="openai">OpenAI API</option><option value="gemini">Google Gemini API</option></select></label>
         <label>Model identifier<input id="agent-editor-model" required maxlength="160" value="qwen2.5:3b" placeholder="e.g. qwen2.5:3b" /></label>
-        <label class="agent-editor-wide">Model API endpoint <span class="agent-field-hint">Optional · defaults to workspace endpoint</span><input id="agent-editor-endpoint" maxlength="500" placeholder="Workspace default (http://ollama:11434/v1)" /></label>
+        <label class="agent-editor-wide">Model API endpoint <span class="agent-field-hint">Optional override · leave blank for the provider default</span><input id="agent-editor-endpoint" maxlength="500" placeholder="Selected provider default endpoint" /></label>
+        <div class="agent-editor-wide agent-provider-help" id="agent-provider-help" role="status">Provider credentials are configured by the workspace administrator in Model Providers. API keys are not stored in agent profiles.</div>
         <label>Authority<select id="agent-editor-authority"><option value="SPECIALIST">Specialist · assigned work</option><option value="COORDINATOR">Coordinator · plans and delegates</option></select></label>
         <label>Reports to<select id="agent-editor-manager"><option value="">No manager / direct to company</option></select></label>
         <label class="agent-editor-wide">Scope and description<textarea id="agent-editor-description" rows="2" maxlength="4000" placeholder="What is this agent accountable for?"></textarea></label>
@@ -270,8 +292,8 @@
     </div>
   </section>
   <script src="/static/auth.js?v=20261119-auth1"></script>
-  <script src="/static/app.js?v=20261120-company-panels2"></script>
-  <script src="/static/company-graph.js?v=20261120-company-panels2"></script>
+  <script src="/static/app.js?v=20261120-commercial-llm1"></script>
+  <script src="/static/company-graph.js?v=20261120-commercial-llm1"></script>
   <script type="module" src="/static/a2a/agent-workspace.js?v=20261120-a2a1"></script>
 </body>
 </html>

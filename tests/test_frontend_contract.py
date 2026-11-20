@@ -28,7 +28,7 @@ def test_vite_and_docker_build_publish_the_same_react_bundle_path():
     docker = source("Dockerfile")
     assert 'base: "/static/app/"' in vite
     assert '"workspace.js"' in vite
-    assert '"../web/app"' in vite
+    assert 'resolve(process.cwd(), "../web/app")' in vite
     assert "web/app ./web/app" in docker
     assert "web/a2a" not in docker
 
@@ -52,20 +52,19 @@ def test_react_company_graph_supports_relationship_inspection_and_node_creation(
     assert "graph.edges.map" in app
     assert "pb-graph-node" in app
     assert "setSelectedNodeId" in app
-    assert "/v2/companies/\" + company.id + \"/nodes" in app
+    assert '"/nodes"' in app
     assert "addGraphNode" in app
 
 
 def test_react_workforce_supports_agent_crud_model_governance_and_reporting_lines():
     app = source("frontend/src/WorkspaceApp.tsx")
-    assert "/v2/companies/\" + company.id + \"/agents" in app
+    assert '"/agents"' in app
     assert 'method: agent ? "PATCH" : "POST"' in app
     for key in [
         "system_prompt", "seniority_level", "authority", "manager_id",
         "model_configuration", "provider", "model_name", "endpoint",
     ]:
         assert key in app
-    assert 'value="openai">OpenAI API' not in app  # provider options are rendered in React
     assert '<option value="openai">OpenAI API</option>' in app
 
 

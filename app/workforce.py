@@ -186,6 +186,7 @@ async def chat_with_agent(
     history: list[dict[str, str]],
     company_id: str,
     tenant_id: str,
+    system_context: str | None = None,
 ) -> str:
     settings = get_settings()
     if settings.mock_inference:
@@ -211,6 +212,8 @@ async def chat_with_agent(
         f"\nCompany mission: {(company.get('data') or {}).get('mission', '')}"
         f"\nOther active employees: {json.dumps([{'name': item['name'], 'role': _agent_role(item)} for item in agents if item['id'] != agent['id']], ensure_ascii=False)}"
     )
+    if system_context:
+        system += "\n\nInteraction context (runtime supplied):\n" + system_context.strip()
     messages = history[-12:] + [{"role": "user", "content": message}]
     settings_model = model_config.get("model_name") or settings.reasoning_model
     payload_history = "\n\n".join(f"{item['role'].upper()}: {item['content']}" for item in messages[:-1])

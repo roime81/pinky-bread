@@ -42,7 +42,7 @@ def check_db_connection() -> None:
 def init_db() -> None:
     """Create the schema from the one-shot bootstrap process only."""
     # Register all ORM tables before creating the schema.
-    from . import company_graph, object_store, durable_runtime  # noqa: F401
+    from . import company_graph, object_store, durable_runtime, agent_messaging  # noqa: F401
 
     if _engine.dialect.name == "postgresql":
         # Protect against accidental concurrent invocations as a final safeguard.

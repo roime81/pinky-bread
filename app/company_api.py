@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 import asyncio
+import json
 import re
 import uuid
 import httpx
@@ -21,6 +22,13 @@ from .durable_runtime import (
     cancel_job,
     configure_coordination,
     get_coordination,
+)
+
+from .agent_messaging import (
+    get_agent_conversation,
+    list_agent_conversations,
+    resolve_agent_discussion,
+    stream_agent_discussion,
 )
 
 from .workforce import (
@@ -127,6 +135,11 @@ class AgentUpdateRequest(WorkforceAction):
 class CompanyChatRequest(WorkforceAction):
     message: str = Field(min_length=1, max_length=12000)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
+
+
+class AgentConversationStreamRequest(WorkforceAction):
+    message: str = Field(min_length=1, max_length=12000)
+    max_turns: int = Field(default=6, ge=2, le=12)
 
 class WorkExecutionRequest(WorkforceAction):
     retry: bool = False
@@ -567,6 +580,43 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
     ]
     if not agents:
         raise HTTPException(409, "Create an AI employee before starting a company conversation")
+    discussion = resolve_agent_discussion(agents, request.message)
+    if discussion is not None:
+        events = [
+            event async for event in stream_agent_discussion(
+                company_id=company_id,
+                tenant_id=request.tenant_id,
+                actor_id=request.actor_id,
+                company=next(node for node in graph["nodes"] if node["type"] == "company"),
+                agents=agents,
+                initiator=discussion["initiator"],
+                recipients=discussion["recipients"],
+                founder_message=request.message,
+                max_turns=discussion["max_turns"],
+            )
+        ]
+        complete = next((event.get("conversation") for event in reversed(events) if event.get("type") == "complete"), None)
+        messages = [event["message"] for event in events if event.get("type") == "message"]
+        summary = next((item for item in reversed(messages) if item.get("message_kind") == "FOUNDER_SUMMARY"), None)
+        return {
+            "reply": summary["content"] if summary else "The discussion completed.",
+            "responses": [
+                {
+                    "agent_id": item["sender_agent_id"],
+                    "name": item["sender_name"],
+                    "role": next((_agent.get("data", {}).get("role", "AI employee") for _agent in agents if _agent["id"] == item["sender_agent_id"]), "AI employee"),
+                    "reply": item["content"],
+                    "recipient_name": item.get("recipient_name"),
+                    "message_kind": item.get("message_kind"),
+                }
+                for item in messages
+            ],
+            "conversation_id": complete.get("conversation_id") if complete else None,
+            "conversation": complete,
+            "mode": "LIVE_AGENT_TO_AGENT",
+            "agent": {"id": discussion["initiator"]["id"], "name": discussion["initiator"]["name"], "role": discussion["initiator"].get("data", {}).get("role", "AI employee")},
+        }
+
     history = []
     for item in request.history[-12:]:
         role = item.get("role")
@@ -593,7 +643,7 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
         raise HTTPException(502, f"AI runtime integration failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
     if not responses:
         raise HTTPException(503, "No active AI employee was available to respond")
-    reply = "\\n\\n".join(f"**{item['name']} · {item['role']}**\\n{item['reply']}" for item in responses)
+    reply = "\n\n".join(f"**{item['name']} · {item['role']}**\n{item['reply']}" for item in responses)
     first = next((item for item in agents if item["id"] == responses[0]["agent_id"]), agents[0])
     return {
         "reply": reply,
@@ -606,6 +656,111 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
             "model": (first.get("data") or {}).get("model_configuration", {}).get("model_name"),
         },
     }
+
+
+
+
+@router.get("/companies/{company_id}/conversations")
+def list_agent_conversations_endpoint(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    conversations = list_agent_conversations(company_id=company_id, tenant_id=tenant_id)
+    return {"conversations": conversations, "count": len(conversations)}
+
+
+@router.get("/companies/{company_id}/conversations/{conversation_id}")
+def get_agent_conversation_endpoint(
+    company_id: str,
+    conversation_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    conversation = get_agent_conversation(
+        company_id=company_id, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    if conversation is None:
+        raise HTTPException(404, "Conversation not found")
+    return conversation
+
+
+@router.post("/companies/{company_id}/conversations/stream")
+async def stream_agent_conversation_endpoint(
+    company_id: str, request: AgentConversationStreamRequest
+):
+    graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agents = [
+        node for node in graph["nodes"]
+        if node["type"] == "agent" and node.get("status") not in {"ARCHIVED", "DISABLED", "PAUSED"}
+    ]
+    resolution = resolve_agent_discussion(agents, request.message)
+    if resolution is None:
+        raise HTTPException(
+            422,
+            "To start an agent discussion, mention the initiating agent and at least one colleague "
+            "(or mention one colleague when a coordinator is configured), and include an instruction "
+            "such as discuss, talk, ask, message or say hello.",
+        )
+    company = next(node for node in graph["nodes"] if node["type"] == "company")
+
+    async def event_stream():
+        iterator = stream_agent_discussion(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            company=company,
+            agents=agents,
+            initiator=resolution["initiator"],
+            recipients=resolution["recipients"],
+            founder_message=request.message,
+            max_turns=min(request.max_turns, resolution["max_turns"])
+            if resolution["max_turns"] == 2 else request.max_turns,
+        ).__aiter__()
+        pending = None
+        conversation_id = None
+        try:
+            pending = asyncio.create_task(anext(iterator))
+            while True:
+                done, _ = await asyncio.wait({pending}, timeout=15.0)
+                if not done:
+                    heartbeat = {"type": "heartbeat", "conversation_id": conversation_id}
+                    yield f"data: {json.dumps(heartbeat)}\n\n"
+                    continue
+                try:
+                    event = pending.result()
+                except StopAsyncIteration:
+                    break
+                conversation_id = (
+                    event.get("conversation_id")
+                    or (event.get("conversation") or {}).get("conversation_id")
+                    or conversation_id
+                )
+                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+                pending = asyncio.create_task(anext(iterator))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        finally:
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            try:
+                await iterator.aclose()
+            except RuntimeError:
+                # The iterator may already have completed or been closed.
+                pass
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 @router.get("/companies/{company_id}/agents")

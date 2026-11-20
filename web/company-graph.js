@@ -616,6 +616,7 @@
       renderCompanyPicker();
       setWorkspaceVisible(true);
       $("#graph-company-picker").value = company.id;
+      $("#graph-company-picker").dispatchEvent(new Event("change", { bubbles: true }));
       await loadGraph(true);
       restoreChatHistory();
       refreshAiRuntime();

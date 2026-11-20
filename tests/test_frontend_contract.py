@@ -5,134 +5,137 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_company_workspace_defines_every_runtime_helper_it_calls():
-    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    required = [
-        "activeAgents",
-        "_isCoordinatorForUi",
-        "renderAgentDirectory",
-        "openAgentEditor",
-        "saveAgent",
-        "sendAiMessage",
-    ]
-    for name in required:
-        assert re.search(rf"function\s+{re.escape(name)}\s*\(", source), name
-    assert len(re.findall(r"function\s+addAgent\s*\(", source)) == 1
+def source(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_company_graph_nodes_remain_pointer_hit_testable():
-    source = (ROOT / "web" / "company-graph.css").read_text(encoding="utf-8")
-    assert ".graph-node{cursor:pointer" in source
-    assert ".graph-node .node-core,.graph-node .node-halo{pointer-events:visiblePainted}" in source
-    assert ".graph-node *{pointer-events:none}" not in source
+def test_product_workspace_is_mounted_from_one_react_root():
+    html = source("web/index.html")
+    entry = source("frontend/src/main.tsx")
+    assert 'id="root"' in html
+    assert "/static/app/workspace.js" in html
+    assert "/static/app/workspace.css" in html
+    assert "createRoot(container).render" in entry
+    assert "WorkspaceApp" in entry
+    assert entry.count("createRoot(") == 1
+    assert "/static/app.js" not in html
+    assert "/static/company-graph.js" not in html
+    assert "/static/a2a/agent-workspace.js" not in html
 
 
-def test_founder_workspace_contains_all_agent_editor_and_chat_controls():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    for element_id in [
-        "graph-add-agent",
-        "graph-add-agent-directory",
-        "agent-editor-form",
-        "agent-editor-provider",
-        "agent-editor-model",
-        "agent-editor-endpoint",
-        "agent-editor-manager",
-        "auth-logout",
-        "company-composer-root",
-        "ai-runtime-status",
+def test_vite_and_docker_build_publish_the_same_react_bundle_path():
+    vite = source("frontend/vite.config.ts")
+    docker = source("Dockerfile")
+    assert 'base: "/static/app/"' in vite
+    assert '"workspace.js"' in vite
+    assert '"../web/app"' in vite
+    assert "web/app ./web/app" in docker
+    assert "web/a2a" not in docker
+
+
+def test_react_workspace_owns_navigation_company_graph_and_company_creation():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    for view in [
+        "company-graph", "company-events", "founder-view", "company-agents",
+        "agent-messaging", "model-providers", "overview", "workflows", "agents", "audit",
     ]:
-        assert f'id="{element_id}"' in html, element_id
+        assert f'"{view}"' in app
+    assert "/v2/companies?tenant_id=" in app
+    assert '"/v2/companies"' in app
+    assert "/graph?tenant_id=" in app
+    assert "setActiveView" in app
+    assert "graph-company-picker" in app
 
 
-def test_hidden_sections_cannot_override_the_hidden_attribute():
-    source = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
-    assert "[hidden]{display:none!important}" in source
-    assert re.search(r"\.view\.active\s*\{\s*display:\s*block\s*!important", source)
+def test_react_company_graph_supports_relationship_inspection_and_node_creation():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "graph.edges.map" in app
+    assert "pb-graph-node" in app
+    assert "setSelectedNodeId" in app
+    assert "/v2/companies/\" + company.id + \"/nodes" in app
+    assert "addGraphNode" in app
 
 
-def test_saved_company_initialization_reveals_the_dashboard():
-    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    init_start = source.index("async function initialise()")
-    init_end = source.index("function renderCompanyPicker()", init_start)
-    initialise = source[init_start:init_end]
-    assert "state.company = state.companies[0]" in initialise
-    assert "setWorkspaceVisible(true)" in initialise
-    assert initialise.index("setWorkspaceVisible(true)") < initialise.index("await loadGraph(true)")
+def test_react_workforce_supports_agent_crud_model_governance_and_reporting_lines():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "/v2/companies/\" + company.id + \"/agents" in app
+    assert 'method: agent ? "PATCH" : "POST"' in app
+    for key in [
+        "system_prompt", "seniority_level", "authority", "manager_id",
+        "model_configuration", "provider", "model_name", "endpoint",
+    ]:
+        assert key in app
+    assert 'value="openai">OpenAI API' not in app  # provider options are rendered in React
+    assert '<option value="openai">OpenAI API</option>' in app
 
 
-def test_founder_chat_does_not_require_manual_agent_selection():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    assert 'id="company-chat-agent"' not in html
-    assert "renderChatAgentPicker" not in source
-    assert "Relevant agents may join" in html
+def test_company_event_log_uses_durable_event_records_and_hash_verification():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "/events?tenant_id=" in app
+    assert "/events/verify?tenant_id=" in app
+    assert "eventVerification.valid" in app
+    assert "entry_hash" in app
+    assert "Company Event Log" in app
 
 
-def test_company_graph_toolbar_and_durable_workforce_panel_are_removed():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    assert 'class="company-toolbar"' not in html
-    assert 'class="graph-tools"' not in html
-    assert 'id="workforce-runtime-panel"' not in html
-    assert 'id="graph-company-picker"' in html
-    assert 'id="graph-add-agent"' in html
-    assert 'graph-heading-actions' in html
+def test_founder_composer_is_react_controlled_and_keeps_document_ingestion():
+    composer = source("frontend/src/FounderComposer.tsx")
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "companyId: string" in composer
+    assert "onSend: (message: string, artifactIds: string[]) => Promise<void>" in composer
+    assert "await onSend(message, uploaded.map((item) => item.object_id))" in composer
+    assert "/document-links" in composer
+    assert "/artifacts" in composer
+    assert "artifactIds" in app
+    assert "/chat" in app
+    assert "FounderComposer" in app
+    assert "company-composer-root" not in source("web/index.html")
 
 
-def test_company_agent_directory_is_rendered_inside_the_left_sidebar():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    sidebar_start = html.index('<aside class="sidebar"')
-    main_start = html.index('<main class="main-area">')
-    directory_start = html.index('id="agent-management-panel"')
-    directory_end = html.index('</section>', directory_start)
-    assert sidebar_start < directory_start < directory_end < main_start
-    assert 'id="company-agent-list"' in html
-    assert 'id="graph-add-agent-directory"' in html
+def test_agent_conversations_are_part_of_the_same_react_application():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    entry = source("frontend/src/main.tsx")
+    assert 'import AgentConversations from "./App"' in app
+    assert "<AgentConversations />" in app
+    assert "pinky:workspace" in app
+    assert entry.count("createRoot(") == 1
 
 
-
-def test_company_event_log_and_founder_view_are_dedicated_pages():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    assert 'data-view="company-events"' in html
-    assert 'data-view="founder-view"' in html
-    assert 'id="view-company-events"' in html
-    assert 'id="view-founder-view"' in html
-    assert html.count('id="graph-activity-panel"') == 1
-    assert html.count('id="graph-brief-panel"') == 1
-    assert 'class="company-bottom-grid"' not in html
-
-
-def test_left_and_right_workspace_panels_are_independently_collapsible():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    styles = (ROOT / "web" / "company-graph.css").read_text(encoding="utf-8")
-    assert 'id="sidebar-toggle"' in html
-    assert 'id="sidebar-panel-close"' in html
-    assert 'id="chat-panel-toggle"' in html
-    assert 'id="chat-panel-close"' in html
+def test_left_and_right_panels_are_independently_collapsible_and_persistent():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    styles = source("frontend/src/workspace.css")
     assert "pinky-sidebar-hidden" in app
     assert "pinky-chat-panel-hidden" in app
-    assert ".app-shell.sidebar-hidden" in styles
-    assert ".app-shell.chat-hidden" in styles
+    assert "is-left-collapsed" in styles
+    assert "is-chat-collapsed" in styles
+    assert "@media(max-width:680px)" in styles
 
 
-def test_agent_graph_dots_can_be_dragged_and_remembered_per_company():
-    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    styles = (ROOT / "web" / "company-graph.css").read_text(encoding="utf-8")
-    assert "bindAgentNodeDragging" in source
-    assert 'closest(".graph-node.agent")' in source
-    assert 'addEventListener("pointerdown"' in source
-    assert 'addEventListener("pointermove"' in source
-    assert 'addEventListener("pointerup"' in source
-    assert "pinky-graph-layout:" in source
-    assert "state.nodePositions" in source
-    assert ".graph-node.agent" in styles
-    assert "cursor: grab" in styles
+def test_model_provider_status_does_not_expose_provider_secrets():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "/v2/model-providers" in app
+    assert "OPENAI_API_KEY" in app
+    assert "GEMINI_API_KEY" in app
+    assert "credentials stay on the server" in app.lower()
+    assert "API keys are never stored in an agent profile" in app
 
 
-def test_dedicated_login_page_is_the_unauthenticated_entry_point():
-    login = (ROOT / "web" / "login.html").read_text(encoding="utf-8")
-    main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
-    script = (ROOT / "web" / "login.js").read_text(encoding="utf-8")
+def test_workflow_and_audit_views_retain_the_existing_backend_contracts():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    for endpoint in [
+        "/v1/workflows/invoke", "/v1/workflows", "/v1/agents",
+        "/v1/agents/reload", "/v1/audit/",
+    ]:
+        assert endpoint in app
+    assert "/approve" in app
+    assert "workflowPrompt" in app
+    assert "audit_trail" in app
+
+
+def test_login_page_remains_the_unauthenticated_entry_point():
+    login = source("web/login.html")
+    main = source("app/main.py")
+    script = source("web/login.js")
     assert 'id="login-form"' in login
     assert 'id="login-google"' in login
     assert 'id="login-password"' in login
@@ -143,28 +146,11 @@ def test_dedicated_login_page_is_the_unauthenticated_entry_point():
     assert 'window.location.replace("/")' in script
 
 
-def test_commercial_model_providers_are_available_in_the_agent_editor():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    company_graph = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    assert '<option value="openai">OpenAI API</option>' in html
-    assert '<option value="gemini">Google Gemini API</option>' in html
-    assert 'id="view-model-providers"' in html
-    assert "OPENAI_API_KEY" in html
-    assert "GEMINI_API_KEY" in html
-    assert "'model-providers':loadModelProviders" in app
-    assert 'provider: "openai"' in company_graph or 'openai: { model:' in company_graph
-    assert 'gemini: { model:' in company_graph
-
-def test_react_founder_composer_supports_document_uploads_and_cloud_share_links():
-    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    main = (ROOT / "frontend" / "src" / "main.tsx").read_text(encoding="utf-8")
-    composer = (ROOT / "frontend" / "src" / "FounderComposer.tsx").read_text(encoding="utf-8")
-    company_graph = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
-    assert 'id="company-composer-root"' in html
-    assert 'id="company-command-form"' not in html
-    assert "FounderComposer" in main
-    assert "onDrop={handleDrop}" in composer
-    assert "document-links" in composer
-    assert "artifact_ids: artifactIds" in company_graph
-    assert "pinky:founder-message-complete" in company_graph
+def test_legacy_workspace_dom_scripts_are_not_loaded_by_the_application_shell():
+    html = source("web/index.html")
+    for path in [
+        "/static/styles.css", "/static/company-graph.css",
+        "/static/app.js", "/static/company-graph.js", "/static/auth.js",
+    ]:
+        assert path not in html
+    assert re.search(r'<div id="root">', html)

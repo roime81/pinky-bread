@@ -423,6 +423,7 @@ def _persist_company_document(
     source_url: str | None = None,
     related_node_id: str | None = None,
     kind: str = "document",
+    display_title: str | None = None,
 ) -> dict[str, Any]:
     clean_name = safe_document_filename(filename)
     extracted_text, extraction_status = extract_document_text(clean_name, content_type, raw)
@@ -454,7 +455,7 @@ def _persist_company_document(
         tenant_id=tenant_id,
         actor_id=actor_id,
         node_type=kind,
-        name=clean_name,
+        name=(display_title or "").strip()[:240] or clean_name,
         description=f"Stored {kind} · {len(raw)} bytes · {extraction_status}",
         status="STORED",
         data={
@@ -525,7 +526,7 @@ async def upload_company_artifact(
         raise HTTPException(400, "Uploaded file is empty")
     if len(raw) > settings.max_upload_bytes:
         raise HTTPException(413, f"File exceeds the {settings.max_upload_mb} MB upload limit")
-    filename = safe_document_filename(title.strip() or file.filename)
+    filename = safe_document_filename(file.filename)
     try:
         content_type = supported_document_type(filename, file.content_type)
         artifact = _persist_company_document(
@@ -537,6 +538,7 @@ async def upload_company_artifact(
             raw=raw,
             related_node_id=related_node_id,
             kind=kind,
+            display_title=title,
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc

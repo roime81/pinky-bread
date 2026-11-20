@@ -52,7 +52,11 @@ jobs:
           node --check web/company-graph.js
           node --check web/auth.js
           node --check web/login.js
-      - name: Build React collaboration workspace
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build React workspace and document composer
         run: |
           cd frontend
           npm install --no-audit --no-fund

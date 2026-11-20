@@ -331,7 +331,7 @@
       const target = event.target instanceof Element ? event.target.closest(".graph-node.agent") : null;
       if (!target) return;
       const point = graphPointFromPointer(svg, event);
-      const transform = /translate\\(([-\\d.]+)\\s+([-\\d.]+)\\)/.exec(target.getAttribute("transform") || "");
+      const transform = /translate\(([-\d.]+)\s+([-\d.]+)\)/.exec(target.getAttribute("transform") || "");
       if (!point || !transform) return;
       const nodeId = target.dataset.nodeId;
       state.drag = {
@@ -370,8 +370,8 @@
       state.drag = null;
       if (drag.moved) {
         saveCompanyNodePositions();
-        state.suppressAgentClick = true;
-        if (cancelled) state.suppressAgentClick = false;
+        state.suppressAgentClick = !cancelled;
+        if (state.suppressAgentClick) window.setTimeout(() => { state.suppressAgentClick = false; }, 0);
         renderGraph();
       }
       try {

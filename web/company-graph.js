@@ -863,10 +863,15 @@
       vllm: { model: "your-model-id", endpoint: "Your vLLM /v1 endpoint", env: "VLLM_API_KEY" },
       "openai-compatible": { model: "your-model-id", endpoint: "Your gateway /v1 endpoint", env: "OPENAI_COMPATIBLE_API_KEY (or VLLM_API_KEY)" },
       openai: { model: "gpt-4.1-mini", endpoint: "https://api.openai.com/v1", env: "OPENAI_API_KEY" },
-      gemini: { model: "gemini-2.5-flash", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai", env: "GEMINI_API_KEY" },
+      gemini: { model: "gemini-4-hydrogen", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai", env: "GEMINI_API_KEY" },
     };
     const selected = defaults[provider] || defaults.ollama;
-    if (model) model.placeholder = `e.g. ${selected.model}`;
+    if (model) {
+      const previousDefault = model.dataset.providerDefault || "qwen2.5:3b";
+      if (!model.value || model.value === previousDefault) model.value = selected.model;
+      model.dataset.providerDefault = selected.model;
+      model.placeholder = `e.g. ${selected.model}`;
+    }
     if (endpoint) endpoint.placeholder = selected.endpoint;
     if (help) {
       const status = state.modelProviders?.providers?.[provider];

@@ -38,7 +38,7 @@ Image files can be attached and stored, but this release does not OCR images or 
 
 ## Cloud-link import boundary
 
-POST /v2/companies/{company_id}/document-links imports a document accessible through a public HTTPS share/download URL. Google Drive file-share URLs and Google Docs/Sheets/Slides export links are normalised where possible; Dropbox shared links are converted to direct-download mode. Other cloud providers work when their public share URL resolves to a direct supported file download.
+POST /v2/companies/{company_id}/document-links imports a document accessible through a public HTTPS share/download URL. Google Drive file-share URLs and Google Docs/Sheets/Slides export links are normalised where possible; Dropbox shared links are converted to direct-download mode; OneDrive, SharePoint and Box public share links are asked for download mode. Other cloud providers work when their public share URL resolves to a direct supported file download. S3-compatible pre-signed HTTPS download URLs can also be used while they remain valid.
 
 The importer:
 - permits HTTPS only

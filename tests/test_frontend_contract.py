@@ -88,3 +88,43 @@ def test_company_agent_directory_is_rendered_inside_the_left_sidebar():
     assert sidebar_start < directory_start < directory_end < main_start
     assert 'id="company-agent-list"' in html
     assert 'id="graph-add-agent-directory"' in html
+
+
+
+def test_company_event_log_and_founder_view_are_dedicated_pages():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    assert 'data-view="company-events"' in html
+    assert 'data-view="founder-view"' in html
+    assert 'id="view-company-events"' in html
+    assert 'id="view-founder-view"' in html
+    assert html.count('id="graph-activity-panel"') == 1
+    assert html.count('id="graph-brief-panel"') == 1
+    assert 'class="company-bottom-grid"' not in html
+
+
+def test_left_and_right_workspace_panels_are_independently_collapsible():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    styles = (ROOT / "web" / "company-graph.css").read_text(encoding="utf-8")
+    assert 'id="sidebar-toggle"' in html
+    assert 'id="sidebar-panel-close"' in html
+    assert 'id="chat-panel-toggle"' in html
+    assert 'id="chat-panel-close"' in html
+    assert "pinky-sidebar-hidden" in app
+    assert "pinky-chat-panel-hidden" in app
+    assert ".app-shell.sidebar-hidden" in styles
+    assert ".app-shell.chat-hidden" in styles
+
+
+def test_agent_graph_dots_can_be_dragged_and_remembered_per_company():
+    source = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
+    styles = (ROOT / "web" / "company-graph.css").read_text(encoding="utf-8")
+    assert "bindAgentNodeDragging" in source
+    assert 'closest(".graph-node.agent")' in source
+    assert 'addEventListener("pointerdown"' in source
+    assert 'addEventListener("pointermove"' in source
+    assert 'addEventListener("pointerup"' in source
+    assert "pinky-graph-layout:" in source
+    assert "state.nodePositions" in source
+    assert ".graph-node.agent" in styles
+    assert "cursor: grab" in styles

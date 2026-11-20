@@ -116,7 +116,7 @@ def resolve_agent_discussion(
             unique.append(agent)
 
     if len(unique) >= 2:
-        participants = unique[:4]
+        participants = unique[:2]
         initiator = participants[0]
         recipients = participants[1:]
     elif len(unique) == 1 and re.search(r"\b(with|to)\b", message, re.IGNORECASE):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 import asyncio
+import json
 import re
 import uuid
 import httpx
@@ -21,6 +22,13 @@ from .durable_runtime import (
     cancel_job,
     configure_coordination,
     get_coordination,
+)
+
+from .agent_messaging import (
+    get_agent_conversation,
+    list_agent_conversations,
+    resolve_agent_discussion,
+    stream_agent_discussion,
 )
 
 from .workforce import (
@@ -127,6 +135,11 @@ class AgentUpdateRequest(WorkforceAction):
 class CompanyChatRequest(WorkforceAction):
     message: str = Field(min_length=1, max_length=12000)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
+
+
+class AgentConversationStreamRequest(WorkforceAction):
+    message: str = Field(min_length=1, max_length=12000)
+    max_turns: int = Field(default=6, ge=2, le=12)
 
 class WorkExecutionRequest(WorkforceAction):
     retry: bool = False
@@ -606,6 +619,81 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
             "model": (first.get("data") or {}).get("model_configuration", {}).get("model_name"),
         },
     }
+
+
+
+
+@router.get("/companies/{company_id}/conversations")
+def list_agent_conversations_endpoint(
+    company_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    conversations = list_agent_conversations(company_id=company_id, tenant_id=tenant_id)
+    return {"conversations": conversations, "count": len(conversations)}
+
+
+@router.get("/companies/{company_id}/conversations/{conversation_id}")
+def get_agent_conversation_endpoint(
+    company_id: str,
+    conversation_id: str,
+    tenant_id: str = Query(default="demo-tenant", min_length=2, max_length=120),
+) -> dict[str, Any]:
+    conversation = get_agent_conversation(
+        company_id=company_id, tenant_id=tenant_id, conversation_id=conversation_id
+    )
+    if conversation is None:
+        raise HTTPException(404, "Conversation not found")
+    return conversation
+
+
+@router.post("/companies/{company_id}/conversations/stream")
+async def stream_agent_conversation_endpoint(
+    company_id: str, request: AgentConversationStreamRequest
+):
+    graph = get_company_graph(company_id=company_id, tenant_id=request.tenant_id)
+    if graph is None:
+        raise HTTPException(404, "Company not found")
+    agents = [
+        node for node in graph["nodes"]
+        if node["type"] == "agent" and node.get("status") not in {"ARCHIVED", "DISABLED", "PAUSED"}
+    ]
+    resolution = resolve_agent_discussion(agents, request.message)
+    if resolution is None:
+        raise HTTPException(
+            422,
+            "To start an agent discussion, mention the initiating agent and at least one colleague "
+            "(or mention one colleague when a coordinator is configured), and include an instruction "
+            "such as discuss, talk, ask, message or say hello.",
+        )
+    company = next(node for node in graph["nodes"] if node["type"] == "company")
+
+    async def event_stream():
+        try:
+            async for event in stream_agent_discussion(
+                company_id=company_id,
+                tenant_id=request.tenant_id,
+                actor_id=request.actor_id,
+                company=company,
+                agents=agents,
+                initiator=resolution["initiator"],
+                recipients=resolution["recipients"],
+                founder_message=request.message,
+                max_turns=min(request.max_turns, resolution["max_turns"])
+                if resolution["max_turns"] == 2 else request.max_turns,
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\\n\\n"
+        except Exception as exc:
+            payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\\n\\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 @router.get("/companies/{company_id}/agents")

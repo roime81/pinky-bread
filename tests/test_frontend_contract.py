@@ -149,7 +149,7 @@ def test_login_page_remains_the_unauthenticated_entry_point():
     assert "/static/login.js" in login
     assert 'RedirectResponse(url="/login", status_code=303)' in main
     assert 'RedirectResponse(url="/", status_code=303)' in main
-    assert 'window.location.replace("/")' in script
+    assert "window.location.replace(destinationAfterLogin())" in script
 
 
 def test_legacy_workspace_dom_scripts_are_not_loaded_by_the_application_shell():

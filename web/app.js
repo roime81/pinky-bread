@@ -7,8 +7,53 @@ function toast(message){const el=$('#toast');if(!el)return;el.textContent=messag
 function statusClass(status){return ({COMPLETED:'completed',PENDING_APPROVAL:'pending',REJECTED:'rejected',FAILED:'failed',RUNNING:'running'})[status]||'running'}
 function shortId(id){return (id||'').slice(0,8)}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderModelProviders(payload){
+ const target=$('#model-provider-list');
+ if(!target)return;
+ const providers=payload?.providers||{};
+ const order=['openai','gemini','ollama','vllm','openai-compatible'];
+ const descriptions={
+  openai:'Use OpenAI models such as GPT through the official OpenAI API.',
+  gemini:'Use Google Gemini models through the Gemini API OpenAI-compatible endpoint.',
+  ollama:'Run models locally with the Ollama service in Docker Compose.',
+  vllm:'Connect your own self-hosted vLLM inference endpoint.',
+  'openai-compatible':'Connect another hosted inference gateway that implements the OpenAI Chat Completions API.'
+ };
+ target.innerHTML=order.map(key=>{
+  const item=providers[key]||{};
+  const configured=Boolean(item.configured);
+  const status=item.requires_api_key
+   ? (configured?'API key configured':'API key missing')
+   : (key==='ollama'?'Local provider available':'Endpoint configured');
+  const statusClassName=item.requires_api_key&&!configured?'missing':'ready';
+  const endpoint=escapeHtml(item.endpoint||'Provider default');
+  const envName=escapeHtml(item.credential_env||'');
+  return `<article class="model-provider-card">
+    <div class="model-provider-card-head"><div><div class="eyebrow">LLM PROVIDER</div><h2>${escapeHtml(item.label||key)}</h2></div>
+    <span class="model-provider-status ${statusClassName}"><i></i>${escapeHtml(status)}</span></div>
+    <p>${escapeHtml(descriptions[key]||'Configured model endpoint.')}</p>
+    <div class="model-provider-endpoint"><span>ENDPOINT</span><code>${endpoint}</code></div>
+    <div class="model-provider-credential"><span>SERVER ENVIRONMENT</span><code>${envName||'No separate key required'}</code></div>
+  </article>`;
+ }).join('');
+ const summary=$('#model-provider-default');
+ if(summary)summary.textContent=payload?.default_provider||'ollama';
+}
+async function loadModelProviders(){
+ const target=$('#model-provider-list');
+ if(target)target.innerHTML='<article class="model-provider-card"><div class="eyebrow">PROVIDER STATUS</div><strong>Checking configured providers…</strong></article>';
+ try{
+  const response=await fetch('/v2/model-providers');
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(payload.detail||`Provider settings could not be loaded (${response.status})`);
+  renderModelProviders(payload);
+ }catch(error){
+  if(target)target.innerHTML=`<article class="model-provider-card"><div class="eyebrow">PROVIDER STATUS</div><strong>Could not load provider status</strong><p>${escapeHtml(error.message)}</p></article>`;
+  throw error;
+ }
+}
 function go(view, section = null){
- const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce','agent-messaging':'Agent Conversations',audit:'Audit Trails','company-graph':'Company graph','company-events':'Company Event Log','founder-view':'Founder View'};
+ const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce','agent-messaging':'Agent Conversations',audit:'Audit Trails','company-graph':'Company graph','company-events':'Company Event Log','founder-view':'Founder View','model-providers':'Model Providers'};
  const sectionLabels={'workforce-runtime-panel':'Durable Workforce','agent-management-panel':'Your Virtual Team','graph-activity-panel':'Company Event Log','graph-brief-panel':'Founder View'};
  const previousView=$('.view.active')?.id?.replace(/^view-/,'')||null;
  appShell?.classList.toggle('a2a-fullscreen',view==='agent-messaging');
@@ -22,7 +67,7 @@ function go(view, section = null){
    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
  const breadcrumb=$('#breadcrumb-current');if(breadcrumb)breadcrumb.textContent=sectionLabels[section]||labels[view]||'Workspace';
- const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'company-graph':window.loadCompanyGraph,'company-events':window.loadCompanyGraph,'founder-view':window.loadCompanyGraph};
+ const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'model-providers':loadModelProviders,'company-graph':window.loadCompanyGraph,'company-events':window.loadCompanyGraph,'founder-view':window.loadCompanyGraph};
  const load=loaders[view];
  let loadPromise=null;
  const sectionTarget=section?document.getElementById(section):null;
@@ -91,6 +136,7 @@ setChatPanelHidden(initiallyChatHidden,false);
 chatPanelToggle?.addEventListener('click',()=>setChatPanelHidden(!appShell?.classList.contains('chat-hidden')));
 chatPanelClose?.addEventListener('click',()=>setChatPanelHidden(true));
 
+$('#model-providers-refresh')?.addEventListener('click',()=>loadModelProviders().then(()=>toast('Provider status refreshed')).catch(error=>toast(error.message)));
 $('#new-workflow-btn')?.addEventListener('click',()=>{go('overview');$('#prompt')?.focus();window.scrollTo({top:0,behavior:'smooth'})});
 $('#browse-btn')?.addEventListener('click',()=>$('#artifact-file')?.click());
 $('#artifact-file')?.addEventListener('change',e=>{for(const f of e.target.files){if(!['image/png','image/jpeg','application/pdf'].includes(f.type)){toast(`Unsupported file: ${f.name}`);continue}if(f.size>12*1024*1024){toast(`${f.name} exceeds 12 MB`);continue}selectedFiles.push(f)}renderSelectedFiles();e.target.value=''});

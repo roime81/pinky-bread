@@ -801,16 +801,9 @@ No regulatory certification, security assurance, production air-gap verification
 
 ## Roadmap
 
-Pinky Bread 2.0 is the active delivery target. Complete identity/company isolation, durable agent collaboration, agent/model governance, company memory, MCP approvals and operational readiness before introducing the separate 3.0 AI infrastructure pipeline. See the [2.0 delivery roadmap](docs/ROADMAP_2.0.md) and [3.0 future pipeline](docs/ROADMAP_3.0.md).
+Pinky Bread 2.0 is the active delivery target. The immediate increment is 2.0.1 identity, company membership, RBAC and tenant isolation. Subsequent increments complete durable agent collaboration, agent/model governance, company memory, controlled MCP integrations and platform operations. See the [Pinky Bread 2.0 delivery roadmap](docs/ROADMAP_2.0.md).
 
-See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
-
-1. **Workforce quality:** richer coordination, cancellation semantics, budget enforcement, agent evaluation and repeatable execution policies.
-2. **Production MCP identity:** OIDC/JWT validation, authenticated tool identities, per-agent grants and tool-level policy checks.
-3. **Approval security:** authenticated approvers, role/tenant checks, separation of duties and replay protection.
-4. **Multimodal processing:** local OCR for scanned PDFs, image validation, vision-model integration tests and safer artifact lifecycle controls.
-5. **Privacy and governance:** local NER/Presidio, secure token vault, prompt/model manifest versioning, audit export and retention policy.
-6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Valkey-backed coordination, policy enforcement, deployment hardening and security/load testing.
+Pinky Bread 3.0 remains a future pipeline for LiteLLM, Langfuse, DSPy, CopilotKit and runtime-framework evaluations. None of these are required for 2.0. See the [Pinky Bread 3.0 future pipeline](docs/ROADMAP_3.0.md).
 
 ## Troubleshooting
 

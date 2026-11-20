@@ -8,7 +8,7 @@ function statusClass(status){return ({COMPLETED:'completed',PENDING_APPROVAL:'pe
 function shortId(id){return (id||'').slice(0,8)}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function go(view, section = null){
- const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce',audit:'Audit Trails','company-graph':'Company graph'};
+ const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce','agent-messaging':'Agent Conversations',audit:'Audit Trails','company-graph':'Company graph'};
  const sectionLabels={'workforce-runtime-panel':'Durable Workforce','agent-management-panel':'Your Virtual Team','graph-activity-panel':'Company Event Log','graph-brief-panel':'Founder View'};
  const previousView=$('.view.active')?.id?.replace(/^view-/,'')||null;
  const target=document.getElementById(`view-${view}`);

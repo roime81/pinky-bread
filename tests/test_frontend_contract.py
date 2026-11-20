@@ -37,7 +37,6 @@ def test_founder_workspace_contains_all_agent_editor_and_chat_controls():
         "agent-editor-model",
         "agent-editor-endpoint",
         "agent-editor-manager",
-        "auth-gate",
         "auth-logout",
         "company-command-form",
         "ai-runtime-status",

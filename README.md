@@ -9,7 +9,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 > **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), the [changelog](CHANGELOG.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md).
 
 > [!IMPORTANT]
-> **MVP / demonstration software.** Docker Compose uses live local Ollama inference by default; mock inference is available only when explicitly enabled and does not inspect image pixels. The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Authentication, enterprise RBAC, tenant isolation, Keycloak/OIDC identity, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
+> **MVP / demonstration software.** Docker Compose uses live local Ollama inference by default; mock inference is available only when explicitly enabled and does not inspect image pixels. The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Local development sign-in and Google OAuth sign-in are available, but enterprise RBAC, company membership/tenant isolation, production identity lifecycle, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
 
 ---
 
@@ -23,7 +23,8 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - [Architecture](#architecture)
 - [Technology stack](#technology-stack)
 - [Requirements](#requirements)
-- [Recommended installation: Docker Compose](#recommended-installation-docker-compose)
+- [Install and run with Docker Compose](#install-and-run-with-docker-compose)
+- [Optional standalone Python / Uvicorn mode](#optional-standalone-python--uvicorn-mode)
 - [Local service ports](#local-service-ports)
 - [Configure the Ollama model](#configure-the-ollama-model)
 - [Configuration reference](#configuration-reference)
@@ -89,7 +90,7 @@ Pinky Bread explores a controlled multi-agent execution pattern:
 
 | Capability | MVP implementation | Current boundary |
 |---|---|---|
-| Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views | Development UI; no login or authenticated tenant boundary |
+| Web operations console | Company graph, company onboarding, node inspector, relationships, event activity, legacy workflow/approval/agent/audit views, local development and Google sign-in | Development UI; authentication does not yet provide company membership, RBAC or tenant isolation |
 | Company graph and workforce | Company, goals, KPIs, reusable agents, assignments, meetings and deliverables with typed edges | Durable PostgreSQL job queue, LangGraph checkpoints and worker recovery; authenticated tenant boundary remains future work |
 | Company event history | PostgreSQL append-only company events with SHA-256 chaining and verification API | Tamper-evident, not independently immutable or WORM protected |
 | Live graph updates | Valkey Pub/Sub notifications and SSE | Database event history is authoritative; Valkey notifications are best-effort |
@@ -192,38 +193,107 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 
 ## Requirements
 
-### Recommended full-stack deployment
+### Recommended Docker Compose deployment
 
 - Docker Engine or Docker Desktop with Docker Compose v2
-- Internet access on first startup to pull container images and the selected Ollama model
-- Sufficient disk and memory for PostgreSQL, Valkey, SeaweedFS, the API/worker and the selected model
+- Internet access on first startup to pull container images and the configured Ollama model
+- Sufficient disk space and memory for PostgreSQL, Valkey, SeaweedFS, the API/worker and the selected model
 - A GPU is optional. Ollama can run on CPU, although inference may be slower
 
 ### Optional standalone Python deployment
 
 - Python 3.11 or newer and `pip`
 - A local Ollama installation listening on `127.0.0.1:11434`, or another OpenAI-compatible model server
-- PostgreSQL/Valkey/MCP are not started by the standalone API command; this mode is intended for API-only development
+- Supporting services such as PostgreSQL, Valkey, MCP, the worker and object storage are **not** started by Uvicorn. Standalone mode is intended for API-only development.
 
-## Recommended installation: Docker Compose
+## Install and run with Docker Compose
 
-The full Compose stack is the recommended path. It starts the API, worker, MCP server, PostgreSQL, Valkey, SeaweedFS and Ollama. The first start pulls the configured model automatically. You do not need to run Uvicorn, Ollama, MCP, PostgreSQL or Valkey in separate terminals.
+**Docker Compose is the recommended way to run Pinky Bread.** It starts the API, web UI, durable worker, MCP server, PostgreSQL, Valkey, SeaweedFS and Ollama together. It also runs the database migration and model-bootstrap services in the correct order.
+
+You do not need to start Uvicorn, Ollama, PostgreSQL, Valkey, MCP or the worker in separate terminals when using this method.
+
+### Existing checkout or GitHub Codespaces
+
+Run these commands from the repository directory to update to the latest `main` branch and start the full application:
 
 ```bash
-git clone https://github.com/roime81/pinky-bread.git
-cd pinky-bread
-cp .env.example .env
-
-# GitHub Codespaces: use 0.0.0.0 for Docker port forwarding.
-# On a normal local machine, keep the safer 127.0.0.1 binding.
-# sed -i 's/^PB_BIND_ADDRESS=.*/PB_BIND_ADDRESS=0.0.0.0/' .env
-
-docker compose config --quiet
+git switch main
+git pull origin main
 docker compose up --build -d
 docker compose ps
 ```
 
-Open the UI at <http://127.0.0.1:8888>. In Codespaces, open port `8888` from the Ports panel. Keep the other forwarded ports private.
+### First-time installation
+
+Clone the repository, then run the same startup commands:
+
+```bash
+git clone https://github.com/roime81/pinky-bread.git
+cd pinky-bread
+git switch main
+git pull origin main
+docker compose up --build -d
+docker compose ps
+```
+
+### Optional environment configuration
+
+The Compose defaults are suitable for a private local development environment. To customise settings such as Google OAuth, the session secret, model name or host binding, create a local environment file once:
+
+```bash
+cp .env.example .env
+```
+
+Do not overwrite an existing `.env` when updating the repository; it may contain your own credentials and settings.
+
+For GitHub Codespaces, set `PB_BIND_ADDRESS=0.0.0.0` in `.env` when needed for forwarded ports. On a normal local machine, keep the default `127.0.0.1` binding. Avoid forwarding database, cache, MCP and Ollama ports publicly.
+
+### Open the application
+
+- Local browser: <http://localhost:8888>
+- GitHub Codespaces: open port `8888` in the Codespaces **Ports** panel and open its forwarded URL.
+
+The first startup can take longer because Docker must download the images and Ollama must pull the configured model. Check service startup and model download with:
+
+```bash
+docker compose ps
+docker compose logs -f api worker ollama ollama-init
+```
+
+For local development, the default sign-in is:
+
+- Username: `admin`
+- Password: `admin`
+
+Change these credentials and the session secret before sharing the environment. See [Sign in to Pinky Bread](#sign-in-to-pinky-bread) and [Enable Google sign-in](#enable-google-sign-in) for authentication setup.
+
+### Update an existing installation
+
+Use this sequence whenever you want to pull the latest code and rebuild the running services:
+
+```bash
+git switch main
+git pull origin main
+docker compose up --build -d
+docker compose ps
+```
+
+Docker Compose recreates services when their image or configuration changes. Your PostgreSQL, model and uploaded-file data are stored in persistent volumes/directories. Use `docker compose down` to stop the stack; **do not add `--volumes` unless you intentionally want to delete persisted data**.
+
+## Optional standalone Python / Uvicorn mode
+
+Use this mode only when you deliberately want to run the FastAPI application directly on your host instead of using the Compose API service. It does **not** start the durable worker, MCP server, PostgreSQL, Valkey, SeaweedFS or Ollama. Those services must be configured and started separately when your development task needs them.
+
+From the repository root, install the Python dependencies and start the API:
+
+```bash
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8888
+```
+
+Open <http://localhost:8888>. The `--reload` option is for development. Binding to `0.0.0.0` exposes the development server on all network interfaces; use it only on a trusted/private network.
+
+**Do not run this Uvicorn command while Docker Compose is running its API service on port `8888`.** Choose one run mode at a time. To switch from Compose to standalone, stop the Compose stack first with `docker compose down`.
 
 ### Local service ports
 

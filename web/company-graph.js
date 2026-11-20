@@ -17,6 +17,9 @@
     reloadRequested: false,
     chatHistory: [],
     chatSending: false,
+    nodePositions: {},
+    drag: null,
+    suppressAgentClick: false,
   };
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -46,6 +49,28 @@
     $("#agent-management-panel").hidden = !hasCompany;
   }
 
+  function loadCompanyNodePositions() {
+    state.nodePositions = {};
+    if (!state.company) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`pinky-graph-layout:${state.company.id}`) || "{}");
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        state.nodePositions = saved;
+      }
+    } catch {
+      state.nodePositions = {};
+    }
+  }
+
+  function saveCompanyNodePositions() {
+    if (!state.company) return;
+    try {
+      localStorage.setItem(`pinky-graph-layout:${state.company.id}`, JSON.stringify(state.nodePositions));
+    } catch {
+      toast("The browser could not save the custom graph layout.");
+    }
+  }
+
   async function initialise() {
     try {
       state.companies = (await api("/v2/companies?tenant_id=demo-tenant")).companies || [];
@@ -55,6 +80,7 @@
         return;
       }
       state.company = state.companies[0];
+      loadCompanyNodePositions();
       setWorkspaceVisible(true);
       try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
       $("#graph-company-picker").value = state.company.id;
@@ -193,6 +219,15 @@
         a.y = Math.max(55, Math.min(height - 55, a.y));
       }
     }
+    // Restore founder-arranged agent positions after the automatic layout pass.
+    for (const [nodeId, saved] of Object.entries(state.nodePositions || {})) {
+      if (!saved || !Number.isFinite(Number(saved.x)) || !Number.isFinite(Number(saved.y))) continue;
+      if (!positions.has(nodeId)) continue;
+      positions.set(nodeId, {
+        x: Math.max(45, Math.min(width - 45, Number(saved.x))),
+        y: Math.max(45, Math.min(height - 45, Number(saved.y))),
+      });
+    }
     return positions;
   }
 
@@ -241,7 +276,7 @@
       const status = (node.status || "").toLowerCase().replaceAll(" ", "_");
       const shortLabel = node.name.length > 25 ? `${node.name.slice(0, 23)}…` : node.name;
       const subLabel = node.type === "company" ? "FOUNDER" : node.type.toUpperCase();
-      return `<g class="graph-node ${escapeHtml(node.type)} status-${escapeHtml(status)} ${selected ? "selected" : ""}" data-node-id="${escapeHtml(node.id)}" transform="translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(node.name)}">
+      return `<g class="graph-node ${escapeHtml(node.type)} status-${escapeHtml(status)} ${selected ? "selected" : ""} ${state.drag?.nodeId === node.id ? "dragging" : ""}" data-node-id="${escapeHtml(node.id)}" transform="translate(${point.x.toFixed(1)} ${point.y.toFixed(1)})" tabindex="0" role="button" aria-label="Inspect ${escapeHtml(node.name)}">
         <circle class="node-halo" r="${radius + 9}"></circle>
         <circle class="node-core" r="${radius}"></circle>
         <text y="${radius + 17}">${escapeHtml(shortLabel)}</text>
@@ -251,7 +286,15 @@
 
     svg.innerHTML = `<g class="graph-edges">${edgeMarkup}</g><g class="graph-nodes">${nodeMarkup}</g>`;
     svg.querySelectorAll("[data-node-id]").forEach((element) => {
-      element.addEventListener("click", () => onNodeClick(element.dataset.nodeId));
+      element.addEventListener("click", (event) => {
+        if (state.suppressAgentClick && element.classList.contains("agent")) {
+          state.suppressAgentClick = false;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onNodeClick(element.dataset.nodeId);
+      });
       element.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -266,6 +309,80 @@
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
     renderAgentDirectory();
     if (state.selectedId) selectNode(state.selectedId, false);
+  }
+
+  function graphPointFromPointer(svg, event) {
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const transformed = point.matrixTransform(matrix.inverse());
+    return { x: transformed.x, y: transformed.y };
+  }
+
+  function bindAgentNodeDragging() {
+    const svg = $("#company-graph-svg");
+    if (!svg || svg.dataset.dragBound === "true") return;
+    svg.dataset.dragBound = "true";
+
+    svg.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || state.connectMode || !state.company) return;
+      const target = event.target instanceof Element ? event.target.closest(".graph-node.agent") : null;
+      if (!target) return;
+      const point = graphPointFromPointer(svg, event);
+      const transform = /translate\(([-\d.]+)\s+([-\d.]+)\)/.exec(target.getAttribute("transform") || "");
+      if (!point || !transform) return;
+      const nodeId = target.dataset.nodeId;
+      state.drag = {
+        nodeId,
+        pointerId: event.pointerId,
+        startX: Number(transform[1]),
+        startY: Number(transform[2]),
+        pointerX: point.x,
+        pointerY: point.y,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        moved: false,
+      };
+      try { svg.setPointerCapture(event.pointerId); } catch {}
+      event.preventDefault();
+    });
+
+    svg.addEventListener("pointermove", (event) => {
+      const drag = state.drag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const point = graphPointFromPointer(svg, event);
+      if (!point) return;
+      const deltaClient = Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY);
+      if (!drag.moved && deltaClient < 4) return;
+      drag.moved = true;
+      const x = Math.max(45, Math.min(955, drag.startX + point.x - drag.pointerX));
+      const y = Math.max(45, Math.min(605, drag.startY + point.y - drag.pointerY));
+      state.nodePositions[drag.nodeId] = { x, y };
+      renderGraph();
+      event.preventDefault();
+    });
+
+    const finishDrag = (event, cancelled = false) => {
+      const drag = state.drag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      state.drag = null;
+      if (drag.moved) {
+        saveCompanyNodePositions();
+        state.suppressAgentClick = !cancelled;
+        if (state.suppressAgentClick) window.setTimeout(() => { state.suppressAgentClick = false; }, 0);
+        renderGraph();
+      }
+      try {
+        if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+      } catch {}
+    };
+    svg.addEventListener("pointerup", (event) => finishDrag(event));
+    svg.addEventListener("pointercancel", (event) => finishDrag(event, true));
+    svg.addEventListener("lostpointercapture", (event) => {
+      if (state.drag?.pointerId === event.pointerId) finishDrag(event, true);
+    });
   }
 
   async function loadJobs() {
@@ -612,6 +729,7 @@
         }),
       });
       state.company = company;
+      loadCompanyNodePositions();
       state.chatHistory = [];
       state.companies.push(company);
       renderCompanyPicker();
@@ -1200,6 +1318,7 @@
   $("#coordination-stop")?.addEventListener("click", () => configureCoordination(false, "PLAN_ONLY"));
   $("#graph-company-picker")?.addEventListener("change", async (event) => {
     state.company = state.companies.find((company) => company.id === event.target.value);
+    loadCompanyNodePositions();
     try { state.chatHistory = JSON.parse(localStorage.getItem(`pinky-chat:${state.company.id}`) || "[]"); } catch { state.chatHistory = []; }
     state.selectedId = null;
     if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
@@ -1221,5 +1340,6 @@
     return renderAgentDirectory();
   };
 
+  bindAgentNodeDragging();
   initialise();
 })();

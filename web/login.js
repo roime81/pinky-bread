@@ -8,12 +8,10 @@
   const submit = document.querySelector("#login-submit");
 
   function destinationAfterLogin() {
-    const requested = new URLSearchParams(window.location.search).get("next") || "/";
-    // Only accept an in-app path. Never redirect to an external or protocol-relative URL.
-    if (!requested.startsWith("/") || requested.startsWith("//") || requested.includes("\\") || requested.startsWith("/\\")) {
-      return "/";
-    }
-    return requested;
+    // Always enter through the canonical application root. The React workspace
+    // selects Overview as its default view; carrying stale deep links from older
+    // releases was sending users to routes that are not real server pages.
+    return "/";
   }
 
   async function initialise() {
@@ -26,7 +24,7 @@
       const config = await configResponse.json();
       const me = await meResponse.json();
       if (!config.enabled || me.authenticated) {
-        window.location.replace(destinationAfterLogin());
+        window.location.replace("/");
         return;
       }
       const showDev = Boolean(config.dev_login_enabled);

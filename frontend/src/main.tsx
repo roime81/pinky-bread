@@ -1,23 +1,16 @@
-import React from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
-import FounderComposer from "./FounderComposer";
+import WorkspaceApp from "./WorkspaceApp";
 import "./styles.css";
+import "./workspace.css";
 
-const container = document.getElementById("a2a-workspace-root");
-if (container) {
-  createRoot(container).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-  );
+const container = document.getElementById("root");
+if (!container) {
+  throw new Error("Pinky Bread workspace root element #root was not found.");
 }
 
-const composerContainer = document.getElementById("company-composer-root");
-if (composerContainer) {
-  createRoot(composerContainer).render(
-    <React.StrictMode>
-      <FounderComposer />
-    </React.StrictMode>,
-  );
-}
+createRoot(container).render(
+  <StrictMode>
+    <WorkspaceApp />
+  </StrictMode>,
+);

@@ -708,21 +708,48 @@ async def stream_agent_conversation_endpoint(
     company = next(node for node in graph["nodes"] if node["type"] == "company")
 
     async def event_stream():
+        iterator = stream_agent_discussion(
+            company_id=company_id,
+            tenant_id=request.tenant_id,
+            actor_id=request.actor_id,
+            company=company,
+            agents=agents,
+            initiator=resolution["initiator"],
+            recipients=resolution["recipients"],
+            founder_message=request.message,
+            max_turns=min(request.max_turns, resolution["max_turns"])
+            if resolution["max_turns"] == 2 else request.max_turns,
+        ).__aiter__()
+        pending = None
+        conversation_id = None
         try:
-            async for event in stream_agent_discussion(
-                company_id=company_id,
-                tenant_id=request.tenant_id,
-                actor_id=request.actor_id,
-                company=company,
-                agents=agents,
-                initiator=resolution["initiator"],
-                recipients=resolution["recipients"],
-                founder_message=request.message,
-                max_turns=min(request.max_turns, resolution["max_turns"])
-                if resolution["max_turns"] == 2 else request.max_turns,
-            ):
+            pending = asyncio.create_task(anext(iterator))
+            while True:
+                done, _ = await asyncio.wait({pending}, timeout=15.0)
+                if not done:
+                    heartbeat = {"type": "heartbeat", "conversation_id": conversation_id}
+                    yield f"data: {json.dumps(heartbeat)}\n\n"
+                    continue
+                try:
+                    event = pending.result()
+                except StopAsyncIteration:
+                    break
+                conversation_id = (
+                    event.get("conversation_id")
+                    or (event.get("conversation") or {}).get("conversation_id")
+                    or conversation_id
+                )
                 yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+                pending = asyncio.create_task(anext(iterator))
+        except asyncio.CancelledError:
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            raise
         except Exception as exc:
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
             payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 

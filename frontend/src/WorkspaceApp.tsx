@@ -712,7 +712,7 @@ export default function WorkspaceApp() {
           </div>
           <div className="pb-topbar-actions">
             <label className="pb-company-picker"><span>COMPANY</span><select id="graph-company-picker" aria-label="Select company" value={companyId} onChange={(event) => setCompanyId(event.target.value)}><option value="">Select company…</option>{companies.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><ChevronDown size={13} /></label>
-            <button className="pb-button primary pb-new-company-button" onClick={() => { setActiveView("company-graph"); setShowCompanyForm(true); }}><Plus size={14} /><span>New company</span></button>
+            <button className="pb-button primary pb-new-company-button" onClick={() => { setCompanyId(""); setCompanyName(""); setActiveView("company-graph"); setShowCompanyForm(true); }}><Plus size={14} /><span>New company</span></button>
             <span className="pb-environment"><i />{String(health.environment || "development").toUpperCase()}</span>
             <button className="pb-icon-button" onClick={() => void reloadCompany().catch((reason) => setError(errorText(reason)))} title="Refresh workspace" aria-label="Refresh workspace"><RefreshCw size={16} className={refreshing ? "pb-spin" : ""} /></button>
             <button className="pb-icon-button" onClick={() => setChatHidden((value) => !value)} title={chatHidden ? "Show founder chat" : "Hide founder chat"} aria-label={chatHidden ? "Show founder chat" : "Hide founder chat"}>

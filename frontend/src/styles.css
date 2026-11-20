@@ -10,7 +10,7 @@
 .a2a-heading-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .a2a-company-select{height:39px;padding:0 12px;display:flex;align-items:center;gap:9px;border:1px solid var(--a2a-border);background:#fff;border-radius:9px;position:relative}
 .a2a-company-select>span{font-size:8px;font-weight:800;letter-spacing:.12em;color:#9aa69e}
-.a2a-company-select select{border:0;outline:0;appearance:none;background:transparent;max-width:160px;padding-right:16px;font:600 11px inherit;color:#344238;cursor:pointer}
+.a2a-company-select select{border:0;outline:0;appearance:none;background:transparent;max-width:160px;padding-right:16px;font:inherit;font-size:11px;font-weight:600;color:#344238;cursor:pointer}
 .a2a-company-select svg{position:absolute;right:10px;pointer-events:none;color:#91a096}
 .a2a-primary-button{height:39px;border:0;background:#233d2d;color:#fff;border-radius:9px;padding:0 14px;display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 5px 13px #1e49301c;transition:background .18s,transform .18s}
 .a2a-primary-button:hover{background:#2c7048;transform:translateY(-1px)}
@@ -103,7 +103,7 @@
 .a2a-composer{padding:14px 20px 12px;border-top:1px solid #edf1ed;background:#fcfdfc}
 .a2a-composer-box{border:1px solid #e2eae3;background:#fff;border-radius:12px;padding:10px 11px 9px;box-shadow:0 3px 13px #263b2b08}
 .a2a-composer-box:focus-within{border-color:#a8c6af;box-shadow:0 0 0 3px #edf6ee}
-.a2a-composer textarea{display:block;width:100%;resize:vertical;min-height:43px;max-height:140px;border:0;outline:0;padding:5px 3px;background:transparent;color:#344438;font:11px/1.65 inherit}
+.a2a-composer textarea{display:block;width:100%;resize:vertical;min-height:43px;max-height:140px;border:0;outline:0;padding:5px 3px;background:transparent;color:#344438;font:inherit;font-size:11px;line-height:1.65}
 .a2a-composer textarea::placeholder{color:#a3ada5}
 .a2a-composer-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:7px}
 .a2a-composer-footer>span{display:flex;align-items:center;gap:6px;color:#9aa59d;font-size:8px}

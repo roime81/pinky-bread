@@ -187,6 +187,7 @@ def test_agent_chat_passes_gemini_credentials_through_mcp_tool_runtime(monkeypat
 
 def test_provider_status_does_not_expose_api_keys(monkeypatch):
     from app import company_api
+    from app.settings import get_settings
 
     settings = get_settings()
     monkeypatch.setattr(settings, "openai_api_key", "sk-never-expose-this")

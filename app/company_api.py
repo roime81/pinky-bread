@@ -580,6 +580,43 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
     ]
     if not agents:
         raise HTTPException(409, "Create an AI employee before starting a company conversation")
+    discussion = resolve_agent_discussion(agents, request.message)
+    if discussion is not None:
+        events = [
+            event async for event in stream_agent_discussion(
+                company_id=company_id,
+                tenant_id=request.tenant_id,
+                actor_id=request.actor_id,
+                company=next(node for node in graph["nodes"] if node["type"] == "company"),
+                agents=agents,
+                initiator=discussion["initiator"],
+                recipients=discussion["recipients"],
+                founder_message=request.message,
+                max_turns=discussion["max_turns"],
+            )
+        ]
+        complete = next((event.get("conversation") for event in reversed(events) if event.get("type") == "complete"), None)
+        messages = [event["message"] for event in events if event.get("type") == "message"]
+        summary = next((item for item in reversed(messages) if item.get("message_kind") == "FOUNDER_SUMMARY"), None)
+        return {
+            "reply": summary["content"] if summary else "The discussion completed.",
+            "responses": [
+                {
+                    "agent_id": item["sender_agent_id"],
+                    "name": item["sender_name"],
+                    "role": next((_agent.get("data", {}).get("role", "AI employee") for _agent in agents if _agent["id"] == item["sender_agent_id"]), "AI employee"),
+                    "reply": item["content"],
+                    "recipient_name": item.get("recipient_name"),
+                    "message_kind": item.get("message_kind"),
+                }
+                for item in messages
+            ],
+            "conversation_id": complete.get("conversation_id") if complete else None,
+            "conversation": complete,
+            "mode": "LIVE_AGENT_TO_AGENT",
+            "agent": {"id": discussion["initiator"]["id"], "name": discussion["initiator"]["name"], "role": discussion["initiator"].get("data", {}).get("role", "AI employee")},
+        }
+
     history = []
     for item in request.history[-12:]:
         role = item.get("role")
@@ -606,7 +643,7 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
         raise HTTPException(502, f"AI runtime integration failed: {type(exc).__name__}: {str(exc)[:300]}") from exc
     if not responses:
         raise HTTPException(503, "No active AI employee was available to respond")
-    reply = "\\n\\n".join(f"**{item['name']} · {item['role']}**\\n{item['reply']}" for item in responses)
+    reply = "\n\n".join(f"**{item['name']} · {item['role']}**\n{item['reply']}" for item in responses)
     first = next((item for item in agents if item["id"] == responses[0]["agent_id"]), agents[0])
     return {
         "reply": reply,
@@ -684,10 +721,10 @@ async def stream_agent_conversation_endpoint(
                 max_turns=min(request.max_turns, resolution["max_turns"])
                 if resolution["max_turns"] == 2 else request.max_turns,
             ):
-                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\\n\\n"
+                yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
         except Exception as exc:
             payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\\n\\n"
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),

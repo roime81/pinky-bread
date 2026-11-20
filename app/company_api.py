@@ -422,6 +422,7 @@ def _persist_company_document(
     raw: bytes,
     source_url: str | None = None,
     related_node_id: str | None = None,
+    kind: str = "document",
 ) -> dict[str, Any]:
     clean_name = safe_document_filename(filename)
     extracted_text, extraction_status = extract_document_text(clean_name, content_type, raw)
@@ -441,7 +442,7 @@ def _persist_company_document(
         filename=clean_name,
         created_by=actor_id,
         metadata={
-            "kind": "document",
+            "kind": kind,
             "source_type": "cloud_link" if source_url else "upload",
             "source_host": source_host,
             "extracted_text": extracted_text,
@@ -452,9 +453,9 @@ def _persist_company_document(
         company_id=company_id,
         tenant_id=tenant_id,
         actor_id=actor_id,
-        node_type="document",
+        node_type=kind,
         name=clean_name,
-        description=f"Stored document · {len(raw)} bytes · {extraction_status}",
+        description=f"Stored {kind} · {len(raw)} bytes · {extraction_status}",
         status="STORED",
         data={
             "object_id": stored["object_id"],
@@ -470,30 +471,25 @@ def _persist_company_document(
     )
     if node is None:
         raise HTTPException(404, "Company not found")
-    if related_node_id:
-        create_edge(
-            company_id=company_id,
-            tenant_id=tenant_id,
-            actor_id=actor_id,
-            source_node_id=node["id"],
-            target_node_id=related_node_id,
-            relationship="informs",
-            data={"object_id": stored["object_id"]},
-        )
+    if kind == "deliverable" and related_node_id:
+        source_node_id, target_node_id, relationship = related_node_id, node["id"], "produces"
+    elif kind == "document" and related_node_id:
+        source_node_id, target_node_id, relationship = node["id"], related_node_id, "informs"
     else:
-        create_edge(
-            company_id=company_id,
-            tenant_id=tenant_id,
-            actor_id=actor_id,
-            source_node_id=company_id,
-            target_node_id=node["id"],
-            relationship="owns",
-            data={"object_id": stored["object_id"]},
-        )
+        source_node_id, target_node_id, relationship = company_id, node["id"], "owns"
+    create_edge(
+        company_id=company_id,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        source_node_id=source_node_id,
+        target_node_id=target_node_id,
+        relationship=relationship,
+        data={"object_id": stored["object_id"]},
+    )
     return {
         "object_id": stored["object_id"],
         "node_id": node["id"],
-        "kind": "document",
+        "kind": kind,
         "filename": clean_name,
         "content_type": content_type,
         "size_bytes": stored["size_bytes"],
@@ -514,8 +510,8 @@ async def upload_company_artifact(
     title: str = Form(default="", max_length=240),
     related_node_id: str | None = Form(default=None),
 ):
-    if kind != "document":
-        raise HTTPException(422, "Only company documents can be attached from the chat composer")
+    if kind not in {"document", "deliverable"}:
+        raise HTTPException(422, "Artifact kind must be document or deliverable")
     graph = get_company_graph(company_id=company_id, tenant_id=tenant_id)
     if graph is None:
         raise HTTPException(404, "Company not found")
@@ -540,13 +536,14 @@ async def upload_company_artifact(
             content_type=content_type,
             raw=raw,
             related_node_id=related_node_id,
+            kind=kind,
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, "Unable to persist company document") from exc
+        raise HTTPException(500, "Unable to persist company artifact") from exc
     return {"artifact": artifact}
 
 

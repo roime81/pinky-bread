@@ -1235,6 +1235,7 @@
           actor_id: "founder",
           message,
           history,
+          artifact_ids: artifactIds,
         }),
         signal: controller.signal,
       });

@@ -85,6 +85,35 @@ def test_anonymous_visitors_are_sent_to_dedicated_login_page(monkeypatch):
     assert already_signed_in.headers["location"] == "/"
 
 
+def test_signed_in_browser_deep_links_serve_react_shell_and_unknown_api_paths_stay_404(monkeypatch):
+    settings = Settings(
+        app_env="test",
+        auth_enabled=True,
+        dev_auth_enabled=True,
+        dev_admin_username="admin",
+        dev_admin_password="admin",
+        session_secret="unit-test-secret-that-is-long-enough",
+    )
+    monkeypatch.setattr(auth, "get_settings", lambda: settings)
+    monkeypatch.setattr(main, "get_settings", lambda: settings)
+
+    client = TestClient(main.app)
+    anonymous = client.get("/workspace/overview", follow_redirects=False)
+    assert anonymous.status_code == 303
+    assert "/login?next=" in anonymous.headers["location"]
+
+    login = client.post("/auth/login", json={"username": "admin", "password": "admin"})
+    assert login.status_code == 200
+    assert login.headers["cache-control"] == "no-store"
+    assert client.get("/auth/me").json()["authenticated"] is True
+
+    deep_link = client.get("/workspace/overview", follow_redirects=False)
+    assert deep_link.status_code == 200
+    assert 'id="root"' in deep_link.text
+    assert client.get("/v2/this-route-does-not-exist").status_code == 404
+    assert client.get("/static/missing-asset.js").status_code == 404
+
+
 def test_workspace_opens_directly_when_authentication_is_disabled(monkeypatch):
     settings = Settings(app_env="test", auth_enabled=False)
     monkeypatch.setattr(auth, "get_settings", lambda: settings)

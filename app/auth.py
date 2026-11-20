@@ -73,6 +73,12 @@ def _set_session(response: Response, *, subject: str, email: str | None = None, 
     )
 
 
+def _request_is_secure(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    forwarded_ssl = request.headers.get("x-forwarded-ssl", "").strip().lower()
+    return request.url.scheme == "https" or forwarded_proto == "https" or forwarded_ssl == "on"
+
+
 def _dev_login_enabled() -> bool:
     settings = get_settings()
     return settings.dev_auth_enabled and settings.app_env.lower() in {"development", "docker", "dev", "test"}
@@ -107,7 +113,8 @@ def dev_login(request: Request, credentials: LoginRequest) -> Response:
     if not (username_ok and password_ok):
         raise HTTPException(401, "Invalid username or password")
     response = JSONResponse({"authenticated": True, "user": {"sub": settings.dev_admin_username, "provider": "development"}})
-    _set_session(response, subject=settings.dev_admin_username, provider="development", secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https")
+    _set_session(response, subject=settings.dev_admin_username, provider="development", secure=_request_is_secure(request))
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -176,7 +183,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
     if not profile.get("email") or profile.get("email_verified") is not True:
         raise HTTPException(403, "Google account must have a verified email address")
     response = RedirectResponse("/", status_code=303)
-    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google", secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https")
+    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google", secure=_request_is_secure(request))
     response.delete_cookie(STATE_COOKIE, path="/auth")
     return response
 

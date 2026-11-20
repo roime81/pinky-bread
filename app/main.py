@@ -3,6 +3,7 @@ import base64
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
@@ -39,12 +40,19 @@ app.include_router(auth_router)
 app.add_middleware(AuthMiddleware)
 
 
+def _workspace_response() -> HTMLResponse:
+    return HTMLResponse(
+        (web_dir / "index.html").read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     current_settings = get_settings()
     if current_settings.auth_enabled and not session_user(request):
         return RedirectResponse(url="/login", status_code=303)
-    return HTMLResponse((web_dir / "index.html").read_text(encoding="utf-8"))
+    return _workspace_response()
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -135,3 +143,24 @@ def get_audit(thread_id: str) -> dict[str, Any]:
         return engine.audit(thread_id)
     except WorkflowNotFound:
         raise HTTPException(404, "Workflow not found")
+
+@app.get("/{path:path}", response_class=HTMLResponse)
+def frontend_route_fallback(path: str, request: Request):
+    """Serve the React workspace on browser deep links without swallowing API 404s."""
+    first_segment = path.split("/", 1)[0].lower()
+    reserved_prefixes = {"static", "auth", "api", "v1", "v2", "docs", "redoc", "openapi.json"}
+    if first_segment in reserved_prefixes:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    requested_path = "/" + path
+    if request.url.query:
+        requested_path += "?" + request.url.query
+
+    current_settings = get_settings()
+    if current_settings.auth_enabled and not session_user(request):
+        return RedirectResponse(
+            url="/login?" + urlencode({"next": requested_path}),
+            status_code=303,
+        )
+    return _workspace_response()
+

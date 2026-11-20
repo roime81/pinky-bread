@@ -172,3 +172,34 @@ def test_react_durable_workforce_queues_jobs_and_configures_recurring_coordinati
     assert "enqueueForNode" in app
     assert "PLAN_ONLY" in app
     assert "AUTO_EXECUTE" in app
+
+
+
+def test_post_login_flow_verifies_session_before_navigation_and_uses_safe_next_path():
+    script = source("web/login.js")
+    assert 'credentials: "same-origin"' in script
+    assert 'fetch("/auth/me"' in script
+    assert "if (!sessionResponse.ok || !session.authenticated)" in script
+    assert "destinationAfterLogin()" in script
+    assert 'requested.startsWith("//")' in script
+    assert "/static/login.css" in source("web/login.html")
+
+
+def test_authenticated_spa_fallback_does_not_hide_missing_api_or_static_routes():
+    main = source("app/main.py")
+    assert '@app.get("/{path:path}"' in main
+    assert "frontend_route_fallback" in main
+    for prefix in ('"static"', '"auth"', '"api"', '"v1"', '"v2"'):
+        assert prefix in main
+    assert 'urlencode({"next": requested_path})' in main
+
+
+def test_overview_is_the_first_screen_and_has_real_first_run_actions():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert 'useState("overview")' in app
+    assert "pb-overview-hero" in app
+    assert "pb-first-run-grid" in app
+    assert "pb-operating-checks" in app
+    assert "pb-overview-activity-list" in app
+    assert "pb-quick-actions" in app
+    assert 'label: "HOME"' in app

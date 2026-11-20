@@ -7,17 +7,26 @@
   const unavailable = document.querySelector("#login-unavailable");
   const submit = document.querySelector("#login-submit");
 
+  function destinationAfterLogin() {
+    const requested = new URLSearchParams(window.location.search).get("next") || "/";
+    // Only accept an in-app path. Never redirect to an external or protocol-relative URL.
+    if (!requested.startsWith("/") || requested.startsWith("//") || requested.includes("\\") || requested.startsWith("/\\")) {
+      return "/";
+    }
+    return requested;
+  }
+
   async function initialise() {
     try {
       const [configResponse, meResponse] = await Promise.all([
-        fetch("/auth/config", { headers: { Accept: "application/json" } }),
-        fetch("/auth/me", { headers: { Accept: "application/json" } }),
+        fetch("/auth/config", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }),
+        fetch("/auth/me", { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } }),
       ]);
       if (!configResponse.ok || !meResponse.ok) throw new Error("Unable to check sign-in configuration.");
       const config = await configResponse.json();
       const me = await meResponse.json();
       if (!config.enabled || me.authenticated) {
-        window.location.replace("/");
+        window.location.replace(destinationAfterLogin());
         return;
       }
       const showDev = Boolean(config.dev_login_enabled);
@@ -43,6 +52,8 @@
     try {
       const response = await fetch("/auth/login", {
         method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           username: document.querySelector("#login-username").value,
@@ -51,10 +62,21 @@
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Sign-in failed.");
-      window.location.replace("/");
+      if (!payload.authenticated) throw new Error("The sign-in service did not confirm the session.");
+
+      // Confirm that the browser accepted the HttpOnly session cookie before navigating.
+      const sessionResponse = await fetch("/auth/me", {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      const session = await sessionResponse.json().catch(() => ({}));
+      if (!sessionResponse.ok || !session.authenticated) {
+        throw new Error("Sign-in succeeded, but the browser session was not saved. Refresh the page and try again; check HTTPS forwarding when using Codespaces.");
+      }
+      window.location.replace(destinationAfterLogin());
     } catch (failure) {
-      if (error) error.textContent = failure.message;
-    } finally {
+      if (error) error.textContent = failure.message || "Sign-in failed.";
       if (submit) {
         submit.disabled = false;
         submit.innerHTML = 'Sign in to workspace <span>↗</span>';

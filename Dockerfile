@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY config ./config
 COPY web ./web
-COPY --from=frontend-build /opt/pinky-bread/web/a2a ./web/a2a
+COPY --from=frontend-build /opt/pinky-bread/web/app ./web/app
 COPY run.py ./run.py
 RUN mkdir -p data/uploads && useradd --create-home --uid 10001 pinky_bread && chown -R pinky_bread:pinky_bread /opt/pinky-bread
 USER pinky_bread

@@ -85,9 +85,11 @@ def test_founder_composer_is_react_controlled_and_keeps_document_ingestion():
     app = source("frontend/src/WorkspaceApp.tsx")
     assert "companyId: string" in composer
     assert "onSend: (message: string, artifactIds: string[]) => Promise<void>" in composer
-    assert "await onSend(message, uploaded.map((item) => item.object_id))" in composer
-    assert "/document-links" in composer
-    assert "/artifacts" in composer
+    assert "await onSend(message, attachments.map((item) => item.object_id))" in composer
+    assert 'fetch("/v2/upload-config")' in composer
+    assert "/v2/companies/" in composer and "/artifacts" in composer
+    assert "DEFAULT_MAX_ATTACHMENTS = 5" in composer
+    assert "GoogleDrive" in composer and "Dropbox" in composer and "OneDrive" in composer
     assert "artifactIds" in app
     assert "/chat" in app
     assert "FounderComposer" in app

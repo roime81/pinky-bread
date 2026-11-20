@@ -1210,7 +1210,7 @@
     log.scrollTop = log.scrollHeight;
   }
 
-  async function sendAiMessage(message) {
+  async function sendAiMessage(message, artifactIds = []) {
     if (!state.company || state.chatSending) return;
     if (!activeAgents().length) {
       appendConversationEntry("system", "Create your first AI employee", "Add an agent to your company before starting an AI conversation.");
@@ -1263,20 +1263,20 @@
     }
   }
 
-  function handleCommand(event) {
-    event?.preventDefault();
-    const input = $("#company-command-input");
-    const command = input.value.trim();
+  function processFounderInstruction(command, artifactIds = []) {
     if (!command || state.chatSending) return;
     if (!state.company) {
       appendConversationEntry("system", "Create your company first", "Open Company Graph and establish a company before sending instructions to your AI workforce.");
       toast("Create or select a company first");
       return;
     }
-    const lower = command.toLowerCase();
     appendConversationEntry("founder", "Founder", command);
-    input.value = "";
-    if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
+    const lower = command.toLowerCase();
+    // Attachments are always routed through the document-aware workforce chat.
+    // This prevents a command prefix from silently bypassing the selected source files.
+    if (artifactIds.length) {
+      sendAiMessage(command, artifactIds);
+    } else if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
       addGoal(command.split(":").slice(1).join(":").trim()).catch((error) => appendConversationEntry("system", "Goal creation failed", error.message));
     } else if (lower.startsWith("plan:")) {
       const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
@@ -1292,9 +1292,30 @@
       const name = command.split(":").slice(1).join(":").trim();
       if (name) openAgentEditorWithName(name);
     } else {
-      sendAiMessage(command);
+      sendAiMessage(command, artifactIds);
     }
   }
+
+  function handleCommand(event) {
+    event?.preventDefault();
+    const input = $("#company-command-input");
+    const command = input?.value?.trim() || "";
+    if (!command || state.chatSending) return;
+    input.value = "";
+    processFounderInstruction(command, []);
+  }
+
+  window.addEventListener("pinky:founder-message", (event) => {
+    const detail = event?.detail || {};
+    const command = String(detail.message || "").trim();
+    const artifactIds = Array.isArray(detail.artifact_ids) ? detail.artifact_ids.filter((value) => typeof value === "string") : [];
+    if (!command) return;
+    if (detail.company_id && state.company?.id !== detail.company_id) {
+      toast("The selected company changed. Please send the instruction again.");
+      return;
+    }
+    processFounderInstruction(command, artifactIds);
+  });
 
   function openAgentEditorWithName(name) {
     openAgentEditor();

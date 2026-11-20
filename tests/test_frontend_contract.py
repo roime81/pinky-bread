@@ -38,7 +38,7 @@ def test_founder_workspace_contains_all_agent_editor_and_chat_controls():
         "agent-editor-endpoint",
         "agent-editor-manager",
         "auth-logout",
-        "company-command-form",
+        "company-composer-root",
         "ai-runtime-status",
     ]:
         assert f'id="{element_id}"' in html, element_id
@@ -155,3 +155,16 @@ def test_commercial_model_providers_are_available_in_the_agent_editor():
     assert "'model-providers':loadModelProviders" in app
     assert 'provider: "openai"' in company_graph or 'openai: { model:' in company_graph
     assert 'gemini: { model:' in company_graph
+
+def test_react_founder_composer_supports_document_uploads_and_cloud_share_links():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    main = (ROOT / "frontend" / "src" / "main.tsx").read_text(encoding="utf-8")
+    composer = (ROOT / "frontend" / "src" / "FounderComposer.tsx").read_text(encoding="utf-8")
+    company_graph = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
+    assert 'id="company-composer-root"' in html
+    assert 'id="company-command-form"' not in html
+    assert "FounderComposer" in main
+    assert "onDrop={handleDrop}" in composer
+    assert "document-links" in composer
+    assert "artifact_ids: artifactIds" in company_graph
+    assert "pinky:founder-message-complete" in company_graph

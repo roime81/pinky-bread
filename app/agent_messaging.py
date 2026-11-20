@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -522,6 +523,12 @@ async def stream_agent_discussion(
             company_id=company_id, tenant_id=tenant_id, conversation_id=conversation_id
         )
         yield {"type": "complete", "conversation": conversation}
+    except asyncio.CancelledError:
+        _set_conversation_status(
+            conversation_id=conversation_id, company_id=company_id, tenant_id=tenant_id,
+            actor_id=actor_id, status="CANCELLED", error="Conversation stream was cancelled or disconnected.",
+        )
+        raise
     except Exception as exc:
         _set_conversation_status(
             conversation_id=conversation_id, company_id=company_id, tenant_id=tenant_id,

@@ -123,3 +123,30 @@ def test_workspace_opens_directly_when_authentication_is_disabled(monkeypatch):
     assert response.status_code == 200
     assert 'id="root"' in response.text
     assert "/static/app/workspace.js" in response.text
+
+
+
+def test_legacy_dashboard_paths_redirect_to_main_overview_after_login(monkeypatch):
+    settings = Settings(
+        app_env="test",
+        auth_enabled=True,
+        dev_auth_enabled=True,
+        dev_admin_username="admin",
+        dev_admin_password="admin",
+        session_secret="unit-test-secret-that-is-long-enough",
+    )
+    monkeypatch.setattr(auth, "get_settings", lambda: settings)
+    monkeypatch.setattr(main, "get_settings", lambda: settings)
+
+    client = TestClient(main.app)
+    assert client.get("/dashboard", follow_redirects=False).headers["location"] == "/login"
+    login = client.post("/auth/login", json={"username": "admin", "password": "admin"})
+    assert login.status_code == 200
+
+    for path in ("/dashboard", "/workspace"):
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/"
+    overview = client.get("/", follow_redirects=False)
+    assert overview.status_code == 200
+    assert 'id="root"' in overview.text

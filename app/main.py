@@ -63,6 +63,16 @@ def login_page(request: Request):
     return HTMLResponse((web_dir / "login.html").read_text(encoding="utf-8"))
 
 
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/workspace", include_in_schema=False)
+def canonical_dashboard_alias(request: Request):
+    """Keep old dashboard bookmarks from landing on an unrecognised page."""
+    current_settings = get_settings()
+    if current_settings.auth_enabled and not session_user(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return RedirectResponse(url="/", status_code=303)
+
+
 @app.get("/api/healthz")
 def healthz() -> dict[str, Any]:
     return {"status": "ok", "app": settings.app_name, "environment": settings.app_env, "mock_inference": settings.mock_inference, "airgap_mode": "network-restricted-by-deployment"}

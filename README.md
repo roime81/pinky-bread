@@ -615,7 +615,7 @@ Do not commit `.env`, real API keys, passwords, access tokens, certificates or p
 
 ## Sign in to Pinky Bread
 
-The Docker Compose workspace opens with a sign-in screen. For local development, the default credentials are:
+When authentication is enabled, opening the application root (`/`) redirects unauthenticated visitors to a dedicated `/login` page. After a successful sign-in, the browser returns to the workspace. For local development, the default credentials are:
 
 - Username: `admin`
 - Password: `admin`
@@ -630,7 +630,7 @@ DEV_ADMIN_PASSWORD=use-a-unique-local-password
 SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters
 ```
 
-The API and company graph endpoints require a signed, HTTP-only browser session cookie when authentication is enabled. Sessions expire after 12 hours. The dashboard shell and static assets remain available to render the sign-in screen; company and workflow APIs are protected.
+The workspace is not sent to the browser until the visitor has an authenticated session. The API and company graph endpoints also require a signed, HTTP-only browser session cookie. Sessions expire after 12 hours; static assets required by the login page remain accessible.
 
 ### Enable Google sign-in
 
@@ -655,6 +655,37 @@ docker compose up -d --build api
 The Google callback validates OAuth state and requires a verified Google email address. Google sign-in is shown automatically when both credentials are configured. The current implementation authenticates a Google identity but does not yet provide organization-domain allow-lists, user provisioning, role-based authorization or tenant membership enforcement; configure those before a multi-user or production deployment.
 
 **Important:** `admin:admin` and the sample session secret are development conveniences only. Do not use them on a public or production deployment. Set a unique password and random session secret, and disable `DEV_AUTH_ENABLED` outside local development.
+
+## Configure commercial LLM providers
+
+Pinky Bread supports per-agent selection between local and hosted models. Open the **Model Providers** page to check credential readiness, then choose the provider when creating or editing an AI employee.
+
+Available providers:
+
+- **OpenAI API** — set `OPENAI_API_KEY`; the default API endpoint is `https://api.openai.com/v1`.
+- **Google Gemini API** — set `GEMINI_API_KEY`; Pinky Bread uses Google's OpenAI-compatible Chat Completions endpoint, `https://generativelanguage.googleapis.com/v1beta/openai`.
+- **Ollama** — local model runtime included in Docker Compose.
+- **vLLM** and **OpenAI-compatible gateway** — self-hosted or hosted inference endpoints.
+
+Put keys in the project-root `.env` file. Do not add keys to agent profiles or commit them to Git:
+
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
+# Optional for custom OpenAI-compatible services:
+OPENAI_COMPATIBLE_API_KEY=your-gateway-api-key
+```
+
+Then rebuild/recreate the API and worker so both runtime paths receive the environment variables:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+In an agent's **LLM provider** settings, select OpenAI or Gemini and enter a model identifier enabled for your provider account (for example, `gpt-4.1-mini` or `gemini-4-hydrogen`). Leave the endpoint blank to use the provider default, or supply a compatible endpoint override. Each agent stores only its provider, model ID and optional endpoint; the server retrieves the corresponding API key from its environment. Provider status reports whether a key is configured but never returns the secret itself.
+
+The selected model is used for agent chat, MCP-assisted tool calls, goal planning and assigned-work execution. Gemini's OpenAI compatibility supports Chat Completions and function calling, but provider-specific capabilities are not necessarily identical to OpenAI's. Check your chosen model's API feature support before relying on advanced options. Hosted inference sends prompts and relevant company context to the provider and may incur usage charges. Review the provider's privacy, data-retention and billing settings before using sensitive company data.
 
 ## Connect the local model to MCP
 

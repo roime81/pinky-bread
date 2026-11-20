@@ -399,13 +399,20 @@ async def stream_agent_discussion(
         db.commit()
         db.refresh(founder_row)
 
-    yield {
-        "type": "conversation_started",
-        "conversation_id": conversation_id,
-        "title": title,
-        "participants": [{"id": agent["id"], "name": agent["name"], "role": _agent_role(agent)} for agent in participants],
-        "message": _message_dict(founder_row),
-    }
+    try:
+        yield {
+            "type": "conversation_started",
+            "conversation_id": conversation_id,
+            "title": title,
+            "participants": [{"id": agent["id"], "name": agent["name"], "role": _agent_role(agent)} for agent in participants],
+            "message": _message_dict(founder_row),
+        }
+    except (asyncio.CancelledError, GeneratorExit):
+        _set_conversation_status(
+            conversation_id=conversation_id, company_id=company_id, tenant_id=tenant_id,
+            actor_id=actor_id, status="CANCELLED", error="Conversation stream closed before agent execution.",
+        )
+        raise
 
     sequence_no = 2
     try:
@@ -523,7 +530,7 @@ async def stream_agent_discussion(
             company_id=company_id, tenant_id=tenant_id, conversation_id=conversation_id
         )
         yield {"type": "complete", "conversation": conversation}
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, GeneratorExit):
         _set_conversation_status(
             conversation_id=conversation_id, company_id=company_id, tenant_id=tenant_id,
             actor_id=actor_id, status="CANCELLED", error="Conversation stream was cancelled or disconnected.",

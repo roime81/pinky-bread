@@ -742,16 +742,19 @@ async def stream_agent_conversation_endpoint(
                 yield f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
                 pending = asyncio.create_task(anext(iterator))
         except asyncio.CancelledError:
-            if pending is not None and not pending.done():
-                pending.cancel()
-                await asyncio.gather(pending, return_exceptions=True)
             raise
         except Exception as exc:
+            payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        finally:
             if pending is not None and not pending.done():
                 pending.cancel()
                 await asyncio.gather(pending, return_exceptions=True)
-            payload = {"type": "error", "error": f"{type(exc).__name__}: {str(exc)[:1000]}"}
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            try:
+                await iterator.aclose()
+            except RuntimeError:
+                # The iterator may already have completed or been closed.
+                pass
 
     return StreamingResponse(
         event_stream(),

@@ -13,15 +13,15 @@
     <aside class="sidebar" id="app-sidebar">
       <div class="brand-lockup">
         <div class="brand-mark"><span></span><span></span><span></span></div>
-        <div><div class="brand-name">The Pinky Bread</div><div class="brand-sub">AUTONOMOUS ORGANIZATION</div></div>
+        <div class="brand-copy"><div class="brand-name">The Pinky Bread</div><div class="brand-sub">AUTONOMOUS ORGANIZATION</div></div><button class="icon-btn sidebar-panel-close" id="sidebar-panel-close" type="button" aria-label="Collapse left panel" title="Collapse left panel">‹</button>
       </div>
       <div class="workspace-label">COMPANY</div>
       <nav class="nav-list" aria-label="Main navigation">
         <div class="nav-group">
           <button class="nav-item active" data-view="company-graph" title="Company graph" aria-label="Company graph"><span class="nav-icon">◎</span><span class="nav-label">Company graph</span></button>
           <div class="nav-sublist" aria-label="Company graph sections">
-            <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-activity-panel" title="Company Event Log" aria-label="Company Event Log"><span class="nav-icon">≋</span><span class="nav-label">Company Event Log</span></button>
-            <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-brief-panel" title="Founder View" aria-label="Founder View"><span class="nav-icon">⌂</span><span class="nav-label">Founder View</span></button>
+            <button class="nav-item nav-subitem" data-view="company-events" title="Company Event Log" aria-label="Company Event Log"><span class="nav-icon">≋</span><span class="nav-label">Company Event Log</span></button>
+            <button class="nav-item nav-subitem" data-view="founder-view" title="Founder View" aria-label="Founder View"><span class="nav-icon">⌂</span><span class="nav-label">Founder View</span></button>
           </div>
         </div>
         <div class="workspace-label nav-workspace-heading">WORKSPACE</div>
@@ -93,18 +93,42 @@
               <div class="inspector-empty"><span>◎</span><strong>Select a dot</strong><p>Inspect ownership, assignments, dependencies, activity and evidence.</p></div>
             </aside>
           </div>
-          <div class="company-bottom-grid">
-            <section class="graph-activity-panel" id="graph-activity-panel">
-              <div class="graph-panel-heading"><div><div class="eyebrow">COMPANY EVENT LOG</div><strong>What is changing</strong></div><span id="graph-event-count">0 events</span></div>
-              <div id="company-event-list" class="company-event-list"><div class="empty-state">Company activity will appear here.</div></div>
-            </section>
-            <section class="graph-brief-panel" id="graph-brief-panel">
-              <div class="eyebrow">FOUNDER VIEW</div><strong>Goal → Work → Result</strong>
-              <p>Follow every objective through the agents assigned to it, their tasks, meetings, decisions and deliverables. The database is the source of truth; this graph is its live projection.</p>
-              <div class="graph-brief-stats"><span><b id="graph-goal-count">0</b> goals</span><span><b id="graph-agent-count">0</b> agents</span><span><b id="graph-work-count">0</b> work items</span></div>
-            </section>
-          </div>
         </div>
+      </section>
+
+      <section class="view" id="view-company-events">
+        <div class="page-heading">
+          <div><div class="eyebrow">COMPANY / ACTIVITY</div><h1>Company Event Log</h1><p>Review changes across your company, including agent activity, work, goals and decisions.</p></div>
+          <span class="graph-live"><i></i> LIVE HISTORY</span>
+        </div>
+        <section class="graph-activity-panel" id="graph-activity-panel">
+          <div class="graph-panel-heading">
+            <div><div class="eyebrow">EVENT STREAM</div><strong>What is changing</strong></div>
+            <span id="graph-event-count">0 events</span>
+          </div>
+          <div id="company-event-list" class="company-event-list"><div class="empty-state">Company activity will appear here.</div></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-founder-view">
+        <div class="page-heading">
+          <div><div class="eyebrow">COMPANY / FOUNDER</div><h1>Founder View</h1><p>A quick operating picture of your organisation: goals, people and work in one place.</p></div>
+          <span class="graph-live"><i></i> COMPANY SNAPSHOT</span>
+        </div>
+        <section class="graph-brief-panel founder-overview-panel" id="graph-brief-panel">
+          <div class="eyebrow">FOUNDER VIEW</div>
+          <strong>Goal → Work → Result</strong>
+          <p>Follow every objective through the agents assigned to it, their tasks, meetings, decisions and deliverables. The database is the source of truth; the company graph is its live projection.</p>
+          <div class="graph-brief-stats">
+            <span><b id="graph-goal-count">0</b> goals</span>
+            <span><b id="graph-agent-count">0</b> agents</span>
+            <span><b id="graph-work-count">0</b> work items</span>
+          </div>
+          <div class="founder-view-actions">
+            <button class="secondary-btn" type="button" data-goto="company-graph">Open company graph</button>
+            <button class="secondary-btn" type="button" data-goto="company-agents">Manage AI workforce</button>
+          </div>
+        </section>
       </section>
 
       <section class="view" id="view-company-agents">

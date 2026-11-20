@@ -97,6 +97,13 @@ def normalise_share_url(value: str) -> str:
         query["dl"] = ["1"]
         from urllib.parse import urlencode
         return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+    # Microsoft OneDrive/SharePoint and Box public shares generally honour
+    # download=1; signed pre-authorised file URLs remain unchanged.
+    if host == "1drv.ms" or host.endswith(".sharepoint.com") or host in {"onedrive.live.com", "www.box.com", "box.com"}:
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        query["download"] = ["1"]
+        from urllib.parse import urlencode
+        return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
     return value.strip()
 
 
@@ -131,12 +138,17 @@ def _filename_from_response(url: str, content_disposition: str | None, content_t
         if candidate:
             clean = safe_filename(candidate)
             if not Path(clean).suffix:
-                clean += _CONTENT_EXTENSIONS.get(content_type.split(";", 1)[0].strip().lower(), ".txt")
+                suffix = _CONTENT_EXTENSIONS.get(content_type.split(";", 1)[0].strip().lower())
+                if not suffix:
+                    raise ValueError("The cloud link did not provide a supported document filename or content type.")
+                clean += suffix
             return clean
     candidate = Path(unquote(urlparse(url).path)).name
     if candidate and Path(candidate).suffix:
         return safe_filename(candidate)
-    suffix = _CONTENT_EXTENSIONS.get(content_type.split(";", 1)[0].strip().lower(), ".txt")
+    suffix = _CONTENT_EXTENSIONS.get(content_type.split(";", 1)[0].strip().lower())
+    if not suffix:
+        raise ValueError("The cloud link did not provide a supported document filename or content type.")
     return "linked-document" + suffix
 
 

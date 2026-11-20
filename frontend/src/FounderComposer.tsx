@@ -49,11 +49,25 @@ export default function FounderComposer() {
   const [status, setStatus] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const previousCompany = useRef("");
+  const pendingRequestId = useRef("");
 
   useEffect(() => {
     const picker = document.getElementById("graph-company-picker") as HTMLSelectElement | null;
     const sync = () => {
-      setCompanyId(picker?.value || "");
+      const nextCompany = picker?.value || "";
+      if (previousCompany.current && previousCompany.current !== nextCompany) {
+        setFiles([]);
+        setLinked([]);
+        setLinkValue("");
+        setShowLink(false);
+        setError("");
+        setStatus("");
+        pendingRequestId.current = "";
+        setBusy(false);
+      }
+      previousCompany.current = nextCompany;
+      setCompanyId(nextCompany);
       setTenantId("demo-tenant");
     };
     sync();
@@ -68,7 +82,9 @@ export default function FounderComposer() {
 
   useEffect(() => {
     const complete = (event: Event) => {
-      const detail = (event as CustomEvent<{ error?: string }>).detail || {};
+      const detail = (event as CustomEvent<{ request_id?: string; error?: string }>).detail || {};
+      if (!detail.request_id || detail.request_id !== pendingRequestId.current) return;
+      pendingRequestId.current = "";
       setBusy(false);
       setStatus("");
       if (detail.error) setError(detail.error);
@@ -81,28 +97,30 @@ export default function FounderComposer() {
     setError("");
     const incoming = Array.from(fileList);
     const accepted: File[] = [];
+    const rejected: string[] = [];
     for (const file of incoming) {
       const ext = file.name.split(".").pop()?.toLowerCase() || "";
       if (!ACCEPTED.has(ext)) {
-        setError(file.name + " is not a supported document format.");
+        rejected.push(file.name + " is not a supported document format.");
         continue;
       }
       if (file.size > MAX_FILE_BYTES) {
-        setError(file.name + " exceeds the 12 MB per-file limit.");
+        rejected.push(file.name + " exceeds the 12 MB per-file limit.");
         continue;
       }
       accepted.push(file);
     }
-    setFiles((current) => {
-      const merged = [...current];
-      for (const candidate of accepted) {
-        if (!merged.some((item) => item.name === candidate.name && item.size === candidate.size && item.lastModified === candidate.lastModified)) {
-          merged.push(candidate);
-        }
+    const merged = [...files];
+    for (const candidate of accepted) {
+      if (!merged.some((item) => item.name === candidate.name && item.size === candidate.size && item.lastModified === candidate.lastModified)) {
+        merged.push(candidate);
       }
-      if (merged.length + linked.length > 10) setError("Attach up to 10 documents per message.");
-      return merged.slice(0, Math.max(0, 10 - linked.length));
-    });
+    }
+    if (merged.length + linked.length > 10) {
+      rejected.push("Attach up to 10 documents per message.");
+    }
+    setFiles(merged.slice(0, Math.max(0, 10 - linked.length)));
+    if (rejected.length) setError(rejected.join(" "));
     if (fileInput.current) fileInput.current.value = "";
   }
 
@@ -175,6 +193,7 @@ export default function FounderComposer() {
       }
       setStatus("Delivering instruction to your AI workforce…");
       const requestId = window.crypto?.randomUUID?.() || "pb-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+      pendingRequestId.current = requestId;
       window.dispatchEvent(new CustomEvent("pinky:founder-message", {
         detail: {
           request_id: requestId,

@@ -3,7 +3,7 @@ import {
   AlertCircle, Check, Cloud, FileImage, FileSpreadsheet, FileText, FileUp,
   Link2, LoaderCircle, Paperclip, Plus, Send, X,
 } from "lucide-react";
-import { FormEvent, DragEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type DragEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 type Artifact = {
   object_id: string;
@@ -12,6 +12,11 @@ type Artifact = {
   size_bytes: number;
   extraction_status?: string;
   source?: string;
+};
+type FounderComposerProps = {
+  companyId: string;
+  tenantId: string;
+  onSend: (message: string, artifactIds: string[]) => Promise<void>;
 };
 
 const ACCEPTED = new Set(["pdf", "docx", "xlsx", "pptx", "csv", "txt", "md", "json", "html", "htm", "xml", "png", "jpg", "jpeg", "webp"]);
@@ -33,9 +38,7 @@ async function responsePayload(response: Response) {
   return payload;
 }
 
-export default function FounderComposer() {
-  const [companyId, setCompanyId] = useState("");
-  const [tenantId, setTenantId] = useState("demo-tenant");
+export default function FounderComposer({ companyId, tenantId, onSend }: FounderComposerProps) {
   const [maxFileMb, setMaxFileMb] = useState(12);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -49,36 +52,6 @@ export default function FounderComposer() {
   const [status, setStatus] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const previousCompany = useRef("");
-  const pendingRequestId = useRef("");
-
-  useEffect(() => {
-    const picker = document.getElementById("graph-company-picker") as HTMLSelectElement | null;
-    const sync = () => {
-      const nextCompany = picker?.value || "";
-      if (previousCompany.current && previousCompany.current !== nextCompany) {
-        setFiles([]);
-        setLinked([]);
-        setLinkValue("");
-        setShowLink(false);
-        setError("");
-        setStatus("");
-        pendingRequestId.current = "";
-        setBusy(false);
-      }
-      previousCompany.current = nextCompany;
-      setCompanyId(nextCompany);
-      setTenantId("demo-tenant");
-    };
-    sync();
-    picker?.addEventListener("change", sync);
-    const observer = new MutationObserver(sync);
-    if (picker) observer.observe(picker, { attributes: true, childList: true, subtree: true });
-    return () => {
-      picker?.removeEventListener("change", sync);
-      observer.disconnect();
-    };
-  }, []);
 
   useEffect(() => {
     fetch("/v2/capabilities")
@@ -91,17 +64,15 @@ export default function FounderComposer() {
   }, []);
 
   useEffect(() => {
-    const complete = (event: Event) => {
-      const detail = (event as CustomEvent<{ request_id?: string; error?: string }>).detail || {};
-      if (!detail.request_id || detail.request_id !== pendingRequestId.current) return;
-      pendingRequestId.current = "";
-      setBusy(false);
-      setStatus("");
-      if (detail.error) setError(detail.error);
-    };
-    window.addEventListener("pinky:founder-message-complete", complete);
-    return () => window.removeEventListener("pinky:founder-message-complete", complete);
-  }, []);
+    setDraft("");
+    setFiles([]);
+    setLinked([]);
+    setLinkValue("");
+    setShowLink(false);
+    setError("");
+    setStatus("");
+    setBusy(false);
+  }, [companyId]);
 
   function addFiles(fileList: FileList | File[]) {
     setError("");
@@ -122,13 +93,9 @@ export default function FounderComposer() {
     }
     const merged = [...files];
     for (const candidate of accepted) {
-      if (!merged.some((item) => item.name === candidate.name && item.size === candidate.size && item.lastModified === candidate.lastModified)) {
-        merged.push(candidate);
-      }
+      if (!merged.some((item) => item.name === candidate.name && item.size === candidate.size && item.lastModified === candidate.lastModified)) merged.push(candidate);
     }
-    if (merged.length + linked.length > 10) {
-      rejected.push("Attach up to 10 documents per message.");
-    }
+    if (merged.length + linked.length > 10) rejected.push("Attach up to 10 documents per message.");
     setFiles(merged.slice(0, Math.max(0, 10 - linked.length)));
     if (rejected.length) setError(rejected.join(" "));
     if (fileInput.current) fileInput.current.value = "";
@@ -194,7 +161,6 @@ export default function FounderComposer() {
     setBusy(true);
     setError("");
     const uploaded: Artifact[] = [...linked];
-    let handedOff = false;
     try {
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
@@ -202,29 +168,18 @@ export default function FounderComposer() {
         uploaded.push(await uploadFile(file));
       }
       setStatus("Delivering instruction to your AI workforce…");
-      const requestId = window.crypto?.randomUUID?.() || "pb-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-      pendingRequestId.current = requestId;
-      window.dispatchEvent(new CustomEvent("pinky:founder-message", {
-        detail: {
-          request_id: requestId,
-          message,
-          artifact_ids: uploaded.map((item) => item.object_id),
-          attachments: uploaded.map((item) => ({ object_id: item.object_id, filename: item.filename })),
-          company_id: companyId,
-        },
-      }));
-      handedOff = true;
+      await onSend(message, uploaded.map((item) => item.object_id));
       setDraft("");
       setFiles([]);
       setLinked([]);
       setShowLink(false);
-      setStatus("Your instruction was delivered. The AI workforce is responding…");
+      setStatus("Your instruction was delivered.");
       requestAnimationFrame(() => textarea.current?.focus());
     } catch (reason) {
-      setError((reason as Error).message || "Unable to attach one or more documents.");
+      setError((reason as Error).message || "Unable to deliver this instruction.");
       setStatus("");
     } finally {
-      if (!handedOff) setBusy(false);
+      setBusy(false);
     }
   }
 
@@ -253,7 +208,6 @@ export default function FounderComposer() {
         <span><span className="composer-status-dot" /> MESSAGE YOUR WORKFORCE</span>
         <span className="composer-company-context">{companyId ? "COMPANY CONTEXT ACTIVE" : "SELECT A COMPANY FIRST"}</span>
       </div>
-
       <textarea
         ref={textarea}
         value={draft}
@@ -265,92 +219,43 @@ export default function FounderComposer() {
         aria-label="Founder instruction"
         disabled={!companyId || busy}
       />
-
       <AnimatePresence initial={false}>
         {(files.length > 0 || linked.length > 0) && (
           <motion.div className="composer-attachments" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
             {files.map((file, index) => {
               const Icon = fileIcon(file.name);
-              return (
-                <div className="composer-attachment" key={file.name + file.lastModified + index}>
-                  <span className="composer-attachment-icon"><Icon size={14} /></span>
-                  <span className="composer-attachment-copy"><strong>{file.name}</strong><small>{formatBytes(file.size)} · Ready to upload</small></span>
-                  <button type="button" aria-label={"Remove " + file.name} onClick={() => setFiles((items) => items.filter((_, i) => i !== index))}><X size={13} /></button>
-                </div>
-              );
+              return <div className="composer-attachment" key={file.name + file.lastModified + index}><span className="composer-attachment-icon"><Icon size={14} /></span><span className="composer-attachment-copy"><strong>{file.name}</strong><small>{formatBytes(file.size)} · Ready to upload</small></span><button type="button" aria-label={"Remove " + file.name} onClick={() => setFiles((items) => items.filter((_, i) => i !== index))}><X size={13} /></button></div>;
             })}
             {linked.map((item) => {
               const Icon = item.content_type.startsWith("image/") ? FileImage : fileIcon(item.filename);
-              return (
-                <div className="composer-attachment" key={item.object_id}>
-                  <span className="composer-attachment-icon cloud"><Icon size={14} /></span>
-                  <span className="composer-attachment-copy"><strong>{item.filename}</strong><small>{formatBytes(item.size_bytes)} · Cloud document imported</small></span>
-                  <button type="button" aria-label={"Remove " + item.filename} onClick={() => setLinked((items) => items.filter((x) => x.object_id !== item.object_id))}><X size={13} /></button>
-                </div>
-              );
+              return <div className="composer-attachment" key={item.object_id}><span className="composer-attachment-icon cloud"><Icon size={14} /></span><span className="composer-attachment-copy"><strong>{item.filename}</strong><small>{formatBytes(item.size_bytes)} · Cloud document imported</small></span><button type="button" aria-label={"Remove " + item.filename} onClick={() => setLinked((items) => items.filter((x) => x.object_id !== item.object_id))}><X size={13} /></button></div>;
             })}
           </motion.div>
         )}
       </AnimatePresence>
-
       <AnimatePresence initial={false}>
         {showLink && (
           <motion.div className="composer-link-row" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}>
             <Link2 size={15} />
-            <input
-              type="url"
-              value={linkValue}
-              onChange={(event) => setLinkValue(event.target.value)}
-              placeholder="Paste a public HTTPS share link or signed download URL…"
-              aria-label="Cloud document URL"
-              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void importLink(); } }}
-            />
-            <button type="button" disabled={!linkValue.trim() || linkBusy || disabled} onClick={() => void importLink()}>
-              {linkBusy ? <LoaderCircle className="composer-spin" size={14} /> : <Plus size={14} />} Add
-            </button>
+            <input type="url" value={linkValue} onChange={(event) => setLinkValue(event.target.value)} placeholder="Paste a public HTTPS share link or signed download URL…" aria-label="Cloud document URL" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void importLink(); } }} />
+            <button type="button" disabled={!linkValue.trim() || linkBusy || disabled} onClick={() => void importLink()}>{linkBusy ? <LoaderCircle className="composer-spin" size={14} /> : <Plus size={14} />} Add</button>
             <button type="button" className="composer-link-close" onClick={() => setShowLink(false)} aria-label="Close link field"><X size={14} /></button>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {(error || status) && (
-        <div className={"composer-feedback" + (error ? " is-error" : "")} role="status">
-          {error ? <AlertCircle size={13} /> : busy || linkBusy ? <LoaderCircle className="composer-spin" size={13} /> : <Check size={13} />}
-          <span>{error || status}</span>
-          {error && <button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={13} /></button>}
-        </div>
-      )}
-
+      {(error || status) && <div className={"composer-feedback" + (error ? " is-error" : "")} role="status">{error ? <AlertCircle size={13} /> : busy || linkBusy ? <LoaderCircle className="composer-spin" size={13} /> : <Check size={13} />}<span>{error || status}</span>{error && <button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={13} /></button>}</div>}
       {dragging && <div className="composer-drop-overlay"><FileUp size={22} /><strong>Drop documents to attach</strong><span>PDF, Office, CSV, text and images</span></div>}
-
       <div className="founder-composer-footer">
         <div className="composer-tools">
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept=".pdf,.docx,.xlsx,.pptx,.csv,.txt,.md,.json,.html,.htm,.xml,.png,.jpg,.jpeg,.webp"
-            hidden
-            onChange={(event) => event.target.files && addFiles(event.target.files)}
-          />
-          <button type="button" className="composer-tool-button" onClick={() => fileInput.current?.click()} disabled={disabled || attachedCount >= 10} title="Attach files">
-            <Paperclip size={15} /><span>Attach files</span>
-          </button>
-          <button type="button" className={"composer-tool-button" + (showLink ? " active" : "")} onClick={() => setShowLink((value) => !value)} disabled={disabled || attachedCount >= 10} title="Add a cloud document link">
-            <Cloud size={15} /><span>Cloud link</span>
-          </button>
+          <input ref={fileInput} type="file" multiple accept=".pdf,.docx,.xlsx,.pptx,.csv,.txt,.md,.json,.html,.htm,.xml,.png,.jpg,.jpeg,.webp" hidden onChange={(event) => event.target.files && addFiles(event.target.files)} />
+          <button type="button" className="composer-tool-button" onClick={() => fileInput.current?.click()} disabled={disabled || attachedCount >= 10} title="Attach files"><Paperclip size={15} /><span>Attach files</span></button>
+          <button type="button" className={"composer-tool-button" + (showLink ? " active" : "")} onClick={() => setShowLink((value) => !value)} disabled={disabled || attachedCount >= 10} title="Add a cloud document link"><Cloud size={15} /><span>Cloud link</span></button>
           <span className="composer-attachment-limit">{attachedCount}/10</span>
         </div>
-        <button type="submit" className="composer-send-button" disabled={disabled || !draft.trim()}>
-          {busy ? <LoaderCircle className="composer-spin" size={15} /> : <Send size={15} />}
-          <span>{busy ? "Preparing…" : "Send to team"}</span>
-        </button>
+        <button type="submit" className="composer-send-button" disabled={disabled || !draft.trim()}>{busy ? <LoaderCircle className="composer-spin" size={15} /> : <Send size={15} />}<span>{busy ? "Preparing…" : "Send to team"}</span></button>
       </div>
-      <div className="composer-help-row">
-        <span>Shift + Enter for a new line</span>
-        <span>Drop files here · {maxFileMb} MB per file</span>
-      </div>
-      {showLink && <p className="composer-cloud-note">Supports public HTTPS share links from Drive, Dropbox, OneDrive and other storage services. Private files require an authenticated connector and cannot be fetched from a public-link importer.</p>}
+      <div className="composer-help-row"><span>Shift + Enter for a new line</span><span>Drop files here · {maxFileMb} MB per file</span></div>
+      {showLink && <p className="composer-cloud-note">Supports public HTTPS share links from Drive, Dropbox, OneDrive and other storage services. Private files require an authenticated connector and cannot be fetched by the public-link importer.</p>}
     </form>
   );
 }

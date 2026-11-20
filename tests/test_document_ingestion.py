@@ -48,3 +48,9 @@ def test_google_drive_share_url_is_converted_to_download_url():
 def test_dropbox_share_url_requests_direct_download():
     result = normalise_share_url("https://www.dropbox.com/s/example/brief.pdf?dl=0")
     assert "dl=1" in result
+
+def test_onedrive_and_sharepoint_links_request_a_download():
+    onedrive = normalise_share_url("https://1drv.ms/b/s!example?e=share")
+    sharepoint = normalise_share_url("https://tenant.sharepoint.com/:w:/s/team/Example?web=1")
+    assert "download=1" in onedrive
+    assert "download=1" in sharepoint

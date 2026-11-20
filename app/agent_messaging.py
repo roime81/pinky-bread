@@ -37,7 +37,7 @@ class AgentConversation(Base):
     company_id: Mapped[str] = mapped_column(String(36), index=True)
     tenant_id: Mapped[str] = mapped_column(String(120), index=True)
     title: Mapped[str] = mapped_column(String(240))
-    status: Mapped[str] = mapped_column(String(24), default="PENDING", index=True)
+    status: Mapped[str] = mapped_column(String(24), default="PENDING")
     initiator_agent_id: Mapped[str] = mapped_column(String(36), index=True)
     participant_agent_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_by: Mapped[str] = mapped_column(String(120))

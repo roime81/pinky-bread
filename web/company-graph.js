@@ -1292,7 +1292,7 @@
       return;
     }
     const attachmentLabel = attachments.length
-      ? "\\n\\nAttached documents: " + attachments.map((item) => String(item.filename || "document")).join(", ")
+      ? "\n\nAttached documents: " + attachments.map((item) => String(item.filename || "document")).join(", ")
       : "";
     appendConversationEntry("founder", "Founder", command + attachmentLabel);
     const lower = command.toLowerCase();

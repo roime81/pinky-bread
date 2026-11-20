@@ -36,7 +36,7 @@ def test_local_and_plain_http_links_are_rejected():
         validate_public_https_url("http://example.com/document.pdf")
     with pytest.raises(ValueError, match="Private or local"):
         validate_public_https_url("https://localhost/private.pdf")
-    with pytest.raises(ValueError, match="Private or local"):
+    with pytest.raises(ValueError, match="private or reserved"):
         validate_public_https_url("https://127.0.0.1/private.pdf")
 
 

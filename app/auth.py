@@ -5,6 +5,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from typing import Any
@@ -203,6 +204,23 @@ class AuthMiddleware:
                 key, value = part.strip().split("=", 1)
                 cookies[key] = value
         if _verify(cookies.get(SESSION_COOKIE)):
+            await self.app(scope, receive, send)
+            return
+
+        # Companion may only bypass the browser session for company artifact uploads.
+        # Its static service token is held server-side and is not exposed to Uppy.
+        settings = get_settings()
+        is_companion_upload = (
+            scope.get("method") == "POST"
+            and re.fullmatch(r"/v2/companies/[0-9a-fA-F-]{36}/artifacts", path) is not None
+        )
+        supplied = headers.get("authorization", "")
+        expected = f"Bearer {settings.companion_upload_token}".strip()
+        if (
+            is_companion_upload
+            and settings.companion_upload_token
+            and hmac.compare_digest(supplied, expected)
+        ):
             await self.app(scope, receive, send)
             return
         response = JSONResponse({"detail": "Sign in is required to access this workspace."}, status_code=401)

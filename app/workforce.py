@@ -292,6 +292,7 @@ async def chat_with_workforce(
     history: list[dict[str, str]],
     company_id: str,
     tenant_id: str,
+    system_context: str | None = None,
 ) -> list[dict[str, str]]:
     """Let every active employee observe the conversation, then invite relevant people to answer.
 
@@ -327,6 +328,7 @@ async def chat_with_workforce(
             history=shared_history,
             company_id=company_id,
             tenant_id=tenant_id,
+            system_context=system_context,
         )
         responses.append({"agent_id": str(agent["id"]), "name": str(agent["name"]), "role": _agent_role(agent), "reply": reply})
         shared_history.append({"role": "assistant", "content": f"{agent['name']} ({_agent_role(agent)}): {reply}"[:4000]})

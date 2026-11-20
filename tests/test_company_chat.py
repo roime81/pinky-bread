@@ -204,3 +204,90 @@ def test_runtime_status_explains_mock_mode(monkeypatch):
         assert payload["mock_inference"] is True
         assert payload["model_reachable"] is False
         assert "MOCK_INFERENCE=true" in payload["model_error"]
+
+
+def test_company_chat_includes_company_scoped_document_text_for_agents(monkeypatch):
+    from app.object_store import ObjectStore
+
+    init_db()
+    settings = get_settings()
+    monkeypatch.setattr(settings, "mock_inference", False)
+    captured = {}
+
+    async def fake_chat_with_workforce(**kwargs):
+        captured.update(kwargs)
+        return [{
+            "agent_id": kwargs["agents"][0]["id"],
+            "name": "Mira",
+            "role": "Product strategy",
+            "reply": "I reviewed the attached strategy.",
+        }]
+
+    monkeypatch.setattr("app.company_api.chat_with_workforce", fake_chat_with_workforce)
+    with TestClient(app) as client:
+        tenant = "company-chat-document-test"
+        company = _company(client, tenant)
+        agent = _agent(client, company["id"], tenant)
+        stored = ObjectStore().persist_object(
+            key=f"companies/{company['id']}/test/strategy.txt",
+            content=b"Northstar will expand into two new markets next year.",
+            content_type="text/plain",
+            tenant_id=tenant,
+            company_id=company["id"],
+            owner_type="company",
+            owner_id=company["id"],
+            filename="strategy.txt",
+            created_by="founder",
+            metadata={
+                "kind": "document",
+                "extracted_text": "Northstar will expand into two new markets next year.",
+                "extraction_status": "extracted",
+            },
+        )
+        response = client.post(f"/v2/companies/{company['id']}/chat", json={
+            "tenant_id": tenant,
+            "actor_id": "founder",
+            "message": "Review the attached strategy and identify the key implication.",
+            "artifact_ids": [stored["object_id"]],
+        })
+        assert response.status_code == 200, response.text
+        assert captured["agents"][0]["id"] == agent["id"]
+        assert "Northstar will expand into two new markets next year." in captured["message"]
+        assert "UNTRUSTED SOURCE MATERIAL" in captured["message"]
+        assert "strategy.txt" in response.json()["documents"]
+
+
+def test_company_chat_rejects_documents_owned_by_another_company(monkeypatch):
+    from app.object_store import ObjectStore
+
+    init_db()
+    with TestClient(app) as client:
+        tenant = "company-chat-document-scope-test"
+        company_a = _company(client, tenant)
+        company_b_response = client.post("/v2/companies", json={
+            "tenant_id": tenant,
+            "owner_id": "founder",
+            "name": "Another Test Company",
+        })
+        assert company_b_response.status_code == 201, company_b_response.text
+        company_b = company_b_response.json()
+        stored = ObjectStore().persist_object(
+            key=f"companies/{company_a['id']}/test/private.txt",
+            content=b"Private company information.",
+            content_type="text/plain",
+            tenant_id=tenant,
+            company_id=company_a["id"],
+            owner_type="company",
+            owner_id=company_a["id"],
+            filename="private.txt",
+            created_by="founder",
+            metadata={"kind": "document", "extracted_text": "Private company information."},
+        )
+        _agent(client, company_b["id"], tenant)
+        response = client.post(f"/v2/companies/{company_b['id']}/chat", json={
+            "tenant_id": tenant,
+            "actor_id": "founder",
+            "message": "Summarise this document.",
+            "artifact_ids": [stored["object_id"]],
+        })
+        assert response.status_code == 404

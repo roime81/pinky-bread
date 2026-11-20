@@ -1,9 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: { "@": resolve(process.cwd(), "src") },
+  },
   base: "/static/a2a/",
   build: {
     outDir: resolve(process.cwd(), "../web/a2a"),

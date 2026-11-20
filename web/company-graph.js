@@ -1210,11 +1210,22 @@
     log.scrollTop = log.scrollHeight;
   }
 
-  async function sendAiMessage(message) {
-    if (!state.company || state.chatSending) return;
+  function notifyComposerComplete(requestId, error = "") {
+    if (!requestId) return;
+    window.dispatchEvent(new CustomEvent("pinky:founder-message-complete", {
+      detail: { request_id: requestId, error },
+    }));
+  }
+
+  async function sendAiMessage(message, artifactIds = [], requestId = "") {
+    if (!state.company || state.chatSending) {
+      notifyComposerComplete(requestId, "The company chat is already busy or no company is selected.");
+      return;
+    }
     if (!activeAgents().length) {
       appendConversationEntry("system", "Create your first AI employee", "Add an agent to your company before starting an AI conversation.");
       toast("Create an AI agent first");
+      notifyComposerComplete(requestId, "Create an AI employee before sending a message.");
       return;
     }
     const history = state.chatHistory.slice(-12);
@@ -1235,6 +1246,7 @@
           actor_id: "founder",
           message,
           history,
+          artifact_ids: artifactIds,
         }),
         signal: controller.signal,
       });
@@ -1260,41 +1272,85 @@
       window.clearTimeout(timeout);
       state.chatSending = false;
       if (send) { send.disabled = false; send.innerHTML = 'Send <span>↗</span>'; }
+      notifyComposerComplete(requestId);
+    }
+  }
+
+  function processFounderInstruction(command, artifactIds = [], requestId = "", attachments = []) {
+    if (!command) {
+      notifyComposerComplete(requestId);
+      return;
+    }
+    if (state.chatSending) {
+      notifyComposerComplete(requestId, "The AI workforce is already processing another instruction.");
+      return;
+    }
+    if (!state.company) {
+      appendConversationEntry("system", "Create your company first", "Open Company Graph and establish a company before sending instructions to your AI workforce.");
+      toast("Create or select a company first");
+      notifyComposerComplete(requestId, "Create or select a company first.");
+      return;
+    }
+    const attachmentLabel = attachments.length
+      ? "\n\nAttached documents: " + attachments.map((item) => String(item.filename || "document")).join(", ")
+      : "";
+    appendConversationEntry("founder", "Founder", command + attachmentLabel);
+    const lower = command.toLowerCase();
+    // Documents always go through the document-aware chat route so their extracted
+    // contents are available to agents and remain scoped to this company.
+    if (artifactIds.length) {
+      sendAiMessage(command, artifactIds, requestId);
+    } else if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
+      Promise.resolve(addGoal(command.split(":").slice(1).join(":").trim()))
+        .catch((error) => appendConversationEntry("system", "Goal creation failed", error.message))
+        .finally(() => notifyComposerComplete(requestId));
+    } else if (lower.startsWith("plan:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
+      if (goal) planGoal(goal.id);
+      else appendConversationEntry("system", "Goal not found", "Select a goal or use plan: followed by its exact name.");
+      notifyComposerComplete(requestId);
+    } else if (lower.startsWith("run:")) {
+      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
+        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
+      if (goal) runGoal(goal.id);
+      else appendConversationEntry("system", "Goal not found", "Select a goal or use run: followed by its exact name.");
+      notifyComposerComplete(requestId);
+    } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
+      const name = command.split(":").slice(1).join(":").trim();
+      if (name) openAgentEditorWithName(name);
+      notifyComposerComplete(requestId);
+    } else {
+      sendAiMessage(command, artifactIds, requestId);
     }
   }
 
   function handleCommand(event) {
     event?.preventDefault();
     const input = $("#company-command-input");
-    const command = input.value.trim();
+    const command = input?.value?.trim() || "";
     if (!command || state.chatSending) return;
-    if (!state.company) {
-      appendConversationEntry("system", "Create your company first", "Open Company Graph and establish a company before sending instructions to your AI workforce.");
-      toast("Create or select a company first");
+    input.value = "";
+    processFounderInstruction(command, []);
+  }
+
+  window.addEventListener("pinky:founder-message", (event) => {
+    const detail = event?.detail || {};
+    const command = String(detail.message || "").trim();
+    const artifactIds = Array.isArray(detail.artifact_ids) ? detail.artifact_ids.filter((value) => typeof value === "string") : [];
+    const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
+    const requestId = String(detail.request_id || "");
+    if (!command) {
+      notifyComposerComplete(requestId, "Write an instruction before sending.");
       return;
     }
-    const lower = command.toLowerCase();
-    appendConversationEntry("founder", "Founder", command);
-    input.value = "";
-    if (lower.startsWith("goal:") || lower.startsWith("create goal:")) {
-      addGoal(command.split(":").slice(1).join(":").trim()).catch((error) => appendConversationEntry("system", "Goal creation failed", error.message));
-    } else if (lower.startsWith("plan:")) {
-      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
-        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(5).trim().toLowerCase());
-      if (goal) planGoal(goal.id);
-      else appendConversationEntry("system", "Goal not found", "Select a goal or use plan: followed by its exact name.");
-    } else if (lower.startsWith("run:")) {
-      const goal = state.graph.nodes.find((node) => node.id === state.selectedId && node.type === "goal")
-        || state.graph.nodes.find((node) => node.type === "goal" && node.name.toLowerCase() === command.slice(4).trim().toLowerCase());
-      if (goal) runGoal(goal.id);
-      else appendConversationEntry("system", "Goal not found", "Select a goal or use run: followed by its exact name.");
-    } else if (lower.startsWith("agent:") || lower.startsWith("create agent:")) {
-      const name = command.split(":").slice(1).join(":").trim();
-      if (name) openAgentEditorWithName(name);
-    } else {
-      sendAiMessage(command);
+    if (detail.company_id && state.company?.id !== detail.company_id) {
+      toast("The selected company changed. Please send the instruction again.");
+      notifyComposerComplete(requestId, "The selected company changed. Please try again.");
+      return;
     }
-  }
+    processFounderInstruction(command, artifactIds, requestId, attachments);
+  });
 
   function openAgentEditorWithName(name) {
     openAgentEditor();

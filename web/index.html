@@ -6,7 +6,7 @@
   <title>The Pinky Bread · Autonomous Organization</title>
   <link rel="stylesheet" href="/static/styles.css?v=20261119-chat-rail1" />
   <link rel="stylesheet" href="/static/company-graph.css?v=20261120-commercial-llm1" />
-  <link rel="stylesheet" href="/static/a2a/agent-workspace.css?v=20261120-a2a1" />
+  <link rel="stylesheet" href="/static/a2a/agent-workspace.css?v=20261120-composer3" />
 </head>
 <body>
   <div class="app-shell">
@@ -231,12 +231,8 @@ GEMINI_API_KEY=your-google-ai-studio-api-key</code></pre>
         <div id="company-conversation" class="company-conversation" role="log" aria-live="polite">
           <div class="conversation-welcome"><span class="conversation-mark">PB</span><div><strong>Welcome to your company workspace.</strong><p>Create or select a company, then start a conversation with your AI workforce.</p><small>Try: <code>goal: Launch our first product</code> · <code>agent: Product Lead</code> · <code>plan: [goal name]</code></small></div></div>
         </div>
-        <form class="company-command-bar" id="company-command-form">
-          <span class="command-spark">✳</span>
-          <input id="company-command-input" aria-label="Founder instruction" placeholder="Message your AI team…" autocomplete="off" />
-          <button id="company-command-send" class="primary-btn" type="submit">Send <span>↗</span></button>
-        </form>
-        <div class="console-footnote">Commands: <code>goal:</code> · <code>agent:</code> · <code>plan:</code> · <code>run:</code>. Every active AI employee can read the conversation. Relevant agents may join; use @Agent Name to call someone directly.</div>
+        <div id="company-composer-root" aria-label="Message composer"></div>
+        <div class="console-footnote">Relevant agents may join automatically. Attach documents or add a public cloud share link; use @mentions to call an employee directly.</div>
       </section>
       <details class="chat-rail-details">
         <summary>Runtime status &amp; execution trace</summary>
@@ -277,6 +273,6 @@ GEMINI_API_KEY=your-google-ai-studio-api-key</code></pre>
   <script src="/static/auth.js?v=20261120-loginfirst1"></script>
   <script src="/static/app.js?v=20261120-commercial-llm1"></script>
   <script src="/static/company-graph.js?v=20261120-commercial-llm1"></script>
-  <script type="module" src="/static/a2a/agent-workspace.js?v=20261120-a2a1"></script>
+  <script type="module" src="/static/a2a/agent-workspace.js?v=20261120-composer3"></script>
 </body>
 </html>

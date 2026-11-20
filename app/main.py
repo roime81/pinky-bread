@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from .database import check_db_connection, init_db
 from .engine import WorkflowEngine, WorkflowNotFound, WorkflowConflict
@@ -13,7 +13,7 @@ from .registry import AgentRegistry
 from .schemas import WorkflowInvokeRequest, ApprovalRequest, ArtifactInput
 from .settings import get_settings
 from .company_api import router as company_graph_router
-from .auth import router as auth_router, AuthMiddleware
+from .auth import router as auth_router, AuthMiddleware, session_user
 
 settings = get_settings()
 registry = AgentRegistry(settings.agent_config_dir)
@@ -40,8 +40,19 @@ app.add_middleware(AuthMiddleware)
 
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard() -> str:
-    return (web_dir / "index.html").read_text(encoding="utf-8")
+def dashboard(request: Request):
+    current_settings = get_settings()
+    if current_settings.auth_enabled and not session_user(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return HTMLResponse((web_dir / "index.html").read_text(encoding="utf-8"))
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    current_settings = get_settings()
+    if not current_settings.auth_enabled or session_user(request):
+        return RedirectResponse(url="/", status_code=303)
+    return HTMLResponse((web_dir / "login.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/healthz")

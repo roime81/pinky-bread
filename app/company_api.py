@@ -792,6 +792,7 @@ async def company_chat_endpoint(company_id: str, request: CompanyChatRequest) ->
     return {
         "reply": reply,
         "responses": responses,
+        "documents": document_names,
         "mode": "LIVE_MODEL_WITH_MCP" if get_settings().mcp_enabled else "LIVE_MODEL",
         "agent": {
             "id": first["id"],

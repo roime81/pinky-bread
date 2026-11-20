@@ -349,3 +349,101 @@
     max-width: 100%;
   }
 }
+
+
+/* Dedicated Company Event Log and Founder View pages. */
+.founder-overview-panel {
+  display: grid;
+  gap: 12px;
+  max-width: 980px;
+  padding: 24px;
+}
+.founder-overview-panel > strong {
+  color: #3a4a3f;
+  font-size: 20px;
+  letter-spacing: -.4px;
+}
+.founder-overview-panel > p {
+  max-width: 720px;
+  margin: 0;
+  color: #7d8982;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.founder-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pb-line);
+}
+#view-company-events .graph-activity-panel {
+  min-height: 260px;
+}
+#view-company-events .company-event-list {
+  max-height: min(68vh, 760px);
+}
+
+/* Draggable agent dots on the company graph. */
+.graph-node.agent {
+  cursor: grab;
+  touch-action: none;
+}
+.graph-node.agent.dragging {
+  cursor: grabbing;
+  opacity: .9;
+}
+.graph-node.agent.dragging .node-halo {
+  opacity: .85;
+  stroke-width: 2.5;
+}
+#company-graph-svg {
+  touch-action: none;
+  user-select: none;
+}
+.canvas-hint {
+  pointer-events: none;
+}
+
+/* Independent, persistent left and right panel collapse behavior. */
+.app-shell.sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr) 360px !important;
+}
+.app-shell.sidebar-hidden.chat-hidden {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.app-shell.sidebar-hidden .sidebar {
+  display: none !important;
+}
+.app-shell.chat-hidden {
+  grid-template-columns: 232px minmax(0, 1fr) !important;
+}
+.app-shell.chat-hidden .chat-rail {
+  display: none !important;
+}
+.app-shell.sidebar-hidden.chat-hidden .main-area {
+  min-width: 0;
+}
+.sidebar-panel-close {
+  margin-left: auto;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e4ebe5;
+  background: #fff;
+  color: #718177;
+  font-size: 20px;
+  line-height: 1;
+}
+.sidebar-panel-close:hover {
+  color: #3d6a49;
+  border-color: #b6cdbb;
+}
+@media(max-width: 960px) {
+  .sidebar-panel-close {
+    display: none !important;
+  }
+  .founder-overview-panel {
+    padding: 17px;
+  }
+}

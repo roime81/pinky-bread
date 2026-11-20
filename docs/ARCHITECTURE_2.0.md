@@ -120,7 +120,6 @@ FastAPI API / Control Plane
                                - no mandatory hosted model provider
        |
        +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
-       +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
 ```
 
 ## Persistence and storage rules
@@ -195,17 +194,17 @@ The current Alpha 4 baseline includes:
 - Per-agent provider configuration for Ollama, vLLM/OpenAI-compatible endpoints, OpenAI and Gemini; credentials remain server-side.
 - Replay-safe assignment deliverables and meeting minutes in the existing local/S3 object-storage adapter.
 - Turn-based multi-agent meetings and KPI measurement history.
-- Compose services for API, horizontally scalable workers, internal MCP server, PostgreSQL/pgvector, Valkey, SeaweedFS and optional Ollama.
+- Compose services for API, horizontally scalable workers, internal MCP server, PostgreSQL/pgvector, Valkey, SeaweedFS and default local Ollama inference.
 
 ### Explicit Alpha 4 boundaries
 
-Alpha 3 moves long-running work into a PostgreSQL-backed job queue and LangGraph checkpoint thread. Workers claim jobs with renewable leases, recover expired leases after process loss, and use replay-safe writes for task/meeting outputs. Valkey is a wake-up and notification service, not the source of truth. The founder can enable recurring PLAN_ONLY coordination or explicitly confirm AUTO_EXECUTE for scheduled assignment execution.
+Alpha 3 introduced long-running work in a PostgreSQL-backed job queue and LangGraph checkpoint thread. Workers claim jobs with renewable leases, recover expired leases after process loss, and use replay-safe writes for task/meeting outputs. Valkey is a wake-up and notification service, not the source of truth. The founder can enable recurring PLAN_ONLY coordination or explicitly confirm AUTO_EXECUTE for scheduled assignment execution.
 
 The MCP v2 service and client use Streamable HTTP and per-agent role allow-lists. The current bearer-token verifier is a private-development mechanism; it is not a Keycloak/OIDC identity integration. Company tenant/actor IDs are still caller-supplied, so the APIs and MCP endpoint are not a production multi-tenant security boundary. External side-effect tools remain unavailable. The React composer supports supported document uploads and public HTTPS cloud-share links; authenticated private-drive connectors and scanned-document OCR are not included. Docker Compose defaults to live local Ollama inference (`MOCK_INFERENCE=false`); mock inference is an explicit development option and produces labelled placeholders, not genuine model output.
 
 The checkpointed StateGraph covers durable workforce jobs. Agent-to-agent discussions are persisted and streamed, but their initial request-bound execution does not yet resume an in-flight turn through the durable worker queue. The checkpointed StateGraph does not provide automatic process-level cancellation of an in-flight model request. Cancellation is cooperative between tasks/meeting turns and after model responses. Calendar/voice meetings, automatic KPI collection, semantic retrieval, model/prompt rollback, budgets, rate limits and production observability remain future work.
 
-## API surface added in Alpha 1–3
+## API surface added in Alpha 1–4
 
 | Method | Endpoint | Purpose |
 |---|---|---|

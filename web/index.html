@@ -6,6 +6,7 @@
   <title>The Pinky Bread · Autonomous Organization</title>
   <link rel="stylesheet" href="/static/styles.css?v=20261119-chat-rail1" />
   <link rel="stylesheet" href="/static/company-graph.css?v=20261119-chat-rail1" />
+  <link rel="stylesheet" href="/static/a2a/agent-workspace.css?v=20261120-a2a1" />
 </head>
 <body>
   <div class="app-shell">
@@ -27,6 +28,7 @@
         </div>
         <div class="workspace-label nav-workspace-heading">WORKSPACE</div>
         <button class="nav-item" data-view="company-agents" title="AI Workforce"><span class="nav-icon">◇</span><span class="nav-label">AI Workforce</span></button>
+        <button class="nav-item" data-view="agent-messaging" title="Agent Conversations"><span class="nav-icon">⇄</span><span class="nav-label">Agent Conversations</span></button>
         <button class="nav-item" data-view="overview" title="Overview"><span class="nav-icon">◫</span><span class="nav-label">Overview</span></button>
         <button class="nav-item" data-view="workflows" title="Workflow"><span class="nav-icon">⌘</span><span class="nav-label">Workflow</span><span class="nav-count" id="nav-workflow-count">0</span></button>
         <button class="nav-item" data-view="agents" title="Workflow Templates"><span class="nav-icon">▧</span><span class="nav-label">Workflow Templates</span></button>
@@ -138,6 +140,10 @@
           <div class="graph-panel-heading"><div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Company agents</strong></div><span id="workspace-agent-count">0 agents</span></div>
           <div id="workspace-agent-list" class="company-agent-list"><div class="empty-state">Select or create a company to start building your team.</div></div>
         </section>
+      </section>
+
+      <section class="view" id="view-agent-messaging">
+        <div id="a2a-workspace-root"></div>
       </section>
 
       <section class="view" id="view-overview">
@@ -266,5 +272,6 @@
   <script src="/static/auth.js?v=20261119-auth1"></script>
   <script src="/static/app.js?v=20261119-chat-rail1"></script>
   <script src="/static/company-graph.js?v=20261119-chat-rail1"></script>
+  <script type="module" src="/static/a2a/agent-workspace.js?v=20261120-a2a1"></script>
 </body>
 </html>

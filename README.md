@@ -52,6 +52,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Dynamic goal-to-work execution:** the founder-selected coordinator delegates to the active agents defined in that company. The planner can only assign work to real agent IDs from the company's roster.
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
+- **Agent-to-agent conversations (new feature branch):** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
 - **LangGraph checkpoints:** each durable job runs through a LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints keyed by job ID.
@@ -184,7 +185,7 @@ The included example is intentionally a workflow demonstration. Keyword detectio
 | Vector extension image | pgvector PostgreSQL image | Extension enabled; embeddings and semantic retrieval are not yet implemented |
 | Cache/event service | Valkey 9.1 (Redis protocol compatible) | Best-effort graph event notifications; PostgreSQL remains durable |
 | PDF processing | PyMuPDF | Text extraction from text-based PDFs |
-| Frontend | HTML, CSS, vanilla JavaScript | Browser-based console without a frontend build toolchain |
+| Frontend | Existing HTML/CSS/JavaScript shell + React 18, TypeScript, Vite, Framer Motion and Lucide React for Agent Conversations | The company graph and Alpha 4 screens remain in the existing shell; the A2A workspace is built to static assets and served by FastAPI |
 | Object storage | SeaweedFS S3 API + boto3 | S3-compatible company documents, deliverables, meeting minutes and workflow artifacts |
 | Containers | Docker, Docker Compose | Local container deployment |
 | Tests | pytest, FastAPI TestClient | API and workflow behavior tests |
@@ -621,6 +622,7 @@ pinky-bread/
 │   ├── engine.py         # Legacy workflow routing, execution and approval flow
 │   ├── workforce.py      # User-defined coordinator, agent delegation, task execution, meetings and KPIs
 │   ├── durable_runtime.py # PostgreSQL jobs, LangGraph checkpoints, worker leases and coordination
+│   ├── agent_messaging.py # Company-scoped A2A conversations, message history and SSE stream
 │   ├── worker.py          # Durable workforce worker entrypoint
 │   ├── mcp_server.py      # Internal MCP v2 server with scoped tools
 │   ├── mcp_client.py      # Role-scoped MCP client for local model tool calls
@@ -650,7 +652,12 @@ pinky-bread/
 │   ├── test_engine.py            # Legacy API/workflow behavior tests
 │   ├── test_company_graph.py     # Company graph and storage tests
 │   └── test_workforce.py         # Planning, execution, meetings and KPI tests
+├── frontend/             # React 18 + TypeScript + Vite A2A collaboration app
+│   ├── src/App.tsx
+│   ├── src/styles.css
+│   └── package.json
 ├── web/
+│   ├── a2a/               # Vite output, generated during build
 │   ├── app.js            # Dashboard behavior
 │   ├── index.html        # Dashboard markup
 │   └── styles.css        # Dashboard styling

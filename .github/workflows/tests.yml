@@ -50,12 +50,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate browser JavaScript
-        run: |
-          node --check web/app.js
-          node --check web/company-graph.js
-          node --check web/auth.js
-          node --check web/login.js
+      - name: Validate remaining browser JavaScript
+        run: node --check web/login.js
       - name: Build React workspace and document composer
         run: |
           cd frontend

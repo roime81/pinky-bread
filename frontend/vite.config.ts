@@ -5,20 +5,19 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: { "@": resolve(process.cwd(), "src") },
-  },
-  base: "/static/a2a/",
+  resolve: { alias: { "@": resolve(process.cwd(), "src") } },
+  base: "/static/app/",
   build: {
-    outDir: resolve(process.cwd(), "../web/a2a"),
+    outDir: resolve(process.cwd(), "../web/app"),
     emptyOutDir: true,
     lib: {
       entry: resolve(process.cwd(), "src/main.tsx"),
       formats: ["es"],
-      fileName: () => "agent-workspace.js",
+      fileName: () => "workspace.js",
     },
+    cssCodeSplit: false,
     rollupOptions: {
-      output: { assetFileNames: "agent-workspace.[ext]" },
+      output: { assetFileNames: "workspace.[ext]" },
     },
   },
 });

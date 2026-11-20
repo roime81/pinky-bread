@@ -91,7 +91,8 @@ def resolve_agent_discussion(
     ]
     action = re.search(
         r"\b(discuss|talk|chat|speak|connect|consult|ask|tell|message|greet|"
-        r"introduce|meet|sync|align|brainstorm|say\s+(?:hello|hi))\b",
+        r"introduce|meet|sync|align|brainstorm|converse|conversation|hello|hi|"
+        r"say\s+(?:hello|hi)|says?\s+(?:hello|hi))\b",
         message,
         re.IGNORECASE,
     )

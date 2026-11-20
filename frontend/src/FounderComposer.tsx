@@ -66,6 +66,17 @@ export default function FounderComposer() {
     };
   }, []);
 
+  useEffect(() => {
+    const complete = (event: Event) => {
+      const detail = (event as CustomEvent<{ error?: string }>).detail || {};
+      setBusy(false);
+      setStatus("");
+      if (detail.error) setError(detail.error);
+    };
+    window.addEventListener("pinky:founder-message-complete", complete);
+    return () => window.removeEventListener("pinky:founder-message-complete", complete);
+  }, []);
+
   function addFiles(fileList: FileList | File[]) {
     setError("");
     const incoming = Array.from(fileList);
@@ -152,40 +163,39 @@ export default function FounderComposer() {
       textarea.current?.focus();
       return;
     }
-    if (!files.length && !linked.length) {
-      window.dispatchEvent(new CustomEvent("pinky:founder-message", { detail: { message, artifact_ids: [], company_id: companyId } }));
-      setDraft("");
-      return;
-    }
     setBusy(true);
     setError("");
     const uploaded: Artifact[] = [...linked];
+    let handedOff = false;
     try {
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
         setStatus("Uploading " + (index + 1) + " of " + files.length + " · " + file.name);
         uploaded.push(await uploadFile(file));
       }
-      setStatus("Sending instruction with " + uploaded.length + " source document(s)…");
+      setStatus("Delivering instruction to your AI workforce…");
+      const requestId = window.crypto?.randomUUID?.() || "pb-" + Date.now() + "-" + Math.random().toString(16).slice(2);
       window.dispatchEvent(new CustomEvent("pinky:founder-message", {
         detail: {
+          request_id: requestId,
           message,
           artifact_ids: uploaded.map((item) => item.object_id),
           attachments: uploaded.map((item) => ({ object_id: item.object_id, filename: item.filename })),
           company_id: companyId,
         },
       }));
+      handedOff = true;
       setDraft("");
       setFiles([]);
       setLinked([]);
-      setStatus("");
       setShowLink(false);
+      setStatus("Your instruction was delivered. The AI workforce is responding…");
       requestAnimationFrame(() => textarea.current?.focus());
     } catch (reason) {
       setError((reason as Error).message || "Unable to attach one or more documents.");
       setStatus("");
     } finally {
-      setBusy(false);
+      if (!handedOff) setBusy(false);
     }
   }
 

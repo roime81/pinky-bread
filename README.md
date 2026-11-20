@@ -666,6 +666,81 @@ The Google callback validates OAuth state and requires a verified Google email a
 
 **Important:** `admin:admin` and the sample session secret are development conveniences only. Do not use them on a public or production deployment. Set a unique password and random session secret, and disable `DEV_AUTH_ENABLED` outside local development.
 
+## Document attachments and cloud imports
+
+The founder's company conversation composer accepts documents as message context. Press the paperclip button to open the upload workspace:
+
+- Drag and drop or browse local files.
+- Import from Google Drive, Dropbox, OneDrive or Box after configuring that provider's OAuth client.
+- Paste a direct document URL using the URL import source. The remote source must be accessible to the server; public or time-limited signed links are the simplest option.
+- Up to **5 documents per message**, with a default **12 MB per file** limit (`MAX_UPLOAD_MB` controls the limit).
+
+Supported text extraction formats are PDF, DOCX, XLSX, PPTX, CSV, JSON, TXT, Markdown, YAML, XML, HTML and LOG. The API extracts bounded text from each document and attaches it to the AI conversation. The documents are stored as company-scoped artifacts in the configured object store, and the request sends artifact IDs rather than file bytes. The context builder verifies the company/tenant scope and treats document text as untrusted reference content. This is prompt-grounded document context, not yet a full document search/RAG index. Scanned PDFs and image-only documents do not receive OCR in this flow.
+
+### Local installation
+
+Local file upload works immediately through the Compose API and SeaweedFS. The Compose stack also runs a self-hosted Uppy Companion on port `3020` for cloud imports. Create/update `.env` with strong values:
+
+```dotenv
+COMPANION_PUBLIC_URL=http://localhost:3020
+COMPANION_DOMAIN=localhost:3020
+COMPANION_PROTOCOL=http
+COMPANION_CLIENT_ORIGINS=http://localhost:8888
+COMPANION_SECRET=replace-with-a-long-random-companion-secret
+COMPANION_UPLOAD_TOKEN=replace-with-a-different-long-random-upload-token
+
+# Add only the providers you intend to use. These are separate from Google sign-in credentials.
+COMPANION_GOOGLE_KEY=
+COMPANION_GOOGLE_SECRET=
+COMPANION_DROPBOX_KEY=
+COMPANION_DROPBOX_SECRET=
+COMPANION_ONEDRIVE_KEY=
+COMPANION_ONEDRIVE_SECRET=
+COMPANION_BOX_KEY=
+COMPANION_BOX_SECRET=
+```
+
+Then rebuild the API, web frontend and Companion:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+The browser reaches Companion at `COMPANION_PUBLIC_URL`; Companion streams selected cloud files to the internal API upload endpoint (`http://api:8080`). The server-side upload target is allow-listed by Companion, and a static bearer token is forwarded only to the company artifact upload route. Do not expose the Companion port or upload token to untrusted users. The Companion data volume stores provider OAuth session state; document bytes are streamed onward rather than stored in Companion.
+
+### GitHub Codespaces
+
+Set the exact forwarded hostnames shown in the Codespaces **Ports** panel. For example, replace `YOUR-CODESPACE` with your Codespace hostname:
+
+```dotenv
+PB_BIND_ADDRESS=0.0.0.0
+COMPANION_PUBLIC_URL=https://YOUR-CODESPACE-3020.app.github.dev
+COMPANION_DOMAIN=YOUR-CODESPACE-3020.app.github.dev
+COMPANION_PROTOCOL=https
+COMPANION_CLIENT_ORIGINS=https://YOUR-CODESPACE-8888.app.github.dev
+```
+
+Mark ports `8888` and `3020` as private unless you deliberately need to share the workspace. The browser application must be on the exact origin listed in `COMPANION_CLIENT_ORIGINS`.
+
+### Configure cloud OAuth providers
+
+Create an OAuth application in each provider's developer console and copy its client ID/key and secret into the matching `COMPANION_...` variables above. Register these callback URLs:
+
+| Provider | Redirect URI |
+|---|---|
+| Google Drive | `https://YOUR-COMPANION-HOST/drive/redirect` |
+| Dropbox | `https://YOUR-COMPANION-HOST/dropbox/redirect` |
+| OneDrive | `https://YOUR-COMPANION-HOST/onedrive/redirect` |
+| Box | `https://YOUR-COMPANION-HOST/box/redirect` |
+
+For local development, replace `https://YOUR-COMPANION-HOST` with `http://localhost:3020`. Use the HTTPS Codespaces host when connecting from Codespaces.
+
+Google Drive requires enabling the Google Drive API and requesting the `drive.readonly` scope for Uppy Companion. Google classifies this as a restricted scope; until the OAuth app is verified, limit access to the test users configured in Google Cloud. These Google Drive credentials are separate from the Google sign-in Client ID unless you deliberately configure one OAuth app for both purposes.
+
+A direct URL import is useful for a public or signed document URL. Private links that require a browser-only login cannot be imported by URL; configure the relevant OAuth provider connector instead. Companion includes URL-fetch protections, but keep its URL import enabled only in the private workspace environment.
+
+
 ## Configure commercial LLM providers
 
 Pinky Bread supports per-agent selection between local and hosted models. Open the **Model Providers** page to check credential readiness, then choose the provider when creating or editing an AI employee.

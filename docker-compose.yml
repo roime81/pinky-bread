@@ -48,6 +48,17 @@ services:
       OPENAI_API_URL: "${OPENAI_API_URL:-https://api.openai.com/v1}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_API_URL: "${GEMINI_API_URL:-https://generativelanguage.googleapis.com/v1beta/openai}"
+      COMPANION_PUBLIC_URL: "${COMPANION_PUBLIC_URL:-http://localhost:3020}"
+      COMPANION_UPLOAD_TOKEN: "${COMPANION_UPLOAD_TOKEN:-pinky-bread-dev-companion-upload-token-change-me}"
+      COMPANION_UPLOAD_TARGET_BASE_URL: "http://api:8080"
+      COMPANION_GOOGLE_KEY: "${COMPANION_GOOGLE_KEY:-}"
+      COMPANION_GOOGLE_SECRET: "${COMPANION_GOOGLE_SECRET:-}"
+      COMPANION_DROPBOX_KEY: "${COMPANION_DROPBOX_KEY:-}"
+      COMPANION_DROPBOX_SECRET: "${COMPANION_DROPBOX_SECRET:-}"
+      COMPANION_ONEDRIVE_KEY: "${COMPANION_ONEDRIVE_KEY:-}"
+      COMPANION_ONEDRIVE_SECRET: "${COMPANION_ONEDRIVE_SECRET:-}"
+      COMPANION_BOX_KEY: "${COMPANION_BOX_KEY:-}"
+      COMPANION_BOX_SECRET: "${COMPANION_BOX_SECRET:-}"
       OPENAI_COMPATIBLE_API_KEY: "${OPENAI_COMPATIBLE_API_KEY:-}"
       WORKER_POLL_SECONDS: "1.5"
       WORKER_LEASE_SECONDS: "120"
@@ -102,6 +113,11 @@ services:
       REASONING_API_URL: "${REASONING_CONTAINER_API_URL:-http://ollama:11434/v1}"
       REASONING_MODEL: "${REASONING_MODEL:-qwen2.5:3b}"
       VLLM_API_KEY: "${VLLM_API_KEY:-local-dev-key}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_API_URL: "${OPENAI_API_URL:-https://api.openai.com/v1}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_API_URL: "${GEMINI_API_URL:-https://generativelanguage.googleapis.com/v1beta/openai}"
+      OPENAI_COMPATIBLE_API_KEY: "${OPENAI_COMPATIBLE_API_KEY:-}"
       WORKER_POLL_SECONDS: "1.5"
       WORKER_LEASE_SECONDS: "120"
       WORKER_HEARTBEAT_SECONDS: "20"
@@ -160,6 +176,39 @@ services:
       migrate:
         condition: service_completed_successfully
     networks: [pinky_bread_internal]
+    restart: unless-stopped
+
+  companion:
+    build:
+      context: ./companion
+    container_name: pinky-bread-companion
+    ports:
+      - "${PB_BIND_ADDRESS:-127.0.0.1}:3020:3020"
+    environment:
+      NODE_ENV: production
+      COMPANION_SECRET: "${COMPANION_SECRET:-pinky-bread-dev-companion-secret-change-me}"
+      COMPANION_DOMAIN: "${COMPANION_DOMAIN:-localhost:3020}"
+      COMPANION_PROTOCOL: "${COMPANION_PROTOCOL:-http}"
+      COMPANION_PORT: "3020"
+      COMPANION_DATADIR: /data
+      COMPANION_CLIENT_ORIGINS: "${COMPANION_CLIENT_ORIGINS:-http://localhost:8888}"
+      COMPANION_UPLOAD_URLS: "http://api:8080/v2/companies/"
+      COMPANION_UPLOAD_HEADERS: '{"Authorization":"Bearer ${COMPANION_UPLOAD_TOKEN:-pinky-bread-dev-companion-upload-token-change-me}"}'
+      COMPANION_ENABLE_URL_ENDPOINT: "true"
+      COMPANION_GOOGLE_KEY: "${COMPANION_GOOGLE_KEY:-}"
+      COMPANION_GOOGLE_SECRET: "${COMPANION_GOOGLE_SECRET:-}"
+      COMPANION_DROPBOX_KEY: "${COMPANION_DROPBOX_KEY:-}"
+      COMPANION_DROPBOX_SECRET: "${COMPANION_DROPBOX_SECRET:-}"
+      COMPANION_ONEDRIVE_KEY: "${COMPANION_ONEDRIVE_KEY:-}"
+      COMPANION_ONEDRIVE_SECRET: "${COMPANION_ONEDRIVE_SECRET:-}"
+      COMPANION_BOX_KEY: "${COMPANION_BOX_KEY:-}"
+      COMPANION_BOX_SECRET: "${COMPANION_BOX_SECRET:-}"
+    volumes:
+      - companion_data:/data
+    depends_on:
+      api:
+        condition: service_started
+    networks: [pinky_bread_internal, companion_egress]
     restart: unless-stopped
 
   ollama:
@@ -253,9 +302,12 @@ networks:
     internal: true
   ollama_download:
     driver: bridge
+  companion_egress:
+    driver: bridge
 
 volumes:
   postgres_data:
   valkey_data:
   seaweed_data:
   ollama_data:
+  companion_data:

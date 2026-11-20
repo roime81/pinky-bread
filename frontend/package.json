@@ -14,7 +14,15 @@
     "@radix-ui/react-slot": "^1.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "@uppy/core": "^6.3.2",
+    "@uppy/dashboard": "^6.0.3",
+    "@uppy/xhr-upload": "^6.0.1",
+    "@uppy/box": "^5.0.0",
+    "@uppy/dropbox": "^6.0.1",
+    "@uppy/google-drive": "^6.0.2",
+    "@uppy/onedrive": "^6.0.0",
+    "@uppy/url": "^6.0.2"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

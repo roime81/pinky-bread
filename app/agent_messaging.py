@@ -343,6 +343,7 @@ async def stream_agent_discussion(
     recipients: list[dict[str, Any]],
     founder_message: str,
     max_turns: int = 6,
+    system_context: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Run a bounded peer conversation, persisting and streaming every message."""
     participants = [initiator, *recipients]
@@ -436,6 +437,8 @@ async def stream_agent_discussion(
             "Write the first message directly to your colleague. Do not address the founder, "
             "do not claim that you have already received a reply, and make the purpose clear."
         )
+        if system_context:
+            opening_context += "\n\n" + system_context
         opening = await chat_with_agent(
             agent=initiator, company=company, agents=agents,
             message=f"Start the discussion with {first_recipient['name']} now.",
@@ -471,6 +474,8 @@ async def stream_agent_discussion(
                 "when appropriate. Keep the discussion focused. When the matter is resolved and you have "
                 "nothing material to add, append the exact token <PB_DISCUSSION_COMPLETE> at the end."
             )
+            if system_context:
+                context += "\n\n" + system_context
             reply = await chat_with_agent(
                 agent=speaker, company=company, agents=agents,
                 message=(
@@ -507,6 +512,8 @@ async def stream_agent_discussion(
             "transcript to provide a concise, useful summary: key points agreed, differing views, "
             "open questions and next steps. Do not invent decisions or claim actions were executed."
         )
+        if system_context:
+            summary_context += "\n\n" + system_context
         summary = await chat_with_agent(
             agent=initiator, company=company, agents=agents,
             message="Please report the outcome of your discussion to the founder.",

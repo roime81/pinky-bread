@@ -197,3 +197,17 @@
 .composer-spin{animation:composer-spin .85s linear infinite}
 @keyframes composer-spin{to{transform:rotate(360deg)}}
 @media(max-width:520px){.founder-composer{padding:11px 10px 9px}.composer-tool-button{padding:0 7px}.composer-tool-button span{font-size:8px}.composer-attachment-copy strong{max-width:130px}.composer-help-row{font-size:7px}}
+
+
+/* Uppy cloud/document upload panel inside the unified founder composer */
+.pb-document-upload-panel{display:flex;flex-direction:column;gap:9px;min-width:0;padding:11px;border:1px solid #e5ece6;border-radius:11px;background:#f8fbf8}
+.pb-document-upload-panel>header,.pb-document-upload-panel>footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pb-document-upload-panel>header>div{display:grid;gap:3px}
+.pb-document-upload-panel>header strong{font-size:10px;color:#435348}
+.pb-document-upload-panel>header small,.pb-document-upload-panel>footer span,.pb-upload-note{font-size:8px;color:#849188}
+.pb-document-upload-panel>header button,.pb-document-upload-panel>footer button{display:grid;place-items:center;border:0;border-radius:7px;padding:6px;background:#eef4ef;color:#607367;cursor:pointer;font-size:9px}
+.pb-cloud-source-note{display:flex;align-items:center;gap:6px;margin:0;color:#568362;font-size:8px}
+.pb-uppy-dashboard{min-width:0}
+.pb-uppy-dashboard .uppy-Dashboard-inner{width:100%;border:1px solid #dfe8e1;border-radius:9px;background:#fff}
+.pb-document-upload-panel>footer{padding-top:7px;border-top:1px solid #e7eee8}
+.pb-upload-note{margin:0;line-height:1.5}

@@ -1,17 +1,38 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertCircle, Check, Cloud, FileImage, FileSpreadsheet, FileText, FileUp,
-  Link2, LoaderCircle, Paperclip, Plus, Send, X,
+  AlertCircle, Check, FileText, LoaderCircle, Paperclip, Send, ShieldCheck, X,
 } from "lucide-react";
-import { type DragEvent, type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Uppy from "@uppy/core";
+import Dashboard from "@uppy/dashboard";
+import Box from "@uppy/box";
+import Dropbox from "@uppy/dropbox";
+import GoogleDrive from "@uppy/google-drive";
+import OneDrive from "@uppy/onedrive";
+import Url from "@uppy/url";
+import XHRUpload from "@uppy/xhr-upload";
 
 type Artifact = {
   object_id: string;
   filename: string;
-  content_type: string;
+  content_type?: string;
   size_bytes: number;
   extraction_status?: string;
   source?: string;
+};
+type UploadConfig = {
+  companion_url: string;
+  companion_enabled: boolean;
+  upload_target_base_url: string;
+  max_upload_mb: number;
+  max_attachments: number;
+  sources: {
+    google_drive: boolean;
+    dropbox: boolean;
+    onedrive: boolean;
+    box: boolean;
+    url: boolean;
+  };
 };
 type FounderComposerProps = {
   companyId: string;
@@ -19,191 +40,199 @@ type FounderComposerProps = {
   onSend: (message: string, artifactIds: string[]) => Promise<void>;
 };
 
-const ACCEPTED = new Set(["pdf", "docx", "xlsx", "pptx", "csv", "txt", "md", "json", "html", "htm", "xml", "png", "jpg", "jpeg", "webp"]);
+const DEFAULT_MAX_ATTACHMENTS = 5;
+const ACCEPTED_FORMATS = ".pdf,.docx,.xlsx,.pptx,.csv,.json,.txt,.md,.yaml,.yml,.xml,.html,.htm,.log";
 
-function formatBytes(value: number): string {
-  if (value < 1024) return value + " B";
-  if (value < 1024 * 1024) return (value / 1024).toFixed(0) + " KB";
-  return (value / 1024 / 1024).toFixed(1) + " MB";
-}
-function fileIcon(name: string) {
-  const ext = name.split(".").pop()?.toLowerCase();
-  if (["xlsx", "csv"].includes(ext || "")) return FileSpreadsheet;
-  if (["png", "jpg", "jpeg", "webp"].includes(ext || "")) return FileImage;
-  return FileText;
-}
 async function responsePayload(response: Response) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.detail || "Document request failed (" + response.status + ")");
   return payload;
 }
 
+function prettySize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "Ready";
+  if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
 export default function FounderComposer({ companyId, tenantId, onSend }: FounderComposerProps) {
-  const [maxFileMb, setMaxFileMb] = useState(12);
+  const [uploadConfig, setUploadConfig] = useState<UploadConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
   const [draft, setDraft] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [linked, setLinked] = useState<Artifact[]>([]);
-  const [linkValue, setLinkValue] = useState("");
-  const [showLink, setShowLink] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [linkBusy, setLinkBusy] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  const [attachments, setAttachments] = useState<Artifact[]>([]);
+  const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const fileInput = useRef<HTMLInputElement>(null);
+  const dashboardTarget = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const attachmentsRef = useRef<Artifact[]>([]);
+  attachmentsRef.current = attachments;
 
   useEffect(() => {
-    fetch("/v2/capabilities")
+    let cancelled = false;
+    fetch("/v2/upload-config")
       .then(responsePayload)
-      .then((payload) => {
-        const configured = Number(payload.max_upload_mb);
-        if (Number.isFinite(configured) && configured > 0 && configured <= 250) setMaxFileMb(configured);
-      })
-      .catch(() => undefined);
+      .then((config) => { if (!cancelled) setUploadConfig(config as UploadConfig); })
+      .catch((reason: Error) => { if (!cancelled) setError(reason.message); })
+      .finally(() => { if (!cancelled) setConfigLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     setDraft("");
-    setFiles([]);
-    setLinked([]);
-    setLinkValue("");
-    setShowLink(false);
+    setAttachments([]);
+    setUploadPanelOpen(false);
+    setUploading(false);
+    setSending(false);
     setError("");
     setStatus("");
-    setBusy(false);
   }, [companyId]);
 
-  function addFiles(fileList: FileList | File[]) {
-    setError("");
-    const incoming = Array.from(fileList);
-    const accepted: File[] = [];
-    const rejected: string[] = [];
-    for (const file of incoming) {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "";
-      if (!ACCEPTED.has(ext)) {
-        rejected.push(file.name + " is not a supported document format.");
-        continue;
-      }
-      if (file.size > maxFileMb * 1024 * 1024) {
-        rejected.push(file.name + " exceeds the " + maxFileMb + " MB per-file limit.");
-        continue;
-      }
-      accepted.push(file);
-    }
-    const merged = [...files];
-    for (const candidate of accepted) {
-      if (!merged.some((item) => item.name === candidate.name && item.size === candidate.size && item.lastModified === candidate.lastModified)) merged.push(candidate);
-    }
-    if (merged.length + linked.length > 10) rejected.push("Attach up to 10 documents per message.");
-    setFiles(merged.slice(0, Math.max(0, 10 - linked.length)));
-    if (rejected.length) setError(rejected.join(" "));
-    if (fileInput.current) fileInput.current.value = "";
-  }
+  useEffect(() => {
+    if (!companyId || !uploadConfig || !uploadPanelOpen || !dashboardTarget.current) return;
 
-  function handleDrop(event: DragEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setDragging(false);
-    if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
-  }
-
-  async function importLink(event?: FormEvent) {
-    event?.preventDefault();
-    const url = linkValue.trim();
-    if (!companyId || !url || linkBusy || linked.length + files.length >= 10) return;
-    setLinkBusy(true);
-    setError("");
-    setStatus("Importing shared document…");
-    try {
-      const response = await fetch("/v2/companies/" + encodeURIComponent(companyId) + "/document-links", {
+    const maxAttachments = uploadConfig.max_attachments || DEFAULT_MAX_ATTACHMENTS;
+    const endpoint = (file: any) => {
+      const base = file.isRemote ? uploadConfig.upload_target_base_url : window.location.origin;
+      return base.replace(/\/$/, "") + "/v2/companies/" + encodeURIComponent(companyId) + "/artifacts";
+    };
+    const uppy = new Uppy({
+      autoProceed: false,
+      restrictions: {
+        maxNumberOfFiles: maxAttachments,
+        maxFileSize: (uploadConfig.max_upload_mb || 12) * 1024 * 1024,
+        allowedFileTypes: ACCEPTED_FORMATS.split(","),
+      },
+      meta: { tenant_id: tenantId, actor_id: "founder", kind: "document" },
+    })
+      .use(Dashboard, {
+        inline: true,
+        target: dashboardTarget.current,
+        height: 245,
+        hideProgressDetails: false,
+        proudlyDisplayPoweredByUppy: false,
+        note: "Company-scoped documents · up to five files per message",
+      })
+      .use(XHRUpload, {
+        endpoint,
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId, actor_id: "founder", url }),
+        fieldName: "file",
+        formData: true,
+        bundle: false,
+        allowedMetaFields: ["tenant_id", "actor_id", "kind"],
+        withCredentials: true,
       });
-      const payload = await responsePayload(response);
-      setLinked((current) => [...current, { ...payload.artifact, source: "cloud" }]);
-      setLinkValue("");
-      setStatus("Cloud document added to this message.");
-    } catch (reason) {
-      setError((reason as Error).message);
-      setStatus("");
-    } finally {
-      setLinkBusy(false);
-    }
-  }
 
-  async function uploadFile(file: File): Promise<Artifact> {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("tenant_id", tenantId);
-    form.append("actor_id", "founder");
-    form.append("kind", "document");
-    const response = await fetch("/v2/companies/" + encodeURIComponent(companyId) + "/artifacts", {
-      method: "POST",
-      body: form,
-    });
-    const payload = await responsePayload(response);
-    return payload.artifact as Artifact;
-  }
+    if (uploadConfig.companion_enabled) {
+      const companionOptions = {
+        companionUrl: uploadConfig.companion_url,
+        companionAllowedHosts: [uploadConfig.companion_url],
+        companionCookiesRule: "include" as const,
+      };
+      if (uploadConfig.sources.url) uppy.use(Url, companionOptions);
+      if (uploadConfig.sources.google_drive) uppy.use(GoogleDrive, companionOptions);
+      if (uploadConfig.sources.dropbox) uppy.use(Dropbox, companionOptions);
+      if (uploadConfig.sources.onedrive) uppy.use(OneDrive, companionOptions);
+      if (uploadConfig.sources.box) uppy.use(Box, companionOptions);
+    }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const message = draft.trim();
-    if (!companyId) {
-      setError("Create or select a company before attaching documents.");
-      return;
-    }
-    if (!message) {
-      setError("Write an instruction for your AI workforce.");
-      textarea.current?.focus();
-      return;
-    }
-    setBusy(true);
-    setError("");
-    const uploaded: Artifact[] = [...linked];
-    try {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
-        setStatus("Uploading " + (index + 1) + " of " + files.length + " · " + file.name);
-        uploaded.push(await uploadFile(file));
+    uppy.on("file-added", (file) => {
+      const waiting = uppy.getFiles().filter((item) => !item.progress.uploadComplete).length;
+      if (attachmentsRef.current.length + waiting > maxAttachments) {
+        uppy.removeFile(file.id);
+        setError("Attach no more than " + maxAttachments + " documents to one message.");
+        return;
       }
-      setStatus("Delivering instruction to your AI workforce…");
-      await onSend(message, uploaded.map((item) => item.object_id));
+      uppy.setFileMeta(file.id, { tenant_id: tenantId, actor_id: "founder", kind: "document" });
+      setError("");
+      setStatus("Added " + file.name);
+    });
+    uppy.on("upload", () => {
+      setError("");
+      setUploading(true);
+      setStatus("Uploading documents to company storage…");
+    });
+    uppy.on("upload-success", (file, response) => {
+      const body = response.body as ({ artifact?: Artifact } & Partial<Artifact>) | undefined;
+      const artifact = body?.artifact || (body?.object_id ? body as Artifact : undefined);
+      if (!artifact?.object_id) {
+        setError((file?.name || "Document") + " uploaded, but the API did not return an artifact reference.");
+        return;
+      }
+      setAttachments((current) => {
+        if (current.some((item) => item.object_id === artifact.object_id)) return current;
+        return [...current, { ...artifact, source: "company-upload" }].slice(0, maxAttachments);
+      });
+      setStatus(artifact.filename + " is attached to this message context");
+    });
+    uppy.on("upload-error", (file, reason) => {
+      setError((file?.name || "Upload") + ": " + (reason.message || "upload failed"));
+      setStatus("");
+    });
+    uppy.on("restriction-failed", (_file, reason) => {
+      setError(reason.message);
+      setStatus("");
+    });
+    uppy.on("complete", () => setUploading(false));
+
+    return () => { uppy.destroy(); };
+  }, [companyId, tenantId, uploadConfig, uploadPanelOpen]);
+
+  const cloudSources = useMemo(() => {
+    const sources = uploadConfig?.sources;
+    if (!sources) return [];
+    return [
+      sources.google_drive && "Google Drive",
+      sources.dropbox && "Dropbox",
+      sources.onedrive && "OneDrive",
+      sources.box && "Box",
+      sources.url && "URL import",
+    ].filter(Boolean) as string[];
+  }, [uploadConfig]);
+
+  const send = useCallback(async (event?: FormEvent) => {
+    event?.preventDefault();
+    const message = draft.trim() || (attachments.length
+      ? "Please review the attached documents and use them as context for my request."
+      : "");
+    if (!message || !companyId || sending || uploading) return;
+    setSending(true);
+    setError("");
+    setStatus("Delivering instruction to your AI workforce…");
+    try {
+      await onSend(message, attachments.map((item) => item.object_id));
       setDraft("");
-      setFiles([]);
-      setLinked([]);
-      setShowLink(false);
+      setAttachments([]);
+      setUploadPanelOpen(false);
       setStatus("Your instruction was delivered.");
       requestAnimationFrame(() => textarea.current?.focus());
     } catch (reason) {
       setError((reason as Error).message || "Unable to deliver this instruction.");
       setStatus("");
     } finally {
-      setBusy(false);
+      setSending(false);
     }
-  }
+  }, [attachments, companyId, draft, onSend, sending, uploading]);
 
-  function onTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
   }
 
-  const attachedCount = files.length + linked.length;
-  const disabled = busy || linkBusy || !companyId;
+  function removeAttachment(objectId: string) {
+    setAttachments((current) => current.filter((item) => item.object_id !== objectId));
+  }
+
+  const maxAttachments = uploadConfig?.max_attachments || DEFAULT_MAX_ATTACHMENTS;
+  const canSend = Boolean(companyId && (draft.trim() || attachments.length) && !sending && !uploading);
+  const sourcesReady = Boolean(uploadConfig?.companion_enabled && cloudSources.length);
 
   return (
-    <form
-      className={"founder-composer" + (dragging ? " is-dragging" : "")}
-      onSubmit={submit}
-      onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-      onDragLeave={(event) => {
-        const next = event.relatedTarget as Node | null;
-        if (!next || !event.currentTarget.contains(next)) setDragging(false);
-      }}
-      onDrop={handleDrop}
-    >
+    <form className="founder-composer" onSubmit={(event) => void send(event)}>
       <div className="founder-composer-topline">
         <span><span className="composer-status-dot" /> MESSAGE YOUR WORKFORCE</span>
         <span className="composer-company-context">{companyId ? "COMPANY CONTEXT ACTIVE" : "SELECT A COMPANY FIRST"}</span>
@@ -212,50 +241,66 @@ export default function FounderComposer({ companyId, tenantId, onSend }: Founder
         ref={textarea}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={onTextareaKeyDown}
+        onKeyDown={onKeyDown}
         rows={3}
         maxLength={12000}
-        placeholder="Ask your AI workforce to analyse, research, plan or collaborate…"
+        placeholder={companyId ? "Ask your AI workforce to analyse, research, plan or collaborate…" : "Create or select a company first"}
         aria-label="Founder instruction"
-        disabled={!companyId || busy}
+        disabled={!companyId || sending}
       />
       <AnimatePresence initial={false}>
-        {(files.length > 0 || linked.length > 0) && (
+        {attachments.length > 0 && (
           <motion.div className="composer-attachments" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-            {files.map((file, index) => {
-              const Icon = fileIcon(file.name);
-              return <div className="composer-attachment" key={file.name + file.lastModified + index}><span className="composer-attachment-icon"><Icon size={14} /></span><span className="composer-attachment-copy"><strong>{file.name}</strong><small>{formatBytes(file.size)} · Ready to upload</small></span><button type="button" aria-label={"Remove " + file.name} onClick={() => setFiles((items) => items.filter((_, i) => i !== index))}><X size={13} /></button></div>;
-            })}
-            {linked.map((item) => {
-              const Icon = item.content_type.startsWith("image/") ? FileImage : fileIcon(item.filename);
-              return <div className="composer-attachment" key={item.object_id}><span className="composer-attachment-icon cloud"><Icon size={14} /></span><span className="composer-attachment-copy"><strong>{item.filename}</strong><small>{formatBytes(item.size_bytes)} · Cloud document imported</small></span><button type="button" aria-label={"Remove " + item.filename} onClick={() => setLinked((items) => items.filter((x) => x.object_id !== item.object_id))}><X size={13} /></button></div>;
-            })}
+            {attachments.map((item) => (
+              <div className="composer-attachment" key={item.object_id}>
+                <span className="composer-attachment-icon cloud"><FileText size={14} /></span>
+                <span className="composer-attachment-copy"><strong>{item.filename}</strong><small>{prettySize(item.size_bytes)} · Document attached</small></span>
+                <button type="button" aria-label={"Remove " + item.filename} onClick={() => removeAttachment(item.object_id)}><X size={13} /></button>
+              </div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
-      <AnimatePresence initial={false}>
-        {showLink && (
-          <motion.div className="composer-link-row" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}>
-            <Link2 size={15} />
-            <input type="url" value={linkValue} onChange={(event) => setLinkValue(event.target.value)} placeholder="Paste a public HTTPS share link or signed download URL…" aria-label="Cloud document URL" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void importLink(); } }} />
-            <button type="button" disabled={!linkValue.trim() || linkBusy || disabled} onClick={() => void importLink()}>{linkBusy ? <LoaderCircle className="composer-spin" size={14} /> : <Plus size={14} />} Add</button>
-            <button type="button" className="composer-link-close" onClick={() => setShowLink(false)} aria-label="Close link field"><X size={14} /></button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {(error || status) && <div className={"composer-feedback" + (error ? " is-error" : "")} role="status">{error ? <AlertCircle size={13} /> : busy || linkBusy ? <LoaderCircle className="composer-spin" size={13} /> : <Check size={13} />}<span>{error || status}</span>{error && <button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={13} /></button>}</div>}
-      {dragging && <div className="composer-drop-overlay"><FileUp size={22} /><strong>Drop documents to attach</strong><span>PDF, Office, CSV, text and images</span></div>}
+      {(error || status) && (
+        <div className={"composer-feedback" + (error ? " is-error" : "")} role="status">
+          {error ? <AlertCircle size={13} /> : sending || uploading ? <LoaderCircle className="composer-spin" size={13} /> : <Check size={13} />}
+          <span>{error || status}</span>
+          {error && <button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={13} /></button>}
+        </div>
+      )}
       <div className="founder-composer-footer">
         <div className="composer-tools">
-          <input ref={fileInput} type="file" multiple accept=".pdf,.docx,.xlsx,.pptx,.csv,.txt,.md,.json,.html,.htm,.xml,.png,.jpg,.jpeg,.webp" hidden onChange={(event) => event.target.files && addFiles(event.target.files)} />
-          <button type="button" className="composer-tool-button" onClick={() => fileInput.current?.click()} disabled={disabled || attachedCount >= 10} title="Attach files"><Paperclip size={15} /><span>Attach files</span></button>
-          <button type="button" className={"composer-tool-button" + (showLink ? " active" : "")} onClick={() => setShowLink((value) => !value)} disabled={disabled || attachedCount >= 10} title="Add a cloud document link"><Cloud size={15} /><span>Cloud link</span></button>
-          <span className="composer-attachment-limit">{attachedCount}/10</span>
+          <button
+            type="button"
+            className={"composer-tool-button" + (uploadPanelOpen ? " active" : "")}
+            onClick={() => setUploadPanelOpen((value) => !value)}
+            disabled={!companyId || sending || uploading || attachments.length >= maxAttachments}
+            title="Attach files or import from cloud storage"
+          >
+            <Paperclip size={15} /><span>Attach / cloud</span>
+          </button>
+          <span className="composer-attachment-limit">{attachments.length}/{maxAttachments}</span>
         </div>
-        <button type="submit" className="composer-send-button" disabled={disabled || !draft.trim()}>{busy ? <LoaderCircle className="composer-spin" size={15} /> : <Send size={15} />}<span>{busy ? "Preparing…" : "Send to team"}</span></button>
+        <button type="submit" className="composer-send-button" disabled={!canSend}>
+          {sending || uploading ? <LoaderCircle className="composer-spin" size={15} /> : <Send size={15} />}
+          <span>{uploading ? "Uploading…" : sending ? "Sending…" : "Send to team"}</span>
+        </button>
       </div>
-      <div className="composer-help-row"><span>Shift + Enter for a new line</span><span>Drop files here · {maxFileMb} MB per file</span></div>
-      {showLink && <p className="composer-cloud-note">Supports public HTTPS share links from Drive, Dropbox, OneDrive and other storage services. Private files require an authenticated connector and cannot be fetched by the public-link importer.</p>}
+      {uploadPanelOpen && (
+        <section className="pb-document-upload-panel" aria-label="Document upload and cloud import">
+          <header>
+            <div><strong>Attach documents</strong><small>Choose local files or an enabled cloud provider.</small></div>
+            <button type="button" onClick={() => setUploadPanelOpen(false)} aria-label="Close document upload"><X size={14} /></button>
+          </header>
+          {configLoading && <p className="pb-upload-note">Checking upload services…</p>}
+          {!configLoading && !uploadConfig?.companion_enabled && <p className="pb-upload-note">Local file upload is available. Configure Companion to enable cloud imports.</p>}
+          {sourcesReady && <p className="pb-cloud-source-note"><ShieldCheck size={12} /> Connected sources: {cloudSources.join(" · ")}</p>}
+          {uploadConfig && <div ref={dashboardTarget} className="pb-uppy-dashboard" />}
+          {status && <p className="pb-upload-note">{status}</p>}
+          <footer><span>{uploadConfig?.max_upload_mb || 12} MB per file · {maxAttachments} documents per message</span><button type="button" onClick={() => setUploadPanelOpen(false)}>Done</button></footer>
+        </section>
+      )}
+      <div className="composer-help-row"><span>Shift + Enter for a new line</span><span>Local upload · Drive · Dropbox · OneDrive · Box · URL</span></div>
     </form>
   );
 }

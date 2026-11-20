@@ -14,7 +14,6 @@ type Artifact = {
   source?: string;
 };
 
-const MAX_FILE_BYTES = 12 * 1024 * 1024;
 const ACCEPTED = new Set(["pdf", "docx", "xlsx", "pptx", "csv", "txt", "md", "json", "html", "htm", "xml", "png", "jpg", "jpeg", "webp"]);
 
 function formatBytes(value: number): string {
@@ -37,6 +36,7 @@ async function responsePayload(response: Response) {
 export default function FounderComposer() {
   const [companyId, setCompanyId] = useState("");
   const [tenantId, setTenantId] = useState("demo-tenant");
+  const [maxFileMb, setMaxFileMb] = useState(12);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [linked, setLinked] = useState<Artifact[]>([]);
@@ -81,6 +81,16 @@ export default function FounderComposer() {
   }, []);
 
   useEffect(() => {
+    fetch("/v2/capabilities")
+      .then(responsePayload)
+      .then((payload) => {
+        const configured = Number(payload.max_upload_mb);
+        if (Number.isFinite(configured) && configured > 0 && configured <= 250) setMaxFileMb(configured);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const complete = (event: Event) => {
       const detail = (event as CustomEvent<{ request_id?: string; error?: string }>).detail || {};
       if (!detail.request_id || detail.request_id !== pendingRequestId.current) return;
@@ -104,8 +114,8 @@ export default function FounderComposer() {
         rejected.push(file.name + " is not a supported document format.");
         continue;
       }
-      if (file.size > MAX_FILE_BYTES) {
-        rejected.push(file.name + " exceeds the 12 MB per-file limit.");
+      if (file.size > maxFileMb * 1024 * 1024) {
+        rejected.push(file.name + " exceeds the " + maxFileMb + " MB per-file limit.");
         continue;
       }
       accepted.push(file);
@@ -233,7 +243,10 @@ export default function FounderComposer() {
       className={"founder-composer" + (dragging ? " is-dragging" : "")}
       onSubmit={submit}
       onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-      onDragLeave={(event) => { if (event.currentTarget === event.target) setDragging(false); }}
+      onDragLeave={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) setDragging(false);
+      }}
       onDrop={handleDrop}
     >
       <div className="founder-composer-topline">
@@ -288,7 +301,7 @@ export default function FounderComposer() {
               type="url"
               value={linkValue}
               onChange={(event) => setLinkValue(event.target.value)}
-              placeholder="Paste a public HTTPS file or cloud share link…"
+              placeholder="Paste a public HTTPS share link or signed download URL…"
               aria-label="Cloud document URL"
               onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void importLink(); } }}
             />
@@ -335,7 +348,7 @@ export default function FounderComposer() {
       </div>
       <div className="composer-help-row">
         <span>Shift + Enter for a new line</span>
-        <span>Drop files here · 12 MB per file</span>
+        <span>Drop files here · {maxFileMb} MB per file</span>
       </div>
       {showLink && <p className="composer-cloud-note">Supports public HTTPS share links from Drive, Dropbox, OneDrive and other storage services. Private files require an authenticated connector and cannot be fetched from a public-link importer.</p>}
     </form>

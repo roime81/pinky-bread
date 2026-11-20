@@ -1,142 +1,192 @@
 # Pinky Bread 2.0 — Delivery Roadmap
 
-Pinky Bread 2.0 is a product upgrade delivered in testable increments. Alpha 1 introduced the persisted company graph; Alpha 2 added the specialist workforce and goal-to-result flow; Alpha 3 adds PostgreSQL-backed jobs, LangGraph checkpoints, lease-based restart recovery, Valkey coordination, recurring founder-controlled Head-of-Agents schedules and MCP v2 for local model tools. Authenticated multi-company governance, policy enforcement and production operations remain future milestones.
+**Release objective:** complete the founder-led, local-first AI Company Operating System on the architecture already present in the 2.0 Alpha line.
+
+Pinky Bread 2.0 is the product foundation: a founder-owned company graph, persistent AI employees, accountable work, agent collaboration, meetings, company knowledge, controlled tools and recoverable execution. The priority is to make those capabilities safe, predictable, observable and useful before adding another layer of AI infrastructure.
+
+## Version boundary
+
+Pinky Bread 2.0 continues with the current stack:
+
+- FastAPI and the existing React/TypeScript workspace
+- PostgreSQL as the authoritative company, job, membership and event store
+- LangGraph with PostgreSQL checkpoints for durable workforce orchestration
+- Valkey for best-effort notifications and worker wake-ups
+- SeaweedFS / S3-compatible object storage for source files and deliverables
+- Ollama by default, with vLLM, OpenAI-compatible endpoints, OpenAI and Gemini as configurable model providers
+- Official MCP Python SDK v2 for tool discovery and execution
+- Existing company graph, agent profiles, workforce queue, meetings and A2A conversation capabilities
+
+**Do not introduce LiteLLM, Langfuse, DSPy, CopilotKit, CrewAI, Agno, AgentScope or AutoGPT as 2.0 runtime dependencies.** They belong to the separately documented [Pinky Bread 3.0 future pipeline](ROADMAP_3.0.md). OpenTelemetry, Prometheus and Grafana remain appropriate 2.0 operational foundations because they address platform reliability rather than replacing the current agent and model architecture.
+
+## Current baseline — 2.0 Alpha 4
+
+Already implemented on the 2.0 line:
+
+- Company graph with persisted nodes, typed relationships and hash-linked event history
+- Founder-defined AI employee profiles, role, skills, responsibilities, model settings, seniority, authority and reporting lines
+- Goal planning, delegated assignments, meetings, KPI measurement history and stored deliverables
+- PostgreSQL-backed durable jobs, idempotency, worker leases, heartbeat, bounded retries and expired-lease recovery
+- LangGraph StateGraph execution with PostgreSQL checkpoint persistence
+- Valkey worker wake-up and live graph notifications, with PostgreSQL remaining authoritative
+- Founder-controlled recurring coordination in PLAN_ONLY and explicitly enabled AUTO_EXECUTE modes
+- MCP v2 Streamable HTTP server/client with role allow-lists and runtime-injected company/agent context
+- Agent-to-agent conversations with each participant's own persona and model configuration
+- React founder composer with multi-file document uploads and public cloud-share link ingestion
+- Ollama-backed local inference by default in Docker Compose; configurable hosted model providers
+- PostgreSQL, Valkey, SeaweedFS, API, worker, MCP and model services in Docker Compose
+
+These features are an Alpha foundation, not a production security claim. The README's security boundaries remain authoritative until the relevant release gates below have passed.
 
 ## Programme principles
 
-1. PostgreSQL is canonical for company state, workflow records, relationships and events.
-2. Valkey distributes notifications and supports coordination; it is never the only copy of important work.
-3. Object storage contains files and deliverables; PostgreSQL holds metadata, ownership, checksums and retention references.
-4. Agents operate against explicit company goals and permissions, not just the latest prompt.
-5. An agent can contribute to many goals, and each assignment remains independently traceable.
-6. Human approval is required for spending, legal commitments, external communications with material impact and other consequential actions.
-7. Every runtime action must have an actor, timestamp, goal/task context, tool identity, result and trace reference.
-8. The UI graph is generated from persisted state and event history, not from fabricated visual data.
+1. PostgreSQL is the source of truth for company state, membership, workflow records, relationships, jobs and event history.
+2. Valkey is an acceleration and notification service, never the only copy of important work.
+3. Object storage contains file bytes; PostgreSQL stores metadata, owner, company scope, checksum and retention references.
+4. Company and agent identity must be established by the authenticated runtime, not trusted from model-generated arguments or caller-supplied tenant/actor fields.
+5. Agents act against explicitly granted company goals, tasks and tools; a prompt is not an authorization mechanism.
+6. Human approval is required for spending, legal commitments, consequential external communications and other irreversible actions.
+7. Every meaningful runtime action must be traceable to a principal, company, goal/task, agent, model configuration, tool, result and timestamp.
+8. Agent collaboration must be durable, bounded, attributable and recoverable.
+9. Local inference must remain a first-class operating mode; commercial model providers remain optional.
+10. Existing functionality must remain backward-compatible where practical and be covered by automated regression tests.
 
-## Phase 1 — Company graph foundation (Alpha 1)
+## Delivery workstreams
 
-- [x] Company charter and root graph node
-- [x] Generic graph node and typed relationship persistence
-- [x] Hash-linked append-only company events
-- [x] Graph snapshot and event verification APIs
-- [x] Valkey-backed graph notifications and SSE endpoint
-- [x] Company graph as the default UI view
-- [x] Goal / agent / work / meeting node creation
-- [x] Node inspector and interactive relationship creation
-- [x] Local and S3-compatible workflow artifact storage adapter
-- [x] PostgreSQL pgvector extension enabled for future semantic memory
-- [x] CI verification of Alpha 1 code branch (Compose runtime smoke test remains pending)
+### 1. Identity, company boundaries and access governance — P0
 
-## Phase 2 — Identity, company boundaries and governance
+This is the first engineering priority. The current development login and signed browser session are not a substitute for company membership authorization; request-supplied tenant and actor identifiers must not decide access.
 
-- Integrate Keycloak OIDC login and secure session/token validation.
-- Replace caller-supplied tenant and actor identifiers with claims from the authenticated identity.
-- Enforce company membership and role-based access at every graph, workflow, artifact, event and approval endpoint.
-- Add founder, company administrator, department lead, agent, reviewer and auditor permissions.
-- Add agent capability grants and scoped credentials; agents receive only tools required for their assigned work.
-- Integrate OpenBao or another open-source secrets manager; no credentials in YAML manifests or UI payloads.
-- Add approval policies, separation of duties, policy decisions and immutable approval references.
-- Add CSRF protections for browser-originated state changes and rate limiting for model/tool calls.
+- Implement a persistent user/principal record keyed by verified identity-provider issuer and subject.
+- Retain local development sign-in for private single-user development, but make its limitations explicit and prevent it from being enabled in production configuration.
+- Complete Google OAuth identity persistence and define the OIDC integration contract for additional identity providers.
+- Persist company memberships and roles: founder/owner, administrator, department lead, agent, reviewer and read-only/auditor.
+- Derive the current actor from the authenticated session or validated service identity.
+- Enforce company membership and role checks on every company graph, chat, agent, job, meeting, KPI, event, artifact and approval endpoint.
+- Enforce tenant/company isolation in MCP tool discovery and execution, not only in the UI.
+- Authenticate approvers and enforce separation of duties for consequential actions.
+- Add CSRF protection, secure cookie settings, session revocation/rotation, login throttling and credential-safe error handling.
+- Add negative tests for cross-company reads, writes, downloads, event streams, job operations and approvals.
 
-**Exit criteria:** cross-company access tests pass; unauthorized users cannot view or mutate graph records, artifacts or approvals; a human approver is an authenticated principal.
+**Exit gate:** an authenticated user cannot read or change another company's graph, history, files, jobs, agents or approvals by altering request fields or URLs. The authorization decision is derived from verified identity and persisted membership.
 
-## Phase 3 — Durable agent workforce
+### 2. Durable agent collaboration and workflow correctness — P1
 
-- [x] Replace the request-driven dispatcher with LangGraph StateGraph job workflows.
-- [x] Use PostgreSQL-backed `AsyncPostgresSaver` checkpoints keyed by durable job ID and test restart/resume semantics.
-- [x] Persist reusable AI employee identities with role, persona, skills, local model selection, runtime mode, health/status and version in the company graph.
-- [x] Implement a Head of Agents planning service using a local model API (or explicit mock planner) to decompose goals into validated work.
-- [x] Replace the fixed starter roster with founder-defined agent creation, editing, promotion/demotion, archive, seniority, authority and reporting-line management.
-- [x] Persist assigned work nodes, owners, acceptance criteria, dependencies and many-to-many agent-to-goal relationships.
-- [x] Add PostgreSQL queue rows with idempotency and one-active-job constraints, worker leases, heartbeats, fencing, retry/backoff and cancellation.
-- [x] Recover expired worker leases and resume job execution through the same LangGraph checkpoint thread.
-- [x] Add founder-controlled recurring `PLAN_ONLY` and explicitly enabled `AUTO_EXECUTE` coordination.
-- [x] Store replay-safe deliverables and meeting minutes in the local/S3 object-store adapter.
-- [ ] Add token/cost budgets, tenant/agent concurrency quotas, model/prompt/skill rollback and capacity-aware scheduling.
+The goal is for agents to collaborate like accountable employees, not transient chat personas.
 
-**Exit criteria:** a durable end-to-end goal is decomposed, assigned, executed, resumed after process loss, and reconciled without duplicate jobs, outputs or graph nodes.
-## Phase 4 — Official tools and open integrations
+- Move agent-to-agent conversations from request-bound streaming into durable workforce jobs.
+- Persist conversation state, participants, messages, turn budget, checkpoints, retries, cancellation and final summary.
+- Recover a conversation after API/worker restart without duplicating completed messages or losing the conversation timeline.
+- Support explicit agent mentions, relevance-based workforce participation and bounded peer discussions.
+- Persist meeting turns as they complete and resume interrupted meetings safely.
+- Add meeting templates for stand-up, planning, review, retrospective and alignment sessions.
+- Convert proposed decisions and action items into reviewable graph records; do not silently execute proposals.
+- Add dependency-aware work scheduling, blocker propagation, deadlines and workload visibility.
+- Add replay/idempotency tests for messages, meetings, generated deliverables and retries.
 
-- [x] Replace the workforce demo adapter with the official MCP Python SDK v2 and Streamable HTTP server/client.
-- [x] Discover MCP tools dynamically and filter by agent role allow-list before exposing them to the local model API.
-- [x] Inject company, tenant and agent identity from the runtime rather than model-generated tool arguments.
-- [x] Require workforce:enqueue for MCP job submission; require founder-enabled AUTO_EXECUTE before MCP goal execution.
-- [ ] Replace the static internal development bearer verifier with Keycloak/OIDC JWT/JWKS or introspection validation.
-- [ ] Store tool definitions, grants, versions, approvals and execution receipts in the company database.
-- [ ] Add sandboxed external connectors for email, calendar, documents, CRM and issue/work tracking.
-- [ ] Keep commercial APIs optional behind pluggable interfaces; add integration health and credential rotation.
+**Exit gate:** interrupted agent conversations, meetings and work can be recovered from durable state with no duplicate side effects or missing attributable messages.
 
-**Exit criteria:** an agent can discover only its granted tools, call an approved tool, record evidence and recover safely from timeout or duplicate submission.
+### 3. Agent and model governance — P1
 
-## Phase 5 — Virtual workplace and meetings
+Use the existing provider adapter in 2.0; improve control and accountability without introducing a new model gateway.
 
-- [x] Persist meeting agenda, meeting type, selected participants, facilitator, state, turn-by-turn contributions and completion timestamps.
-- [x] Run a turn-based multi-agent text discussion and persist Markdown minutes in object storage with graph references.
-- [ ] Add calendar scheduling, recurring stand-ups, scrum planning/review/retrospective templates and reminders.
-- [ ] Allow the founder to join live by text; add optional local speech-to-text and text-to-speech later.
-- [ ] Extract proposed decisions and action items into reviewable graph nodes and assignments.
-- [ ] Add cross-department conflict escalation, commitment tracking and follow-up.
+- Add per-company, per-agent and per-job token and cost budgets.
+- Add concurrency quotas, request limits, timeouts, retry limits and model fallback policy.
+- Persist model provider, model identifier, endpoint reference, generation settings and model configuration version for every execution.
+- Version agent instructions, tool grants and reusable skills.
+- Support reviewed promotion and rollback of agent configuration and prompts.
+- Record model latency, token usage where available, failures, retries and estimated cost.
+- Prevent API keys and bearer tokens from appearing in graph payloads, logs, traces or browser responses.
+- Expose provider readiness and capacity without revealing credentials.
 
-**Exit criteria:** a meeting produces reviewable decisions and traceable tasks; the meeting itself does not silently execute consequential actions.
+**Exit gate:** a founder can set spending and concurrency limits, inspect the configuration used for an execution, and roll an agent back to a known-good profile.
 
-## Phase 6 — Goal, KPI and work management
+### 4. Company knowledge and memory — P2
 
-- Add goal hierarchy and alignment across company, department and team objectives.
-- [x] Record KPI measurements with numeric value, target comparison, source, evidence, timestamp and a bounded measurement history.
-- [x] Derive goal work-completion percentage from persisted assignment states.
-- [ ] Add validated KPI definitions: formula, unit, target, threshold, reporting period, source and accountable owner.
-- [ ] Add automated KPI collectors and time-series snapshots explainable from source events.
-- [ ] Add due dates, recurrence, automatic blocker propagation, workload and agent capacity views.
-- Support project plans, milestones, release gates and deliverable acceptance.
-- Trace every result to its goal and the work and agents that produced it.
-- Add planned-vs-actual budget and operational cost tracking.
+Turn company documents and previous work into governed, source-grounded knowledge.
 
-**Exit criteria:** founder can inspect a goal, see agent contribution and delivery evidence, and explain KPI progress from persisted events.
+- Implement the pgvector-backed embedding and retrieval pipeline using a configurable local embedding model.
+- Parse, chunk and index supported documents with source metadata, checksum, company scope and retention policy.
+- Support retrieval filters by company, department, goal, project, agent permission and document visibility.
+- Separate durable company facts, episodic meetings/work history and short-lived task context.
+- Return filename, page/section and source references with retrieved evidence.
+- Add document versioning, re-indexing, deletion, expiry and correction workflows.
+- Treat retrieved documents as untrusted source material; defend against prompt injection and cross-company retrieval.
+- Add retrieval evaluation datasets for relevance, citation correctness and isolation.
 
-## Phase 7 — Company memory and knowledge
+**Exit gate:** an agent can answer from authorized company knowledge with source references, and automated tests prove that it cannot retrieve another company's documents.
 
-- Build semantic memory using pgvector and a local embedding model.
-- Scope memory by company, goal, project, agent and access policy.
-- Add document ingestion, parsing, chunking, provenance and retention.
-- Add citation-bearing retrieval for agent decisions and deliverables.
-- Separate durable company facts, episodic meeting/work memory and short-lived task context.
-- Add memory correction, expiry, export and deletion workflows.
+### 5. Tool ecosystem and approvals — P2
 
-**Exit criteria:** agents can retrieve relevant authorised company knowledge with provenance and cannot cross company boundaries.
+Extend MCP carefully while preserving the current role-scoped model.
 
-## Phase 8 — Observability, resilience and operations
+- Replace development static bearer validation with validated JWT/JWKS or a suitable OIDC authorization service.
+- Persist MCP servers, tool metadata, versions, grants, execution receipts and approval requirements.
+- Add sandboxed connectors for selected business systems, initially read-only where possible.
+- Enforce per-agent and per-company tool grants at execution time.
+- Require human approval for write actions with material business consequences.
+- Add idempotency keys, timeout handling, rate limits and replay protection to external tool calls.
+- Keep the existing simulated refund/ledger example simulated; never connect it to a real financial system.
 
-- Instrument APIs, agent runs, tools, meetings and model calls with OpenTelemetry traces.
-- Publish operational metrics and logs to Prometheus and Grafana.
-- Add alerts, dashboards, service-level objectives and runbooks.
-- Add database migration management, backup/restore tests and disaster-recovery procedures.
-- Add SeaweedFS lifecycle, replication and recovery policy for retained deliverables.
-- [x] Add a separate workforce worker service with PostgreSQL-backed job state and Valkey wake-up coordination.
-- [x] Configure Compose for horizontally scalable workers; PostgreSQL leases coordinate replicas.
-- [ ] Add OpenTelemetry traces for job, graph, model and MCP calls; Prometheus metrics and Grafana dashboards.
-- [ ] Add alerts, runbooks, backup/restore tests and disaster-recovery procedures.
-- [ ] Add Valkey HA/persistence and SeaweedFS replication/retention policy where required.
-- [ ] Add load testing, security tests, SBOM, dependency scanning and signed images.
+**Exit gate:** an agent can discover and call only authorized tools, every call is attributable and replay-safe, and consequential actions require authenticated approval.
 
-**Exit criteria:** recovery and observability are tested under service, queue, model and storage failures.
+### 6. Platform observability and operational readiness — P2
 
-## Definition of done for the 2.0 release
+Use portable open standards for 2.0 operations.
 
-Pinky Bread 2.0 should not be called complete until:
+- Add OpenTelemetry traces across API requests, workforce jobs, LangGraph nodes, LLM calls, MCP calls and object storage operations.
+- Propagate correlation IDs across founder request, company, goal, job, conversation and agent activity.
+- Export service and worker metrics for queue depth, lease expiry, throughput, latency, errors and model usage.
+- Add Prometheus collection and Grafana dashboards/alerts.
+- Add structured logs with secret and sensitive-data redaction.
+- Add runbooks for model outage, worker recovery, PostgreSQL/Valkey/object-store outage and job replay.
+- Add PostgreSQL and SeaweedFS backup/restore drills; document retention and recovery objectives.
+- Add dependency scanning, SBOM generation, image scanning and deployment configuration checks.
+- Add load, soak, failure-injection and security tests for the Compose deployment.
 
-- A founder can create a company charter and measurable goals.
-- The Head of Agents can plan and delegate work across specialist agents.
-- Agent identities and responsibilities persist across sessions and restarts.
-- One agent can contribute to several goals with distinct assignments and progress.
-- Agents can run meetings and create decisions and action items with attributable history.
-- Workflows persist and resume safely after restart.
-- The graph updates from real database events and supports reverse traceability.
-- KPIs are calculated from defined, auditable sources.
-- Documents and deliverables are stored as objects with database metadata and access controls.
-- OIDC, company isolation, RBAC, approvals and tool scopes pass security tests.
-- Local inference, memory retrieval and MCP tools work with documented open-source components.
-- CI, Compose smoke tests, backup/restore and operational runbooks pass.
+**Exit gate:** operators can trace a user request end-to-end, identify failure location, recover durable work and restore data from tested backups.
 
-## Suggested next engineering slice
+## Recommended implementation sequence
 
-Alpha 3 adds durable job execution and a standards-based internal MCP boundary. The next priority is **Phase 2 identity and company boundaries**: replace caller-supplied tenant/actor IDs and static MCP tokens with Keycloak/OIDC, membership checks, RBAC and per-agent grants before exposing Pinky Bread to untrusted users or enabling consequential external tools. Then add budget/policy enforcement, operational telemetry and the first sandboxed MCP connectors.
+| Increment | Work | Expected outcome |
+|---|---|---|
+| 2.0.1 | Identity, company membership, RBAC and tenant isolation | Secure company boundaries |
+| 2.0.2 | Durable A2A conversations and meeting recovery | Resilient virtual workforce |
+| 2.0.3 | Agent/model budgets, configuration versions and rollback | Governed AI employees |
+| 2.0.4 | pgvector memory, document retrieval and citations | Company knowledge layer |
+| 2.0.5 | MCP identity, grants, approvals and sandboxed connectors | Controlled tool ecosystem |
+| 2.0.6 | OpenTelemetry, Prometheus, Grafana, backup/restore and release hardening | Operationally supportable 2.0 |
+
+The increments may overlap where dependencies allow, but the identity and company-boundary release gate must precede multi-user exposure or consequential external integrations.
+
+## Definition of done for Pinky Bread 2.0
+
+Pinky Bread 2.0 is ready for a production-readiness review only when:
+
+- A founder can create a company and define goals, KPIs, departments and a custom workforce.
+- Agent identities and reporting relationships persist across sessions and restarts.
+- The coordinator can plan, delegate, track dependencies and report progress.
+- Agents can collaborate directly and hold meetings with durable, attributable transcripts.
+- Workflows and conversations recover safely after API or worker failure.
+- The graph updates from real persisted events and supports reverse traceability from outcomes to source work.
+- Company documents are indexed and retrieved with provenance and access controls.
+- Model and agent versions, budgets, costs, tools and approvals are visible and governed.
+- OIDC-backed identity, company membership, RBAC and tenant isolation pass negative security tests.
+- MCP grants and consequential approvals are enforced server-side.
+- End-to-end tracing, operational dashboards, alerts, runbooks and backup/restore tests pass.
+- The full CI suite and Docker Compose smoke tests pass; known limitations and deployment assumptions are documented.
+
+Passing these gates does not by itself constitute regulatory certification or independent security assurance.
+
+## Explicitly deferred to Pinky Bread 3.0
+
+The following are future-pipeline items, not 2.0 prerequisites:
+
+- LiteLLM as a dedicated multi-provider model gateway
+- Langfuse as a dedicated LLM tracing, prompt-management and evaluation platform
+- DSPy for systematic prompt/program optimisation
+- CopilotKit for a deeper generative UI and agent interaction framework
+- Comparative evaluation of CrewAI, Agno and AgentScope as alternative/specialist agent runtimes
+- AutoGPT-inspired visual workflow/agent builder capabilities
+
+See [Pinky Bread 3.0 — Future Pipeline](ROADMAP_3.0.md). The 2.0 codebase should preserve clean adapters and interfaces so these tools can be evaluated later without rewriting company data, identity, jobs or business rules.

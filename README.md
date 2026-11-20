@@ -55,7 +55,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Dynamic goal-to-work execution:** the founder-selected coordinator delegates to the active agents defined in that company. The planner can only assign work to real agent IDs from the company's roster.
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
-- **Agent-to-agent conversations (new feature branch):** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
+- **Agent-to-agent conversations:** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
 - **React founder composer and document-aware chat:** attach multiple PDF/Office/text documents by browse or drag-and-drop, import public HTTPS cloud-share links, store sources in the existing company object store, extract supported document text and pass company-scoped source context to the workforce. See [frontend and document ingestion guide](docs/FRONTEND_AND_DOCUMENTS.md). Private cloud accounts still require authenticated OAuth connectors; image OCR is not included.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
@@ -76,7 +76,7 @@ Keycloak/OIDC JWT validation, company-scoped RBAC, OpenBao secrets, OPA policy e
 See:
 - [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)
 - [Pinky Bread 2.0 open-source stack](docs/OPEN_SOURCE_STACK_2.0.md)
-- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)
+- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)\n- [Pinky Bread 3.0 future pipeline](docs/ROADMAP_3.0.md) — deferred technologies and evaluation gates
 
 ## Overview
 

@@ -6,10 +6,10 @@ export default defineConfig({
   plugins: [react()],
   base: "/static/a2a/",
   build: {
-    outDir: resolve(__dirname, "../web/a2a"),
+    outDir: resolve(process.cwd(), "../web/a2a"),
     emptyOutDir: true,
     lib: {
-      entry: resolve(__dirname, "src/main.tsx"),
+      entry: resolve(process.cwd(), "src/main.tsx"),
       formats: ["es"],
       fileName: () => "agent-workspace.js",
     },

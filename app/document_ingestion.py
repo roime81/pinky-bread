@@ -129,7 +129,10 @@ def _filename_from_response(url: str, content_disposition: str | None, content_t
         message["content-disposition"] = content_disposition
         candidate = message.get_filename()
         if candidate:
-            return safe_filename(candidate)
+            clean = safe_filename(candidate)
+            if not Path(clean).suffix:
+                clean += _CONTENT_EXTENSIONS.get(content_type.split(";", 1)[0].strip().lower(), ".txt")
+            return clean
     candidate = Path(unquote(urlparse(url).path)).name
     if candidate and Path(candidate).suffix:
         return safe_filename(candidate)
@@ -165,10 +168,35 @@ async def fetch_public_document(url: str, max_bytes: int) -> tuple[bytes, str, s
     raise ValueError("The cloud link redirected too many times.")
 
 
+def _validate_office_archive(content: bytes) -> None:
+    import zipfile
+    from io import BytesIO
+
+    try:
+        with zipfile.ZipFile(BytesIO(content)) as archive:
+            entries = archive.infolist()
+            if len(entries) > 2_000:
+                raise ValueError("Office document contains too many archive entries.")
+            total_size = sum(item.file_size for item in entries)
+            if total_size > 100 * 1024 * 1024:
+                raise ValueError("Office document expands beyond the 100 MB safety limit.")
+            for item in entries:
+                if item.file_size and item.compress_size == 0:
+                    raise ValueError("Office document contains an invalid compressed entry.")
+                if item.compress_size and item.file_size / item.compress_size > 200:
+                    raise ValueError("Office document compression ratio exceeds the safety limit.")
+                if ".." in Path(item.filename).parts:
+                    raise ValueError("Office document contains an unsafe archive path.")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The uploaded Office document is not a valid Office archive.") from exc
+
+
 def extract_document_text(filename: str, content_type: str, content: bytes) -> tuple[str, str]:
     suffix = Path(filename).suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
         return "", "image_attached_text_extraction_not_enabled"
+    if suffix in {".docx", ".xlsx", ".pptx"}:
+        _validate_office_archive(content)
     try:
         if suffix == ".pdf":
             import fitz
@@ -213,6 +241,8 @@ def extract_document_text(filename: str, content_type: str, content: bytes) -> t
             text = "\n".join(parser.parts)
         else:
             text = content.decode("utf-8-sig", errors="replace")
+    except ValueError:
+        raise
     except Exception as exc:
         return "", f"extraction_failed:{type(exc).__name__}"
     cleaned = "\n".join(line.rstrip() for line in text.splitlines() if line.strip())

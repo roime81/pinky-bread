@@ -41,6 +41,9 @@
   function setWorkspaceVisible(hasCompany) {
     $("#company-onboarding").hidden = hasCompany;
     $("#company-dashboard").hidden = !hasCompany;
+    $("#graph-company-picker-wrap").hidden = !hasCompany;
+    $("#graph-add-agent").hidden = !hasCompany;
+    $("#agent-management-panel").hidden = !hasCompany;
   }
 
   async function initialise() {
@@ -262,8 +265,6 @@
     $("#graph-agent-count").textContent = nodes.filter((node) => node.type === "agent" && node.status !== "ARCHIVED").length;
     $("#graph-work-count").textContent = nodes.filter((node) => node.type === "work").length;
     renderAgentDirectory();
-    $("#graph-company-name").textContent = state.company.name;
-    $("#graph-company-mission").textContent = state.company.data?.mission || state.company.description || "Company workspace";
     if (state.selectedId) selectNode(state.selectedId, false);
   }
 
@@ -727,7 +728,10 @@
     if (mainList) mainList.innerHTML = markup;
     if (workspaceList) workspaceList.innerHTML = markup;
     const count = $("#workspace-agent-count");
-    if (count) count.textContent = `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`;
+    const pageCount = $("#ai-workspace-agent-count");
+    const countLabel = `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`;
+    if (count) count.textContent = countLabel;
+    if (pageCount) pageCount.textContent = countLabel;
   }
 
   function openAgentEditor(agent = null) {

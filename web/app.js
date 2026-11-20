@@ -8,7 +8,7 @@ function statusClass(status){return ({COMPLETED:'completed',PENDING_APPROVAL:'pe
 function shortId(id){return (id||'').slice(0,8)}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function go(view, section = null){
- const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce','agent-messaging':'Agent Conversations',audit:'Audit Trails','company-graph':'Company graph'};
+ const labels={overview:'Overview',workflows:'Workflow',agents:'Workflow Templates','company-agents':'AI Workforce','agent-messaging':'Agent Conversations',audit:'Audit Trails','company-graph':'Company graph','company-events':'Company Event Log','founder-view':'Founder View'};
  const sectionLabels={'workforce-runtime-panel':'Durable Workforce','agent-management-panel':'Your Virtual Team','graph-activity-panel':'Company Event Log','graph-brief-panel':'Founder View'};
  const previousView=$('.view.active')?.id?.replace(/^view-/,'')||null;
  appShell?.classList.toggle('a2a-fullscreen',view==='agent-messaging');
@@ -22,7 +22,7 @@ function go(view, section = null){
    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
  });
  const breadcrumb=$('#breadcrumb-current');if(breadcrumb)breadcrumb.textContent=sectionLabels[section]||labels[view]||'Workspace';
- const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'company-graph':window.loadCompanyGraph};
+ const loaders={workflows:loadWorkflows,agents:loadAgents,'company-agents':window.loadCompanyAgents,audit:loadAuditOptions,'company-graph':window.loadCompanyGraph,'company-events':window.loadCompanyGraph,'founder-view':window.loadCompanyGraph};
  const load=loaders[view];
  let loadPromise=null;
  const sectionTarget=section?document.getElementById(section):null;
@@ -60,12 +60,15 @@ function setSidebarHidden(hidden,persist=true){
  sidebarToggle.setAttribute('aria-expanded',String(!hidden));
  sidebarToggle.setAttribute('aria-label',hidden?'Show sidebar':'Hide sidebar');
  sidebarToggle.title=hidden?'Show sidebar':'Hide sidebar';
+ const internalClose=$('#sidebar-panel-close');
+ if(internalClose){internalClose.hidden=hidden;internalClose.title='Collapse left panel';internalClose.setAttribute('aria-label','Collapse left panel');}
  if(persist){try{localStorage.setItem('pinky-sidebar-hidden',hidden?'true':'false');}catch{}}
 }
 let initiallyHidden=false;
 try{initiallyHidden=localStorage.getItem('pinky-sidebar-hidden')==='true';}catch{}
 setSidebarHidden(initiallyHidden,false);
 sidebarToggle?.addEventListener('click',()=>setSidebarHidden(!appShell?.classList.contains('sidebar-hidden')));
+$('#sidebar-panel-close')?.addEventListener('click',()=>setSidebarHidden(true));
 
 const chatPanelToggle=$('#chat-panel-toggle');
 const chatPanelClose=$('#chat-panel-close');

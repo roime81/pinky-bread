@@ -567,6 +567,28 @@ export default function WorkspaceApp() {
     } catch (reason) { setError(errorText(reason)); }
   }
 
+  async function recordKpiMeasurement(node: GraphNode) {
+    if (!company) return;
+    const rawValue = window.prompt("Enter the measured KPI value", String(node.data?.current_value ?? ""));
+    if (rawValue === null || rawValue.trim() === "") return;
+    const actualValue = Number(rawValue);
+    if (!Number.isFinite(actualValue)) {
+      setError("Enter a valid numeric KPI value.");
+      return;
+    }
+    const source = window.prompt("Measurement source", "Founder measurement");
+    if (!source?.trim()) return;
+    const evidence = window.prompt("Optional evidence or notes", "") || "";
+    try {
+      await api("/v2/companies/" + company.id + "/kpis/" + node.id + "/measure", {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: company.tenant_id || TENANT, actor_id: ACTOR, actual_value: actualValue, source: source.trim(), evidence }),
+      });
+      await reloadCompany();
+      setNotice("KPI measurement recorded.");
+    } catch (reason) { setError(errorText(reason)); }
+  }
+
   async function verifyEvents() {
     if (!company) return;
     try {
@@ -614,16 +636,16 @@ export default function WorkspaceApp() {
     } catch (reason) { setError(errorText(reason)); }
   }
 
-  async function addGraphNode(type: "goal" | "work" | "meeting") {
+  async function addGraphNode(type: "goal" | "kpi" | "work" | "meeting") {
     if (!company) return;
-    const name = window.prompt(type === "goal" ? "Name this company goal" : type === "work" ? "Name this work item" : "Name this meeting");
+    const name = window.prompt(type === "goal" ? "Name this company goal" : type === "kpi" ? "Name this KPI" : type === "work" ? "Name this work item" : "Name this meeting");
     if (!name?.trim()) return;
     try {
       await api("/v2/companies/" + company.id + "/nodes", {
         method: "POST",
         body: JSON.stringify({
           tenant_id: company.tenant_id || TENANT, actor_id: ACTOR, node_type: type,
-          name: name.trim(), description: "", status: type === "work" ? "BACKLOG" : "PLANNED", data: {},
+          name: name.trim(), description: "", status: type === "work" ? "BACKLOG" : "PLANNED", data: type === "kpi" ? { unit: "value", target_value: null, current_value: null } : {},
         }),
       });
       await reloadCompany();
@@ -709,7 +731,7 @@ export default function WorkspaceApp() {
 
           {!loading && activeView === "company-graph" && (
             <section className="pb-page">
-              <PageHeading eyebrow="THE AUTONOMOUS ORGANIZATION" title="Your company. Your agents. One living graph." description="Build your virtual organisation, define reporting lines and connect company goals to the people and work that move them forward." actions={<><button className="pb-button secondary" onClick={() => void addGraphNode("goal")} disabled={!company}><Plus size={15} /> Add goal</button><button className="pb-button secondary" onClick={() => void addGraphNode("work")} disabled={!company}><Plus size={15} /> Add work</button><button className="pb-button secondary" onClick={() => void addGraphNode("meeting")} disabled={!company}><Plus size={15} /> Add meeting</button><button className="pb-button primary" onClick={() => editAgent(null)} disabled={!company}><Plus size={15} /> Add AI employee</button></>} />
+              <PageHeading eyebrow="THE AUTONOMOUS ORGANIZATION" title="Your company. Your agents. One living graph." description="Build your virtual organisation, define reporting lines and connect company goals to the people and work that move them forward." actions={<><button className="pb-button secondary" onClick={() => void addGraphNode("goal")} disabled={!company}><Plus size={15} /> Add goal</button><button className="pb-button secondary" onClick={() => void addGraphNode("kpi")} disabled={!company}><Plus size={15} /> Add KPI</button><button className="pb-button secondary" onClick={() => void addGraphNode("work") disabled={!company}><Plus size={15} /> Add work</button><button className="pb-button secondary" onClick={() => void addGraphNode("meeting")} disabled={!company}><Plus size={15} /> Add meeting</button><button className="pb-button primary" onClick={() => editAgent(null)} disabled={!company}><Plus size={15} /> Add AI employee</button></>} />
               {!company ? (
                 <section className="pb-onboarding-card">
                   <div className="pb-onboarding-art"><div className="pb-orbit orbit-one" /><div className="pb-orbit orbit-two" /><span><Building2 size={30} /></span></div>
@@ -760,6 +782,7 @@ export default function WorkspaceApp() {
                       <div className="pb-inspector-kicker">NODE INSPECTOR</div><div className="pb-inspector-avatar">{selectedNode.type === "agent" ? <Bot size={22} /> : <Network size={22} />}</div><h3>{selectedNode.name}</h3><span className="pb-node-type">{selectedNode.type.toUpperCase()} · {selectedNode.status || "ACTIVE"}</span>
                       <p>{selectedNode.description || "No additional description has been provided."}</p>
                       {selectedNode.type === "agent" && <><div className="pb-inspector-detail"><span>ROLE</span><strong>{nodeRole(selectedNode)}</strong></div><div className="pb-inspector-detail"><span>MODEL</span><strong>{selectedNode.data?.model_configuration?.model_name || "Default model"}</strong></div><button className="pb-button secondary full" onClick={() => editAgent(selectedNode)}>Edit agent profile</button></>}
+                      {selectedNode.type === "kpi" && <button className="pb-button secondary full" onClick={() => void recordKpiMeasurement(selectedNode)}>Record KPI measurement <ArrowUpRight size={14} /></button>}
                       {["goal", "work", "meeting"].includes(selectedNode.type) && <button className="pb-button primary full" onClick={() => void enqueueForNode(selectedNode)}>{selectedNode.type === "goal" ? "Queue goal planning" : selectedNode.type === "work" ? "Queue work execution" : "Queue meeting"} <ArrowUpRight size={14} /></button>}
                       <div className="pb-inspector-detail"><span>CREATED</span><strong>{dateTime(selectedNode.created_at)}</strong></div>
                     </> : <div className="pb-inspector-empty"><div><Network size={23} /></div><strong>Select a node</strong><p>Inspect ownership, reporting lines, status and model configuration.</p></div>}

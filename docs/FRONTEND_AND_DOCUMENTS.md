@@ -2,7 +2,7 @@
 
 ## Frontend foundation
 
-The product workspace now runs as one React 19 + TypeScript application mounted from a single React root. The React application owns the navigation, company selector, company graph, node inspector, founder view, event log, AI workforce editor, provider settings, workflow execution/history, templates, audit viewer and founder chat rail. Agent-to-agent conversations are rendered as a feature within that same root.
+The product workspace now runs as one React 19 + TypeScript application mounted from a single React root. The React application owns the navigation, company selector, company graph, node inspector and relationship editor, founder view, event log and hash verification, AI workforce editor, provider settings, durable job queue and recurring coordination controls, workflow execution/history, templates, audit viewer and founder chat rail. Agent-to-agent conversations are rendered as a feature within that same root.
 
 The production bundle is built with Vite 8 into `web/app` and served by FastAPI at `/static/app`. The old imperative workspace shell and its separate script entry points are no longer loaded. The UI uses the existing FastAPI contracts and PostgreSQL-backed company graph/event records; it does not introduce a second frontend API or a parallel state store. Tailwind CSS 4, Framer Motion and Lucide remain available to the React interface.
 

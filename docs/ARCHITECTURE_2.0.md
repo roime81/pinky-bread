@@ -1,6 +1,6 @@
 # Pinky Bread 2.0 — AI Company Operating System
 
-**Status:** Alpha 3 — durable workforce runtime, PostgreSQL checkpoints and MCP v2  
+**Status:** Alpha 4 — durable workforce runtime, document-aware React composer, agent collaboration and MCP v2  
 **Product direction:** a founder-led virtual company whose goals, AI workers, work, collaboration and outcomes are represented as one living graph.
 
 ## Product model
@@ -120,7 +120,6 @@ FastAPI API / Control Plane
                                - no mandatory hosted model provider
        |
        +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
-       +-------------------- OpenTelemetry / Prometheus / Grafana (planned)
 ```
 
 ## Persistence and storage rules
@@ -177,9 +176,9 @@ The Compose PostgreSQL image enables the `vector` extension. The extension is re
 
 No proprietary hosted LLM, vector database, object storage or workflow service is required by the target architecture. External model providers may be added later as optional adapters, never as a hard dependency.
 
-## Alpha 3 implementation
+## Alpha 4 implementation
 
-The current feature branch implements:
+The current Alpha 4 baseline includes:
 
 - Company creation with vision, mission and values; persistent graph nodes, typed edges and hash-linked company event history.
 - Valkey-backed graph updates, plus PostgreSQL-backed job submission and worker wake-up notifications.
@@ -189,20 +188,23 @@ The current feature branch implements:
 - PostgreSQL job leases, worker heartbeats, fencing, bounded retries/backoff, expired-lease recovery and cooperative cancellation.
 - Founder-controlled recurring company coordination in PLAN_ONLY or explicitly enabled AUTO_EXECUTE mode.
 - Local OpenAI-compatible model API through Ollama or vLLM-compatible runtimes; Ollama-backed live inference is the default in Docker Compose; set `MOCK_INFERENCE=true` for deliberate simulation.
-- Official MCP Python SDK v2 Streamable HTTP client/server, role tool allow-lists, trusted identity injection and scoped internal bearer credentials.
+- Official MCP Python SDK v2 Streamable HTTP client/server, role tool allow-lists, runtime identity context and scoped internal development bearer credentials.
+- Agent-to-agent conversations with persistent message history and a React collaboration workspace; the initial streaming execution is request-bound and still needs durable job/checkpoint recovery.
+- React 19 + TypeScript founder composer with multi-file upload, public HTTPS cloud-share ingestion and company-scoped document context; private cloud OAuth connectors and image OCR remain pending.
+- Per-agent provider configuration for Ollama, vLLM/OpenAI-compatible endpoints, OpenAI and Gemini; credentials remain server-side.
 - Replay-safe assignment deliverables and meeting minutes in the existing local/S3 object-storage adapter.
 - Turn-based multi-agent meetings and KPI measurement history.
-- Compose services for API, horizontally scalable workers, internal MCP server, PostgreSQL/pgvector, Valkey, SeaweedFS and optional Ollama.
+- Compose services for API, horizontally scalable workers, internal MCP server, PostgreSQL/pgvector, Valkey, SeaweedFS and default local Ollama inference.
 
-### Explicit Alpha 2 boundaries
+### Explicit Alpha 4 boundaries
 
-Alpha 3 moves long-running work into a PostgreSQL-backed job queue and LangGraph checkpoint thread. Workers claim jobs with renewable leases, recover expired leases after process loss, and use replay-safe writes for task/meeting outputs. Valkey is a wake-up and notification service, not the source of truth. The founder can enable recurring PLAN_ONLY coordination or explicitly confirm AUTO_EXECUTE for scheduled assignment execution.
+Alpha 3 introduced long-running work in a PostgreSQL-backed job queue and LangGraph checkpoint thread. Workers claim jobs with renewable leases, recover expired leases after process loss, and use replay-safe writes for task/meeting outputs. Valkey is a wake-up and notification service, not the source of truth. The founder can enable recurring PLAN_ONLY coordination or explicitly confirm AUTO_EXECUTE for scheduled assignment execution.
 
-The MCP v2 service and client use Streamable HTTP and per-agent role allow-lists. The current bearer-token verifier is a private-development mechanism; it is not a Keycloak/OIDC identity integration. Company tenant/actor IDs are still caller-supplied, so the APIs and MCP endpoint are not a production multi-tenant security boundary. External side-effect tools remain unavailable. MOCK_INFERENCE is still enabled by default and produces labelled development placeholders, not genuine model output.
+The MCP v2 service and client use Streamable HTTP and per-agent role allow-lists. The current bearer-token verifier is a private-development mechanism; it is not a Keycloak/OIDC identity integration. Company tenant/actor IDs are still caller-supplied, so the APIs and MCP endpoint are not a production multi-tenant security boundary. External side-effect tools remain unavailable. The React composer supports supported document uploads and public HTTPS cloud-share links; authenticated private-drive connectors and scanned-document OCR are not included. Docker Compose defaults to live local Ollama inference (`MOCK_INFERENCE=false`); mock inference is an explicit development option and produces labelled placeholders, not genuine model output.
 
-The checkpointed StateGraph covers job-level orchestration; it does not yet provide automatic process-level cancellation of an in-flight model request. Cancellation is cooperative between tasks/meeting turns and after model responses. Calendar/voice meetings, automatic KPI collection, semantic retrieval, model/prompt rollback, budgets, rate limits and production observability remain future work.
+The checkpointed StateGraph covers durable workforce jobs. Agent-to-agent discussions are persisted and streamed, but their initial request-bound execution does not yet resume an in-flight turn through the durable worker queue. The checkpointed StateGraph does not provide automatic process-level cancellation of an in-flight model request. Cancellation is cooperative between tasks/meeting turns and after model responses. Calendar/voice meetings, automatic KPI collection, semantic retrieval, model/prompt rollback, budgets, rate limits and production observability remain future work.
 
-## API surface added in Alpha 1–3
+## API surface added in Alpha 1–4
 
 | Method | Endpoint | Purpose |
 |---|---|---|

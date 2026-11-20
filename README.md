@@ -6,7 +6,7 @@ Pinky Bread is evolving from a multi-agent workflow prototype into a founder-led
 
 Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime: Ollama starts by default, the selected model is pulled automatically, API and MCP have dedicated host ports, and Docker service DNS keeps container-to-container calls predictable. PostgreSQL stores jobs and LangGraph checkpoints; worker leases, heartbeats and recovery allow execution to resume after process loss. Valkey coordinates worker wake-ups, the founder can enable recurring Head-of-Agents coordination, and the official MCP Python SDK v2 connects role-scoped tools to self-hosted Ollama/vLLM-compatible model APIs.
 
-> **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), the [changelog](CHANGELOG.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [delivery roadmap](docs/ROADMAP_2.0.md).
+> **Versioning:** this release is **Pinky Bread 2.0.0 Alpha 4** (`v2.0.0-alpha.4`), built on the Alpha 1 company graph, Alpha 2 workforce runtime and Alpha 3 durable runtime. The default `main` branch is the source of truth. See the [Alpha 4 release notes](docs/releases/v2.0.0-alpha.4.md), the [changelog](CHANGELOG.md), [2.0 architecture](docs/ARCHITECTURE_2.0.md), [open-source stack](docs/OPEN_SOURCE_STACK_2.0.md) and [2.0 delivery roadmap](docs/ROADMAP_2.0.md) plus the [3.0 future pipeline](docs/ROADMAP_3.0.md).
 
 > [!IMPORTANT]
 > **MVP / demonstration software.** Docker Compose uses live local Ollama inference by default; mock inference is available only when explicitly enabled and does not inspect image pixels. The included refund/ledger action is simulated and never contacts a real banking system or transfers money. Local development sign-in and Google OAuth sign-in are available, but enterprise RBAC, company membership/tenant isolation, production identity lifecycle, production MCP OAuth/JWT verification, production-grade PII detection and independently immutable audit storage are not implemented. Do not use this build for production, regulated decisions, or real financial/clinical operations.
@@ -55,7 +55,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Dynamic goal-to-work execution:** the founder-selected coordinator delegates to the active agents defined in that company. The planner can only assign work to real agent IDs from the company's roster.
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
-- **Agent-to-agent conversations (new feature branch):** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
+- **Agent-to-agent conversations:** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
 - **React founder composer and document-aware chat:** attach multiple PDF/Office/text documents by browse or drag-and-drop, import public HTTPS cloud-share links, store sources in the existing company object store, extract supported document text and pass company-scoped source context to the workforce. See [frontend and document ingestion guide](docs/FRONTEND_AND_DOCUMENTS.md). Private cloud accounts still require authenticated OAuth connectors; image OCR is not included.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
@@ -76,7 +76,7 @@ Keycloak/OIDC JWT validation, company-scoped RBAC, OpenBao secrets, OPA policy e
 See:
 - [Pinky Bread 2.0 architecture](docs/ARCHITECTURE_2.0.md)
 - [Pinky Bread 2.0 open-source stack](docs/OPEN_SOURCE_STACK_2.0.md)
-- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)
+- [Pinky Bread 2.0 roadmap](docs/ROADMAP_2.0.md)\n- [Pinky Bread 3.0 future pipeline](docs/ROADMAP_3.0.md) — deferred technologies and evaluation gates
 
 ## Overview
 
@@ -801,14 +801,9 @@ No regulatory certification, security assurance, production air-gap verification
 
 ## Roadmap
 
-See [the Alpha 2 workforce runtime guide](docs/WORKFORCE_RUNTIME_2.0.md) for the goal-to-result workflow and [Alpha 3 durable runtime guide](docs/DURABLE_WORKFORCE_RUNTIME_2.0.md) for checkpoints, worker recovery, coordination, MCP v2 and local models. Remaining roadmap increments:
+Pinky Bread 2.0 is the active delivery target. The immediate increment is 2.0.1 identity, company membership, RBAC and tenant isolation. Subsequent increments complete durable agent collaboration, agent/model governance, company memory, controlled MCP integrations and platform operations. See the [Pinky Bread 2.0 delivery roadmap](docs/ROADMAP_2.0.md).
 
-1. **Workforce quality:** richer coordination, cancellation semantics, budget enforcement, agent evaluation and repeatable execution policies.
-2. **Production MCP identity:** OIDC/JWT validation, authenticated tool identities, per-agent grants and tool-level policy checks.
-3. **Approval security:** authenticated approvers, role/tenant checks, separation of duties and replay protection.
-4. **Multimodal processing:** local OCR for scanned PDFs, image validation, vision-model integration tests and safer artifact lifecycle controls.
-5. **Privacy and governance:** local NER/Presidio, secure token vault, prompt/model manifest versioning, audit export and retention policy.
-6. **Platform operations:** OIDC, mTLS, OpenTelemetry, Valkey-backed coordination, policy enforcement, deployment hardening and security/load testing.
+Pinky Bread 3.0 remains a future pipeline for LiteLLM, Langfuse, DSPy, CopilotKit and runtime-framework evaluations. None of these are required for 2.0. See the [Pinky Bread 3.0 future pipeline](docs/ROADMAP_3.0.md).
 
 ## Troubleshooting
 

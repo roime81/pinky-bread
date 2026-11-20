@@ -185,12 +185,12 @@ def test_agent_chat_passes_gemini_credentials_through_mcp_tool_runtime(monkeypat
     assert captured["api_key"] == "gemini-agent-test"
 
 
-def test_provider_status_does_not_expose_api_keys():
+def test_provider_status_does_not_expose_api_keys(monkeypatch):
     from app import company_api
 
     settings = get_settings()
-    settings.openai_api_key = "sk-never-expose-this"
-    settings.gemini_api_key = "AIza-never-expose-this"
+    monkeypatch.setattr(settings, "openai_api_key", "sk-never-expose-this")
+    monkeypatch.setattr(settings, "gemini_api_key", "AIza-never-expose-this")
     result = company_api.model_providers_endpoint()
     assert result["providers"]["openai"]["configured"] is True
     assert result["providers"]["gemini"]["configured"] is True

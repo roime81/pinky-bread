@@ -8,6 +8,7 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 from .settings import get_settings
+from .model_providers import normalize_chat_completions_base_url
 
 
 ROLE_TOOL_ALLOWLIST: dict[str, set[str]] = {
@@ -74,7 +75,7 @@ async def complete_with_mcp(
     api_url: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Call a local OpenAI-compatible model and route only role-allow-listed tools over MCP."""
+    """Call a configured OpenAI-compatible provider and expose only role-allow-listed MCP tools."""
     settings = get_settings()
     if not settings.mcp_enabled:
         raise RuntimeError("MCP is disabled")
@@ -93,12 +94,7 @@ async def complete_with_mcp(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    base_endpoint = (api_url or settings.reasoning_api_url).strip().rstrip("/")
-    if base_endpoint.endswith("/chat/completions"):
-        base_endpoint = base_endpoint[: -len("/chat/completions")]
-    if not base_endpoint.endswith("/v1"):
-        base_endpoint = f"{base_endpoint}/v1"
-    endpoint = f"{base_endpoint}/chat/completions"
+    endpoint = f"{normalize_chat_completions_base_url(api_url or settings.reasoning_api_url)}/chat/completions"
     model_tools: list[dict[str, Any]] = []
     async with httpx.AsyncClient(
         headers=headers,
@@ -146,7 +142,7 @@ async def complete_with_mcp(
                     try:
                         message = body["choices"][0]["message"]
                     except (KeyError, IndexError, TypeError) as exc:
-                        raise RuntimeError("Local model returned an unsupported chat-completion response") from exc
+                        raise RuntimeError("The selected model provider returned an unsupported chat-completion response") from exc
                     tool_calls = message.get("tool_calls") or []
                     content = message.get("content") or ""
                     if not tool_calls:

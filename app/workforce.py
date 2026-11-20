@@ -12,6 +12,7 @@ import httpx
 from .company_graph import create_edge, create_node, get_company_graph, update_node
 from .object_store import ObjectStore
 from .settings import get_settings
+from .model_providers import normalize_chat_completions_base_url, resolve_agent_model_configuration
 
 
 def _now() -> str:
@@ -127,12 +128,7 @@ def _mock_plan(agents: list[dict[str, Any]], goal: dict[str, Any]) -> dict[str, 
 
 
 def _openai_compatible_base_url(value: str) -> str:
-    endpoint = value.strip().rstrip("/")
-    if endpoint.endswith("/chat/completions"):
-        endpoint = endpoint[: -len("/chat/completions")]
-    if not endpoint.endswith("/v1"):
-        endpoint = f"{endpoint}/v1"
-    return endpoint
+    return normalize_chat_completions_base_url(value)
 
 
 async def _chat_completion(
@@ -193,10 +189,10 @@ async def chat_with_agent(
         raise RuntimeError("AI chat is disabled because MOCK_INFERENCE=true. Configure a model endpoint and set MOCK_INFERENCE=false.")
     data = agent.get("data") or {}
     model_config = data.get("model_configuration") or {}
-    model_name = str(model_config.get("model_name") or settings.reasoning_model)
-    endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)
-    if not endpoint.startswith(("http://", "https://")):
-        raise RuntimeError("The selected agent model endpoint must be an HTTP(S) URL.")
+    resolved_model = resolve_agent_model_configuration(model_config, settings=settings)
+    model_name = str(resolved_model["model_name"])
+    endpoint = str(resolved_model["api_url"])
+    api_key = str(resolved_model["api_key"])
     role = _agent_role(agent)
     responsibilities = data.get("responsibilities") or []
     skills = data.get("skills") or []
@@ -232,6 +228,7 @@ async def chat_with_agent(
             max_tokens=int(model_config.get("max_tokens", 1800)),
             model_name=str(settings_model),
             api_url=endpoint,
+            api_key=api_key,
         )
     return await _chat_completion(
         system_prompt=system,
@@ -240,6 +237,7 @@ async def chat_with_agent(
         max_tokens=int(model_config.get("max_tokens", 1800)),
         model_name=str(settings_model),
         api_url=endpoint,
+        api_key=api_key,
     )
 
 
@@ -442,6 +440,10 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
             f"Goal: {goal['name']}\nDescription: {goal.get('description', '')}\n"
             f"Available agents: {json.dumps(agent_catalog, ensure_ascii=False)}"
         )
+        coordinator_model = resolve_agent_model_configuration(
+            (coordinator.get("data") or {}).get("model_configuration") or {},
+            settings=settings,
+        )
         if settings.mcp_enabled:
             from .mcp_client import complete_with_mcp
 
@@ -453,8 +455,9 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 tenant_id=tenant_id,
                 agent_id=coordinator["id"],
                 max_tokens=3000,
-                model_name=str((coordinator.get("data") or {}).get("model_configuration", {}).get("model_name") or settings.reasoning_model),
-                api_url=str((coordinator.get("data") or {}).get("model_configuration", {}).get("endpoint") or settings.reasoning_api_url),
+                model_name=str(coordinator_model["model_name"]),
+                api_url=str(coordinator_model["api_url"]),
+                api_key=str(coordinator_model["api_key"]),
             )
         else:
             plan_response = await _chat_completion(
@@ -462,6 +465,9 @@ async def plan_goal(*, company_id: str, tenant_id: str, goal_id: str, actor_id: 
                 user_prompt=prompt,
                 temperature=0.15,
                 max_tokens=3000,
+                model_name=str(coordinator_model["model_name"]),
+                api_url=str(coordinator_model["api_url"]),
+                api_key=str(coordinator_model["api_key"]),
             )
         tasks = _parse_plan(plan_response, {agent["id"] for agent in specialists})
         planner_mode = "local-model+mcp" if settings.mcp_enabled else "local-model"
@@ -548,6 +554,8 @@ async def _execute_prompt(
         "Complete the assignment, state assumptions, explain risks and provide a practical deliverable. "
         "Never claim external actions were performed unless an approved tool actually performed them."
     ))
+    model_config = data.get("model_configuration") or {}
+    resolved_model = resolve_agent_model_configuration(model_config, settings=settings)
     if settings.mcp_enabled:
         from .mcp_client import complete_with_mcp
 
@@ -558,21 +566,19 @@ async def _execute_prompt(
             company_id=company_id,
             tenant_id=tenant_id,
             agent_id=agent["id"],
-            max_tokens=2400,
-            model_name=str((data.get("model_configuration") or {}).get("model_name") or settings.reasoning_model),
-            api_url=str((data.get("model_configuration") or {}).get("endpoint") or settings.reasoning_api_url),
+            max_tokens=int(model_config.get("max_tokens", 2400)),
+            model_name=str(resolved_model["model_name"]),
+            api_url=str(resolved_model["api_url"]),
+            api_key=str(resolved_model["api_key"]),
         )
-    model_config = data.get("model_configuration") or {}
-    endpoint = str(model_config.get("endpoint") or settings.reasoning_api_url)
-    if not endpoint.startswith(("http://", "https://")):
-        raise RuntimeError("The selected agent model endpoint must be an HTTP(S) URL.")
     return await _chat_completion(
         system_prompt=system,
         user_prompt=prompt,
         temperature=float(model_config.get("temperature", 0.25)),
         max_tokens=int(model_config.get("max_tokens", 2400)),
-        model_name=str(model_config.get("model_name") or settings.reasoning_model),
-        api_url=endpoint,
+        model_name=str(resolved_model["model_name"]),
+        api_url=str(resolved_model["api_url"]),
+        api_key=str(resolved_model["api_key"]),
     )
 
 

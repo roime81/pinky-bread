@@ -51,6 +51,7 @@ jobs:
           node --check web/app.js
           node --check web/company-graph.js
           node --check web/auth.js
+          node --check web/login.js
       - name: Build React collaboration workspace
         run: |
           cd frontend

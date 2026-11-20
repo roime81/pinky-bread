@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 from pydantic import BaseModel, Field
 
 from .settings import get_settings
+from .model_providers import PROVIDER_DEFAULTS, model_provider_status
 from .object_store import ObjectStore
 from .durable_runtime import (
     enqueue_job,
@@ -58,6 +59,47 @@ from .company_graph import (
 )
 
 router = APIRouter(prefix="/v2", tags=["company graph"])
+
+def _validated_model_configuration(value: dict[str, Any] | None) -> dict[str, Any]:
+    config = dict(value or {})
+    secret_fields = {"api_key", "apikey", "secret", "token", "access_token", "authorization"}
+    if secret_fields.intersection(key.lower() for key in config):
+        raise HTTPException(
+            422,
+            "Provider API keys must be configured on the server in .env; they cannot be stored in agent profiles.",
+        )
+    allowed = {"provider", "model_name", "endpoint", "temperature", "max_tokens"}
+    unknown = set(config) - allowed
+    if unknown:
+        raise HTTPException(422, f"Unsupported model configuration fields: {', '.join(sorted(unknown))}")
+    provider = str(config.get("provider") or get_settings().model_provider).strip().lower()
+    if provider not in PROVIDER_DEFAULTS:
+        raise HTTPException(422, f"Unsupported model provider '{provider}'.")
+    config["provider"] = provider
+    model_name = config.get("model_name")
+    if provider in {"openai", "gemini"} and (not isinstance(model_name, str) or not model_name.strip()):
+        raise HTTPException(422, f"Choose a model identifier for the {PROVIDER_DEFAULTS[provider]['label']} provider.")
+    if model_name is not None:
+        if not isinstance(model_name, str) or len(model_name.strip()) > 160:
+            raise HTTPException(422, "Model identifier must be a string of at most 160 characters.")
+        config["model_name"] = model_name.strip()
+    endpoint = config.get("endpoint")
+    if endpoint:
+        if not isinstance(endpoint, str) or len(endpoint) > 500 or not endpoint.startswith(("http://", "https://")):
+            raise HTTPException(422, "Model API endpoint must be a valid HTTP(S) URL of at most 500 characters.")
+        config["endpoint"] = endpoint.strip()
+    if "max_tokens" in config:
+        try:
+            config["max_tokens"] = max(1, min(32000, int(config["max_tokens"])))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, "max_tokens must be an integer.") from exc
+    if "temperature" in config:
+        try:
+            config["temperature"] = max(0.0, min(2.0, float(config["temperature"])))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, "temperature must be a number between 0 and 2.") from exc
+    return config
+
 
 
 class CompanyCreate(BaseModel):
@@ -175,14 +217,26 @@ def company_graph_capabilities() -> dict[str, Any]:
         "persistence": "PostgreSQL/SQLAlchemy graph records and event history",
         "live_notifications": "Valkey Pub/Sub; PostgreSQL remains authoritative",
         "object_storage": "Local filesystem or S3-compatible SeaweedFS with PostgreSQL metadata",
-        "agent_management": ["founder-defined agent creation", "profile and prompt editing", "seniority promotion/demotion", "coordinator authority", "manager reporting lines", "archive with history preservation"],
+        "agent_management": ["founder-defined agent creation", "profile and prompt editing", "per-agent commercial and local LLM provider settings", "seniority promotion/demotion", "coordinator authority", "manager reporting lines", "archive with history preservation"],
         "workforce": ["dynamic agent delegation", "goal decomposition", "assigned work execution", "meeting facilitation", "KPI measurement history"],
-        "inference": "Local OpenAI-compatible model endpoint or explicitly labelled mock mode",
+        "inference": "Per-agent Ollama, vLLM, OpenAI-compatible, OpenAI API or Gemini API provider selection",
         "orchestration": "LangGraph StateGraph with PostgreSQL AsyncPostgresSaver checkpoints",
         "durable_jobs": "PostgreSQL job records, worker leases, retries, cancellation and recovery",
         "coordination": "Founder-controlled recurring PLAN_ONLY or AUTO_EXECUTE schedules",
         "mcp": "Official MCP Python SDK v2 Streamable HTTP; bearer scopes for development/internal use",
         "source_of_truth": "PostgreSQL; Valkey is only a best-effort coordination signal",
+    }
+
+
+
+@router.get("/model-providers")
+def model_providers_endpoint() -> dict[str, Any]:
+    settings = get_settings()
+    return {
+        "providers": model_provider_status(settings=settings),
+        "default_provider": settings.model_provider,
+        "credentials_storage": "server_environment_only",
+        "credential_help": "Set OPENAI_API_KEY or GEMINI_API_KEY in .env, then recreate the API and worker containers.",
     }
 
 
@@ -787,7 +841,7 @@ def create_company_agent_endpoint(company_id: str, request: AgentCreateRequest) 
         "authority": request.authority,
         "runtime_status": "READY",
         "created_via": "company_agent_management",
-        "model_configuration": request.model_configuration,
+        "model_configuration": _validated_model_configuration(request.model_configuration),
     }
     try:
         node = create_agent_node(
@@ -815,7 +869,7 @@ def update_company_agent_endpoint(
     for key in ("role", "title", "skills", "responsibilities", "system_prompt", "seniority_level", "authority", "model_configuration"):
         if key in fields:
             value = getattr(request, key)
-            patch[key] = [item.strip() for item in value if item.strip()] if key in {"skills", "responsibilities"} and value is not None else (value.strip() if key in {"role", "title", "system_prompt"} and value is not None else value)
+            patch[key] = _validated_model_configuration(value) if key == "model_configuration" and value is not None else ([item.strip() for item in value if item.strip()] if key in {"skills", "responsibilities"} and value is not None else (value.strip() if key in {"role", "title", "system_prompt"} and value is not None else value))
     try:
         node = update_agent_node(
             company_id=company_id,

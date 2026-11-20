@@ -470,3 +470,129 @@
     display: none !important;
   }
 }
+
+
+/* Commercial and local model provider configuration. */
+.model-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 16px;
+}
+.model-provider-card,
+.model-provider-setup {
+  min-width: 0;
+  border: 1px solid var(--pb-line);
+  border-radius: var(--pb-radius);
+  background: #fff;
+  padding: 18px;
+}
+.model-provider-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.model-provider-card h2 {
+  margin: 5px 0 0;
+  font-size: 15px;
+  color: #34443a;
+}
+.model-provider-card p,
+.model-provider-setup p {
+  color: #7d8982;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.model-provider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #edf5ef;
+  color: #4d8059;
+  font: 9px ui-monospace, monospace;
+  white-space: nowrap;
+}
+.model-provider-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #61a878;
+}
+.model-provider-status.missing {
+  background: #fff4e8;
+  color: #a36d31;
+}
+.model-provider-status.missing i {
+  background: #d29b57;
+}
+.model-provider-endpoint,
+.model-provider-credential {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.model-provider-endpoint span,
+.model-provider-credential span {
+  color: #9aa49c;
+  font: 8px ui-monospace, monospace;
+  letter-spacing: .7px;
+}
+.model-provider-endpoint code,
+.model-provider-credential code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #59695d;
+  font: 9px ui-monospace, monospace;
+}
+.model-provider-setup {
+  max-width: 900px;
+}
+.model-provider-setup h2 {
+  margin: 6px 0 4px;
+  color: #34443a;
+  font-size: 17px;
+}
+.model-provider-setup pre {
+  overflow-x: auto;
+  margin: 10px 0 14px;
+  border: 1px solid #e8eee8;
+  border-radius: 8px;
+  background: #f7faf7;
+  padding: 12px;
+  color: #49604e;
+  font-size: 10px;
+}
+.model-provider-setup code {
+  font-family: ui-monospace, monospace;
+}
+.model-provider-security {
+  border-top: 1px solid #edf1ed;
+  padding-top: 10px;
+}
+.agent-provider-help {
+  margin-top: -4px;
+  border: 1px solid #e3ebe4;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fbf8;
+  color: #63776a;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.agent-provider-help.is-missing {
+  border-color: #f0e2cb;
+  background: #fffaf2;
+  color: #926c3c;
+}
+@media(max-width:760px) {
+  .model-provider-grid {
+    grid-template-columns: 1fr;
+  }
+  .model-provider-card-head {
+    flex-wrap: wrap;
+  }
+}

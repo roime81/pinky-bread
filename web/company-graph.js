@@ -17,6 +17,7 @@
     reloadRequested: false,
     chatHistory: [],
     chatSending: false,
+    modelProviders: null,
     nodePositions: {},
     drag: null,
     suppressAgentClick: false,
@@ -852,6 +853,45 @@
     if (pageCount) pageCount.textContent = countLabel;
   }
 
+  function renderAgentProviderHelp() {
+    const provider = $("#agent-editor-provider")?.value || "ollama";
+    const model = $("#agent-editor-model");
+    const endpoint = $("#agent-editor-endpoint");
+    const help = $("#agent-provider-help");
+    const defaults = {
+      ollama: { model: "qwen2.5:3b", endpoint: "http://ollama:11434/v1", env: "No commercial API key required" },
+      vllm: { model: "your-model-id", endpoint: "Your vLLM /v1 endpoint", env: "VLLM_API_KEY" },
+      "openai-compatible": { model: "your-model-id", endpoint: "Your gateway /v1 endpoint", env: "OPENAI_COMPATIBLE_API_KEY (or VLLM_API_KEY)" },
+      openai: { model: "gpt-4.1-mini", endpoint: "https://api.openai.com/v1", env: "OPENAI_API_KEY" },
+      gemini: { model: "gemini-4-hydrogen", endpoint: "https://generativelanguage.googleapis.com/v1beta/openai", env: "GEMINI_API_KEY" },
+    };
+    const selected = defaults[provider] || defaults.ollama;
+    if (model) {
+      const previousDefault = model.dataset.providerDefault || "qwen2.5:3b";
+      if (!model.value || model.value === previousDefault) model.value = selected.model;
+      model.dataset.providerDefault = selected.model;
+      model.placeholder = `e.g. ${selected.model}`;
+    }
+    if (endpoint) endpoint.placeholder = selected.endpoint;
+    if (help) {
+      const status = state.modelProviders?.providers?.[provider];
+      const credential = status?.requires_api_key
+        ? (status.configured ? "API key configured" : `${selected.env} is not configured`)
+        : (provider === "ollama" ? "Local Ollama provider" : `${selected.env} is configured on the server`);
+      help.textContent = `${credential}. Set credentials in Model Providers / .env. API keys are not saved in the agent profile or sent to the browser.`;
+      help.classList.toggle("is-missing", Boolean(status?.requires_api_key && !status.configured));
+    }
+  }
+
+  async function refreshModelProviderStatus() {
+    try {
+      state.modelProviders = await api("/v2/model-providers");
+      renderAgentProviderHelp();
+    } catch {
+      state.modelProviders = null;
+    }
+  }
+
   function openAgentEditor(agent = null) {
     const form = $("#agent-editor-form");
     if (!form) return;
@@ -872,6 +912,13 @@
     $("#agent-editor-provider").value = model.provider || "ollama";
     $("#agent-editor-model").value = model.model_name || "qwen2.5:3b";
     $("#agent-editor-endpoint").value = model.endpoint || "";
+    const providerSelect = $("#agent-editor-provider");
+    if (providerSelect && providerSelect.dataset.providerHelpBound !== "true") {
+      providerSelect.addEventListener("change", renderAgentProviderHelp);
+      providerSelect.dataset.providerHelpBound = "true";
+    }
+    renderAgentProviderHelp();
+    if (!state.modelProviders) refreshModelProviderStatus();
     const manager = $("#agent-editor-manager");
     manager.innerHTML = '<option value="">Reports directly to founder</option>' + activeAgents()
       .filter((item) => item.id !== agent?.id)

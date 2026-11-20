@@ -27,6 +27,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - [Optional standalone Python / Uvicorn mode](#optional-standalone-python--uvicorn-mode)
 - [Local service ports](#local-service-ports)
 - [Configure the Ollama model](#configure-the-ollama-model)
+- [Configure commercial LLM providers](#configure-commercial-llm-providers)
 - [Configuration reference](#configuration-reference)
 - [Try the demo workflow](#try-the-demo-workflow)
 - [API reference](#api-reference)
@@ -60,7 +61,8 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
 - **Continuous coordination:** the founder-selected coordinator can run recurring PLAN_ONLY or AUTO_EXECUTE schedules; disabled by default.
 - **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity. MCP is published on a dedicated host port for private local integrations.
-- **Default private LLM:** Ollama starts with the Compose stack, pulls `qwen2.5:3b` on first startup and stores model files in a persistent Docker volume. vLLM and other OpenAI-compatible local endpoints remain configurable.
+- **Per-agent LLM providers:** each company employee can use Ollama, vLLM, an OpenAI-compatible gateway, OpenAI API or Google Gemini API. Commercial API keys remain in server environment variables while provider/model selection is saved in the employee profile.
+- **Default private LLM:** Ollama starts with the Compose stack, pulls `qwen2.5:3b` on first startup and stores model files in a persistent Docker volume. vLLM and other OpenAI-compatible endpoints remain configurable.
 - **Durable worker service:** separate worker process that can be scaled horizontally.
 
 ### What still needs to be built
@@ -560,11 +562,16 @@ The `.env.example` file is the canonical template. Copy it to `.env` once and ed
 | `DEV_MODE` | `true` | Development mode only; it does not add authentication. |
 | `PB_BIND_ADDRESS` | `127.0.0.1` | Host bind address for Compose-published ports. Use `0.0.0.0` in Codespaces when required by port forwarding. |
 | `MOCK_INFERENCE` | `false` | `false` uses the configured live model. Set `true` only for a deterministic simulation without real LLM reasoning. Compose and the sample `.env` default to `false`. |
-| `MODEL_PROVIDER` | `ollama` | Default reasoning provider: `ollama`, `vllm` or `openai-compatible`. |
+| `MODEL_PROVIDER` | `ollama` | Default provider: `ollama`, `vllm`, `openai-compatible`, `openai` or `gemini`. Company agents can override this selection individually. |
 | `REASONING_API_URL` | `http://127.0.0.1:11434/v1` | Host-run OpenAI-compatible reasoning endpoint. Do not use this host address inside Docker containers. |
 | `REASONING_CONTAINER_API_URL` | `http://ollama:11434/v1` | Compose-only override passed to API, worker and model bootstrap; use Docker DNS here. |
 | `REASONING_MODEL` | `qwen2.5:3b` | Default model name pulled by `ollama-init` and used when an agent does not override it. |
 | `VLLM_API_KEY` | `ollama` in sample; `local-dev-key` in bare settings | Bearer credential for an OpenAI-compatible model server. Ollama local use does not normally require a real API key. |
+| `OPENAI_API_KEY` | Empty | Optional server-side API key for agents configured to use OpenAI. |
+| `OPENAI_API_URL` | `https://api.openai.com/v1` | Optional OpenAI Chat Completions endpoint override. |
+| `GEMINI_API_KEY` | Empty | Optional Google AI Studio API key for agents configured to use Gemini. |
+| `GEMINI_API_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible Chat Completions endpoint. |
+| `OPENAI_COMPATIBLE_API_KEY` | Empty | Optional API key for a custom OpenAI-compatible gateway; falls back to `VLLM_API_KEY`. |
 | `MULTIMODAL_API_URL` | `http://127.0.0.1:8002/v1` | Optional OpenAI-compatible vision endpoint. No vision server is included in this Compose stack. |
 | `MULTIMODAL_MODEL` | `local-vision` | Model identifier for the optional vision endpoint. |
 
@@ -615,7 +622,7 @@ Do not commit `.env`, real API keys, passwords, access tokens, certificates or p
 
 ## Sign in to Pinky Bread
 
-The Docker Compose workspace opens with a sign-in screen. For local development, the default credentials are:
+When authentication is enabled, opening the application root (`/`) redirects unauthenticated visitors to a dedicated `/login` page. After a successful sign-in, the browser returns to the workspace. For local development, the default credentials are:
 
 - Username: `admin`
 - Password: `admin`
@@ -630,7 +637,7 @@ DEV_ADMIN_PASSWORD=use-a-unique-local-password
 SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters
 ```
 
-The API and company graph endpoints require a signed, HTTP-only browser session cookie when authentication is enabled. Sessions expire after 12 hours. The dashboard shell and static assets remain available to render the sign-in screen; company and workflow APIs are protected.
+The workspace is not sent to the browser until the visitor has an authenticated session. The API and company graph endpoints also require a signed, HTTP-only browser session cookie. Sessions expire after 12 hours; static assets required by the login page remain accessible.
 
 ### Enable Google sign-in
 
@@ -655,6 +662,37 @@ docker compose up -d --build api
 The Google callback validates OAuth state and requires a verified Google email address. Google sign-in is shown automatically when both credentials are configured. The current implementation authenticates a Google identity but does not yet provide organization-domain allow-lists, user provisioning, role-based authorization or tenant membership enforcement; configure those before a multi-user or production deployment.
 
 **Important:** `admin:admin` and the sample session secret are development conveniences only. Do not use them on a public or production deployment. Set a unique password and random session secret, and disable `DEV_AUTH_ENABLED` outside local development.
+
+## Configure commercial LLM providers
+
+Pinky Bread supports per-agent selection between local and hosted models. Open the **Model Providers** page to check credential readiness, then choose the provider when creating or editing an AI employee.
+
+Available providers:
+
+- **OpenAI API** — set `OPENAI_API_KEY`; the default API endpoint is `https://api.openai.com/v1`.
+- **Google Gemini API** — set `GEMINI_API_KEY`; Pinky Bread uses Google's OpenAI-compatible Chat Completions endpoint, `https://generativelanguage.googleapis.com/v1beta/openai`.
+- **Ollama** — local model runtime included in Docker Compose.
+- **vLLM** and **OpenAI-compatible gateway** — self-hosted or hosted inference endpoints.
+
+Put keys in the project-root `.env` file. Do not add keys to agent profiles or commit them to Git:
+
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
+# Optional for custom OpenAI-compatible services:
+OPENAI_COMPATIBLE_API_KEY=your-gateway-api-key
+```
+
+Then rebuild/recreate the API and worker so both runtime paths receive the environment variables:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+In an agent's **LLM provider** settings, select OpenAI or Gemini and enter a model identifier enabled for your provider account (for example, `gpt-4.1-mini` or `gemini-4-hydrogen`). Leave the endpoint blank to use the provider default, or supply a compatible endpoint override. Each agent stores only its provider, model ID and optional endpoint; the server retrieves the corresponding API key from its environment. Provider status reports whether a key is configured but never returns the secret itself.
+
+The selected model is used for agent chat, MCP-assisted tool calls, goal planning and assigned-work execution. Gemini's OpenAI compatibility supports Chat Completions and function calling, but provider-specific capabilities are not necessarily identical to OpenAI's. Check your chosen model's API feature support before relying on advanced options. Hosted inference sends prompts and relevant company context to the provider and may incur usage charges. Review the provider's privacy, data-retention and billing settings before using sensitive company data.
 
 ## Connect the local model to MCP
 

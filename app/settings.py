@@ -31,10 +31,15 @@ class Settings(BaseSettings):
     max_upload_mb: int = 12
     reasoning_api_url: str = "http://127.0.0.1:11434/v1"
     reasoning_model: str = "qwen2.5:3b"
+    openai_api_key: str = ""
+    openai_api_url: str = "https://api.openai.com/v1"
+    gemini_api_key: str = ""
+    gemini_api_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    openai_compatible_api_key: str = ""
     multimodal_api_url: str = "http://localhost:8002/v1"
     multimodal_model: str = "local-vision"
     vllm_api_key: str = "local-dev-key"
-    model_provider: Literal["vllm", "ollama", "openai-compatible"] = "ollama"
+    model_provider: Literal["vllm", "ollama", "openai-compatible", "openai", "gemini"] = "ollama"
     worker_poll_seconds: float = 1.5
     worker_lease_seconds: int = 120
     worker_heartbeat_seconds: int = 20

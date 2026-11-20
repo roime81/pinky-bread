@@ -56,6 +56,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Stored work products:** each successful assignment writes a Markdown deliverable to local/S3 object storage; PostgreSQL records metadata, ownership and checksum, and the graph links work to its output.
 - **Virtual meetings:** turn-based text discussions with participant edges, contributions, facilitator summary and stored minutes.
 - **Agent-to-agent conversations:** named agents can initiate real peer messages, receive replies through each colleague's own persona/model configuration, persist the exchange in PostgreSQL, stream the timeline to a React workspace and return a founder-facing summary. See [A2A runtime documentation](docs/AGENT_TO_AGENT_2.0.md).
+- **Unified React workspace:** a single React 19 application owns navigation, company onboarding, graph/relationships, KPI measurements, workforce management, durable job queue and coordination, agent conversations, workflows, audits and founder command chat. Responsive left navigation and right command rail can be collapsed independently. See [frontend and document ingestion guide](docs/FRONTEND_AND_DOCUMENTS.md).
 - **React founder composer and document-aware chat:** attach multiple PDF/Office/text documents by browse or drag-and-drop, import public HTTPS cloud-share links, store sources in the existing company object store, extract supported document text and pass company-scoped source context to the workforce. See [frontend and document ingestion guide](docs/FRONTEND_AND_DOCUMENTS.md). Private cloud accounts still require authenticated OAuth connectors; image OCR is not included.
 - **KPI history:** founder-recorded numeric measurements with source, evidence, timestamp and a bounded snapshot history.
 - **Durable jobs:** PostgreSQL job rows with idempotency, worker ownership leases, heartbeats, retries/backoff, cancellation and expired-lease recovery.
@@ -762,15 +763,19 @@ pinky-bread/
 │   ├── test_engine.py            # Legacy API/workflow behavior tests
 │   ├── test_company_graph.py     # Company graph and storage tests
 │   └── test_workforce.py         # Planning, execution, meetings and KPI tests
-├── frontend/             # React 18 + TypeScript + Vite A2A collaboration app
-│   ├── src/App.tsx
-│   ├── src/styles.css
-│   └── package.json
+├── frontend/             # Unified React 19 + TypeScript + Vite workspace
+│   ├── src/WorkspaceApp.tsx # Main company OS, graph, workforce and operations UI
+│   ├── src/App.tsx          # Agent-to-agent conversations feature
+│   ├── src/FounderComposer.tsx # Founder chat and document attachments
+│   ├── src/main.tsx         # Single React application entry point
+│   ├── src/workspace.css    # React workspace design system
+│   ├── src/styles.css       # Conversation and composer styling
+│   └── vite.config.ts       # Builds the unified app into web/app
 ├── web/
-│   ├── a2a/               # Vite output, generated during build
-│   ├── app.js            # Dashboard behavior
-│   ├── index.html        # Dashboard markup
-│   └── styles.css        # Dashboard styling
+│   ├── index.html        # Minimal React application shell
+│   ├── login.html        # Dedicated authentication page
+│   ├── login.js          # Login page behavior
+│   └── app/              # Generated React bundle (created by Vite/Docker build)
 ├── .env.example          # Sample local environment settings
 ├── CHANGELOG.md          # Version history
 ├── .github/workflows/    # CI and release publishing

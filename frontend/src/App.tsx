@@ -139,7 +139,14 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const picker = document.getElementById("graph-company-picker") as HTMLSelectElement | null;
-    const sync = () => { if (picker?.value) setCompanyId(picker.value); };
+    const sync = () => {
+      if (!picker?.value) return;
+      const selectedId = picker.value;
+      setCompanyId(selectedId);
+      api<{ companies: Company[] }>("/v2/companies?tenant_id=" + TENANT)
+        .then((result) => setCompanies(result.companies || []))
+        .catch((reason: Error) => setError(reason.message));
+    };
     picker?.addEventListener("change", sync);
     api<{ companies: Company[] }>("/v2/companies?tenant_id=" + TENANT)
       .then((result) => {
@@ -153,6 +160,18 @@ export default function App() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; picker?.removeEventListener("change", sync); };
   }, []);
+
+  useEffect(() => {
+    const onWorkspace = (event: Event) => {
+      const view = (event as CustomEvent<{ view?: string }>).detail?.view;
+      if (view === "agent-messaging" && company) {
+        loadData(company.id, company.tenant_id || TENANT)
+          .catch((reason: Error) => setError(reason.message));
+      }
+    };
+    window.addEventListener("pinky:workspace", onWorkspace);
+    return () => window.removeEventListener("pinky:workspace", onWorkspace);
+  }, [company, loadData]);
 
   useEffect(() => {
     if (!companyId || !company) return;

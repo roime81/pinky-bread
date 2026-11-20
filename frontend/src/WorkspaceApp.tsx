@@ -30,6 +30,12 @@ type GraphNode = {
 };
 type GraphEdge = { id: string; source: string; target: string; relationship: string };
 type Graph = { nodes: GraphNode[]; edges: GraphEdge[] };
+type DurableJob = {
+  job_id: string; kind: string; target_id: string; status: string; attempts: number;
+  max_attempts: number; last_error?: string | null; created_at?: string; started_at?: string | null;
+  completed_at?: string | null; cancel_requested?: boolean; result?: Record<string, any> | null;
+};
+type Coordination = { enabled: boolean; mode: "PLAN_ONLY" | "AUTO_EXECUTE"; interval_seconds: number; next_run_at?: string | null; last_run_at?: string | null };
 type EventRecord = {
   event_no: number; id: string; actor_id: string; type: string;
   payload: Record<string, any>; occurred_at: string; entry_hash: string;
@@ -103,6 +109,7 @@ const navGroups = [
     label: "WORKSPACE",
     items: [
       { id: "company-agents", label: "AI Workforce", icon: Users },
+      { id: "durable-workforce", label: "Durable Workforce", icon: Zap },
       { id: "agent-messaging", label: "Agent Conversations", icon: MessageSquare },
       { id: "model-providers", label: "Model Providers", icon: Settings2 },
     ],
@@ -258,6 +265,12 @@ export default function WorkspaceApp() {
   const [companyId, setCompanyId] = useState("");
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const [jobs, setJobs] = useState<DurableJob[]>([]);
+  const [coordination, setCoordination] = useState<Coordination>({ enabled: false, mode: "PLAN_ONLY", interval_seconds: 300 });
+  const [coordinationSaving, setCoordinationSaving] = useState(false);
+  const [connectMode, setConnectMode] = useState(false);
+  const [connectSourceId, setConnectSourceId] = useState("");
+  const [relationship, setRelationship] = useState("reports_to");
   const [eventVerification, setEventVerification] = useState<{ valid: boolean; checked_events: number } | null>(null);
   const [providers, setProviders] = useState<Record<string, Provider>>({});
   const [defaultProvider, setDefaultProvider] = useState("ollama");
@@ -299,14 +312,18 @@ export default function WorkspaceApp() {
 
   const loadCompanyData = useCallback(async (selected: Company) => {
     const tenant = selected.tenant_id || TENANT;
-    const [nextGraph, nextEvents, nextVerify] = await Promise.all([
+    const [nextGraph, nextEvents, nextVerify, nextJobs, nextCoordination] = await Promise.all([
       api<Graph>("/v2/companies/" + selected.id + "/graph?tenant_id=" + encodeURIComponent(tenant)),
       api<{ events: EventRecord[] }>("/v2/companies/" + selected.id + "/events?tenant_id=" + encodeURIComponent(tenant) + "&limit=200"),
       api<{ valid: boolean; checked_events: number }>("/v2/companies/" + selected.id + "/events/verify?tenant_id=" + encodeURIComponent(tenant)),
+      api<{ jobs: DurableJob[] }>("/v2/companies/" + selected.id + "/jobs?tenant_id=" + encodeURIComponent(tenant) + "&limit=100"),
+      api<{ coordination: Coordination | null }>("/v2/companies/" + selected.id + "/coordination?tenant_id=" + encodeURIComponent(tenant)),
     ]);
     setGraph({ nodes: nextGraph.nodes || [], edges: nextGraph.edges || [] });
     setEvents(nextEvents.events || []);
     setEventVerification(nextVerify);
+    setJobs(nextJobs.jobs || []);
+    setCoordination(nextCoordination.coordination || { enabled: false, mode: "PLAN_ONLY", interval_seconds: 300 });
     setSelectedNodeId("");
   }, []);
 
@@ -489,6 +506,67 @@ export default function WorkspaceApp() {
     } catch (reason) { setError(errorText(reason)); }
   }
 
+  async function enqueueForNode(node: GraphNode) {
+    if (!company) return;
+    const route = node.type === "goal"
+      ? "/v2/companies/" + company.id + "/goals/" + node.id + "/jobs"
+      : node.type === "work"
+        ? "/v2/companies/" + company.id + "/work/" + node.id + "/jobs"
+        : node.type === "meeting"
+          ? "/v2/companies/" + company.id + "/meetings/" + node.id + "/jobs"
+          : "";
+    if (!route) return;
+    const payload = node.type === "goal"
+      ? { tenant_id: company.tenant_id || TENANT, actor_id: ACTOR, kind: "goal_plan" }
+      : { tenant_id: company.tenant_id || TENANT, actor_id: ACTOR };
+    try {
+      await api(route, { method: "POST", body: JSON.stringify(payload) });
+      await reloadCompany();
+      setNotice("Durable " + node.type + " job queued.");
+      setActiveView("durable-workforce");
+    } catch (reason) { setError(errorText(reason)); }
+  }
+
+  async function cancelJob(job: DurableJob) {
+    if (!company) return;
+    try {
+      await api("/v2/companies/" + company.id + "/jobs/" + job.job_id + "/cancel", {
+        method: "POST", body: JSON.stringify({ tenant_id: company.tenant_id || TENANT, actor_id: ACTOR }),
+      });
+      await reloadCompany();
+      setNotice("Cancellation requested for job " + shortId(job.job_id) + ".");
+    } catch (reason) { setError(errorText(reason)); }
+  }
+
+  async function saveCoordination(event: FormEvent) {
+    event.preventDefault();
+    if (!company) return;
+    setCoordinationSaving(true);
+    try {
+      const result = await api<{ coordination: Coordination }>("/v2/companies/" + company.id + "/coordination", {
+        method: "PUT",
+        body: JSON.stringify({ tenant_id: company.tenant_id || TENANT, actor_id: ACTOR, enabled: coordination.enabled, mode: coordination.mode, interval_seconds: coordination.interval_seconds }),
+      });
+      setCoordination(result.coordination);
+      setNotice(result.coordination.enabled ? "Recurring company coordination enabled." : "Recurring company coordination disabled.");
+    } catch (reason) { setError(errorText(reason)); }
+    finally { setCoordinationSaving(false); }
+  }
+
+  async function connectGraphNodes(targetId: string) {
+    if (!company || !connectSourceId || !targetId || connectSourceId === targetId) return;
+    try {
+      await api("/v2/companies/" + company.id + "/edges", {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: company.tenant_id || TENANT, actor_id: ACTOR, source_node_id: connectSourceId, target_node_id: targetId, relationship, data: { created_from: "react_company_graph" } }),
+      });
+      setConnectMode(false);
+      setConnectSourceId("");
+      await reloadCompany();
+      setNotice("Company relationship created.");
+    } catch (reason) { setError(errorText(reason)); }
+  }
+
   async function verifyEvents() {
     if (!company) return;
     try {
@@ -556,6 +634,7 @@ export default function WorkspaceApp() {
   const workflowCount = workflows.length;
   const pendingCount = workflows.filter((item) => item.status === "PENDING_APPROVAL").length;
   const completedCount = workflows.filter((item) => item.status === "COMPLETED").length;
+  const activeJobCount = jobs.filter((item) => ["PENDING", "RUNNING"].includes(item.status)).length;
   const goals = nodes.filter((item) => item.type === "goal");
   const workItems = nodes.filter((item) => ["work", "deliverable", "document"].includes(item.type));
   const companyNode = nodes.find((item) => item.type === "company") || company;
@@ -630,7 +709,7 @@ export default function WorkspaceApp() {
 
           {!loading && activeView === "company-graph" && (
             <section className="pb-page">
-              <PageHeading eyebrow="THE AUTONOMOUS ORGANIZATION" title="Your company. Your agents. One living graph." description="Build your virtual organisation, define reporting lines and connect company goals to the people and work that move them forward." actions={<><button className="pb-button secondary" onClick={() => void addGraphNode("goal")} disabled={!company}><Plus size={15} /> Add goal</button><button className="pb-button primary" onClick={() => editAgent(null)} disabled={!company}><Plus size={15} /> Add AI employee</button></>} />
+              <PageHeading eyebrow="THE AUTONOMOUS ORGANIZATION" title="Your company. Your agents. One living graph." description="Build your virtual organisation, define reporting lines and connect company goals to the people and work that move them forward." actions={<><button className="pb-button secondary" onClick={() => void addGraphNode("goal")} disabled={!company}><Plus size={15} /> Add goal</button><button className="pb-button secondary" onClick={() => void addGraphNode("work")} disabled={!company}><Plus size={15} /> Add work</button><button className="pb-button secondary" onClick={() => void addGraphNode("meeting")} disabled={!company}><Plus size={15} /> Add meeting</button><button className="pb-button primary" onClick={() => editAgent(null)} disabled={!company}><Plus size={15} /> Add AI employee</button></>} />
               {!company ? (
                 <section className="pb-onboarding-card">
                   <div className="pb-onboarding-art"><div className="pb-orbit orbit-one" /><div className="pb-orbit orbit-two" /><span><Building2 size={30} /></span></div>
@@ -641,7 +720,8 @@ export default function WorkspaceApp() {
               ) : (
                 <div className="pb-graph-layout">
                   <section className="pb-graph-panel">
-                    <div className="pb-panel-toolbar"><div><span className="pb-eyebrow">COMPANY NETWORK</span><strong>{nodes.length} nodes <i>·</i> {graph.edges.length} relationships</strong></div><span className="pb-live-pill"><i /> LIVE GRAPH</span></div>
+                    <div className="pb-panel-toolbar"><div><span className="pb-eyebrow">COMPANY NETWORK</span><strong>{nodes.length} nodes <i>·</i> {graph.edges.length} relationships</strong></div><div className="pb-graph-actions"><span className="pb-live-pill"><i /> LIVE GRAPH</span><button className={"pb-button small " + (connectMode ? "primary" : "secondary")} onClick={() => { setConnectMode((value) => !value); setConnectSourceId(""); }}>{connectMode ? "Cancel connect" : "Connect nodes"}</button></div></div>
+                    {connectMode && <div className="pb-connect-hint"><span>{connectSourceId ? "Select a destination node" : "Select a source node"}</span><select value={relationship} onChange={(event) => setRelationship(event.target.value)}><option value="reports_to">Reports to</option><option value="owns">Owns</option><option value="contributes_to">Contributes to</option><option value="assigned_to">Assigned to</option><option value="depends_on">Depends on</option><option value="collaborates_with">Collaborates with</option><option value="participates_in">Participates in</option><option value="produces">Produces</option><option value="measures">Measures</option><option value="blocks">Blocks</option><option value="informs">Informs</option></select></div>}
                     {nodes.length <= 1 ? <EmptyState icon={Network} title="Your graph is ready to grow" description="Create an AI employee, goal or work item to begin building your organisation." action={<button className="pb-button primary" onClick={() => editAgent(null)}><Plus size={15} /> Create first agent</button>} /> : (
                       <div className="pb-graph-canvas">
                         <svg viewBox={"0 0 1000 " + Math.max(560, 190 + Math.ceil(Math.max(1, nodes.length - 1) / 3) * 148)} role="img" aria-label="Company relationship graph">
@@ -664,7 +744,7 @@ export default function WorkspaceApp() {
                               {others.map((item) => {
                                 const point = positions.get(item.id)!;
                                 const tone = item.type === "agent" ? "agent" : item.type === "goal" ? "goal" : "work";
-                                return <g key={item.id} transform={"translate(" + (point.x - 125) + " " + (point.y - 35) + ")"} className={"pb-graph-node " + tone + (selectedNodeId === item.id ? " selected" : "")} onClick={() => setSelectedNodeId(item.id)} role="button" tabIndex={0}>
+                                return <g key={item.id} transform={"translate(" + (point.x - 125) + " " + (point.y - 35) + ")"} className={"pb-graph-node " + tone + (selectedNodeId === item.id ? " selected" : "") + (connectSourceId === item.id ? " connect-source" : "")} onClick={() => { if (connectMode) { if (!connectSourceId) setConnectSourceId(item.id); else void connectGraphNodes(item.id); } else setSelectedNodeId(item.id); }} role="button" tabIndex={0}>
                                   <rect width="250" height="72" rx="13" /><circle cx="31" cy="36" r="17" /><text x="31" y="40" textAnchor="middle" className="pb-node-symbol">{item.type === "agent" ? "AI" : item.type === "goal" ? "◎" : "↗"}</text><text x="58" y="30" className="pb-node-title">{item.name.slice(0, 26)}</text><text x="58" y="49" className="pb-node-subtitle">{(item.type + " / " + (item.status || "ACTIVE")).toUpperCase().slice(0, 32)}</text>
                                 </g>;
                               })}
@@ -680,6 +760,7 @@ export default function WorkspaceApp() {
                       <div className="pb-inspector-kicker">NODE INSPECTOR</div><div className="pb-inspector-avatar">{selectedNode.type === "agent" ? <Bot size={22} /> : <Network size={22} />}</div><h3>{selectedNode.name}</h3><span className="pb-node-type">{selectedNode.type.toUpperCase()} · {selectedNode.status || "ACTIVE"}</span>
                       <p>{selectedNode.description || "No additional description has been provided."}</p>
                       {selectedNode.type === "agent" && <><div className="pb-inspector-detail"><span>ROLE</span><strong>{nodeRole(selectedNode)}</strong></div><div className="pb-inspector-detail"><span>MODEL</span><strong>{selectedNode.data?.model_configuration?.model_name || "Default model"}</strong></div><button className="pb-button secondary full" onClick={() => editAgent(selectedNode)}>Edit agent profile</button></>}
+                      {["goal", "work", "meeting"].includes(selectedNode.type) && <button className="pb-button primary full" onClick={() => void enqueueForNode(selectedNode)}>{selectedNode.type === "goal" ? "Queue goal planning" : selectedNode.type === "work" ? "Queue work execution" : "Queue meeting"} <ArrowUpRight size={14} /></button>}
                       <div className="pb-inspector-detail"><span>CREATED</span><strong>{dateTime(selectedNode.created_at)}</strong></div>
                     </> : <div className="pb-inspector-empty"><div><Network size={23} /></div><strong>Select a node</strong><p>Inspect ownership, reporting lines, status and model configuration.</p></div>}
                   </aside>
@@ -719,6 +800,30 @@ export default function WorkspaceApp() {
               {!company ? <EmptyState title="Create a company first" description="Your AI workforce belongs to a company workspace." action={<button className="pb-button primary" onClick={() => setActiveView("company-graph")}>Open company setup</button>} /> : <>
                 <div className="pb-workforce-summary"><div><strong>{activeAgents.length}</strong><span>Active employees</span></div><div><strong>{agents.length - activeAgents.length}</strong><span>Paused / archived</span></div><div><strong>{activeAgents.filter((item) => String(item.data?.authority).toUpperCase() === "COORDINATOR").length}</strong><span>Coordinators</span></div></div>
                 {agents.length ? <div className="pb-agent-grid">{agents.map((agent) => <article className="pb-agent-card" key={agent.id}><div className="pb-agent-card-top"><span className="pb-agent-avatar large">{initials(agent.name)}</span><span className={"pb-agent-status " + (nodeIsActive(agent) ? "active" : "paused")}>{agent.status || "ACTIVE"}</span></div><h3>{agent.name}</h3><p className="pb-agent-title">{agent.data?.title || agent.data?.role || "AI employee"}</p><p className="pb-agent-description">{agent.description || "No description provided."}</p><div className="pb-agent-tags"><span>Level {agent.data?.seniority_level || 3}</span><span>{agent.data?.authority === "COORDINATOR" ? "Coordinator" : "Specialist"}</span></div><div className="pb-agent-model"><span>MODEL</span><strong>{agent.data?.model_configuration?.model_name || "Default model"}</strong><small>{agent.data?.model_configuration?.provider || defaultProvider}</small></div><footer><button className="pb-button secondary small" onClick={() => editAgent(agent)}>Edit profile</button><button className="pb-button ghost small" onClick={() => void pauseAgent(agent)}>{agent.status === "PAUSED" ? "Reactivate" : "Pause"}</button></footer></article>)}</div> : <EmptyState icon={Users} title="Your virtual team starts here" description="Define your first AI employee and assign a specialist role." action={<button className="pb-button primary" onClick={() => editAgent(null)}><Plus size={15} /> Create AI employee</button>} />}
+              </>}
+            </section>
+          )}
+
+          {!loading && activeView === "durable-workforce" && (
+            <section className="pb-page">
+              <PageHeading eyebrow="EXECUTION / DURABLE RUNTIME" title="Durable Workforce" description="Monitor queued agent work, inspect execution status and configure recurring company coordination." actions={<button className="pb-button secondary" onClick={() => void reloadCompany()} disabled={!company}><RefreshCw size={14} /> Refresh jobs</button>} />
+              {!company ? <EmptyState icon={Zap} title="Select a company first" description="Durable jobs and company coordination are scoped to a company workspace." /> : <>
+                <div className="pb-stat-grid"><StatCard label="Total jobs" value={jobs.length} detail="PostgreSQL job records" icon={Workflow} /><StatCard label="Pending / running" value={activeJobCount} detail="Awaiting or executing work" icon={Clock3} /><StatCard label="Completed" value={jobs.filter((job) => job.status === "COMPLETED").length} detail="Successfully executed" icon={Check} /><StatCard label="Failed" value={jobs.filter((job) => job.status === "FAILED").length} detail="Require review or retry" icon={AlertCircle} /></div>
+                <div className="pb-two-column">
+                  <section className="pb-section-card"><div className="pb-section-card-heading"><div><span className="pb-eyebrow">FOUNDER CONTROL</span><h2>Recurring coordination</h2></div><span className={"pb-agent-status " + (coordination.enabled ? "active" : "paused")}>{coordination.enabled ? "ENABLED" : "DISABLED"}</span></div>
+                    <form className="pb-workflow-form" onSubmit={saveCoordination}>
+                      <label className="pb-toggle-row"><span><strong>Enable scheduled planning</strong><small>Use the assigned coordinator to review open company goals on a recurring schedule.</small></span><input type="checkbox" checked={coordination.enabled} onChange={(event) => setCoordination((value) => ({ ...value, enabled: event.target.checked }))} /></label>
+                      <label>Execution mode<select value={coordination.mode} onChange={(event) => setCoordination((value) => ({ ...value, mode: event.target.value as Coordination["mode"] }))}><option value="PLAN_ONLY">Plan only · recommend work</option><option value="AUTO_EXECUTE">Auto execute · execute eligible work</option></select></label>
+                      <label>Interval<select value={coordination.interval_seconds} onChange={(event) => setCoordination((value) => ({ ...value, interval_seconds: Number(event.target.value) }))}><option value={300}>Every 5 minutes</option><option value={900}>Every 15 minutes</option><option value={1800}>Every 30 minutes</option><option value={3600}>Every hour</option><option value={86400}>Daily</option></select></label>
+                      <div className="pb-coordination-dates"><span>LAST RUN<strong>{dateTime(coordination.last_run_at || undefined)}</strong></span><span>NEXT RUN<strong>{dateTime(coordination.next_run_at || undefined)}</strong></span></div>
+                      <button className="pb-button primary full" type="submit" disabled={coordinationSaving}>{coordinationSaving ? "Saving policy…" : "Save coordination policy"}</button>
+                      <p className="pb-form-note">Auto execution is controlled by the founder. A real agent with Coordinator authority must be assigned; the scheduler does not invent a Head of Agents identity.</p>
+                    </form>
+                  </section>
+                  <section className="pb-section-card"><div className="pb-section-card-heading"><div><span className="pb-eyebrow">QUEUE OVERVIEW</span><h2>Latest durable jobs</h2></div><span className="pb-count-pill">{jobs.length} jobs</span></div>
+                    {jobs.length ? <div className="pb-job-list">{jobs.map((job) => <article className="pb-job-row" key={job.job_id}><div className="pb-job-main"><span className="pb-job-icon"><Workflow size={14} /></span><div><strong>{job.kind.replace(/_/g, " ")}</strong><small>{shortId(job.target_id)} · {dateTime(job.created_at)}</small></div></div><span className={"pb-status " + job.status.toLowerCase()}>{job.status.replace(/_/g, " ")}</span>{["PENDING", "RUNNING"].includes(job.status) && <button className="pb-button ghost small" onClick={() => void cancelJob(job)}>Cancel</button>}{job.last_error && <p className="pb-job-error">{job.last_error}</p>}</article>)}</div> : <EmptyState icon={Workflow} title="No durable jobs queued" description="Select a goal, work item or meeting in Company Graph and queue it for execution." />}
+                  </section>
+                </div>
               </>}
             </section>
           )}

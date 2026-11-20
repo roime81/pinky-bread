@@ -128,3 +128,31 @@ def test_agent_graph_dots_can_be_dragged_and_remembered_per_company():
     assert "state.nodePositions" in source
     assert ".graph-node.agent" in styles
     assert "cursor: grab" in styles
+
+
+def test_dedicated_login_page_is_the_unauthenticated_entry_point():
+    login = (ROOT / "web" / "login.html").read_text(encoding="utf-8")
+    main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    script = (ROOT / "web" / "login.js").read_text(encoding="utf-8")
+    assert 'id="login-form"' in login
+    assert 'id="login-google"' in login
+    assert 'id="login-password"' in login
+    assert 'id="app-shell"' not in login
+    assert "/static/login.js" in login
+    assert 'RedirectResponse(url="/login", status_code=303)' in main
+    assert 'RedirectResponse(url="/", status_code=303)' in main
+    assert 'window.location.replace("/")' in script
+
+
+def test_commercial_model_providers_are_available_in_the_agent_editor():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    company_graph = (ROOT / "web" / "company-graph.js").read_text(encoding="utf-8")
+    assert '<option value="openai">OpenAI API</option>' in html
+    assert '<option value="gemini">Google Gemini API</option>' in html
+    assert 'id="view-model-providers"' in html
+    assert "OPENAI_API_KEY" in html
+    assert "GEMINI_API_KEY" in html
+    assert "'model-providers':loadModelProviders" in app
+    assert 'provider: "openai"' in company_graph or 'openai: { model:' in company_graph
+    assert 'gemini: { model:' in company_graph

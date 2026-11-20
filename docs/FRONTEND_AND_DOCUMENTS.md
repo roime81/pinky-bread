@@ -2,14 +2,9 @@
 
 ## Frontend foundation
 
-The current workspace uses:
-- React 19 and TypeScript for the agent collaboration area and founder chat composer
-- Vite 8 for the production build
-- Tailwind CSS 4 for utility styling
-- shadcn/ui-compatible component conventions with Radix UI primitives
-- Motion for transitions and Lucide for icons
+The product workspace now runs as one React 19 + TypeScript application mounted from a single React root. The React application owns the navigation, company selector, company graph, node inspector, founder view, event log, AI workforce editor, provider settings, workflow execution/history, templates, audit viewer and founder chat rail. Agent-to-agent conversations are rendered as a feature within that same root.
 
-The company graph, navigation and existing operational views continue to use the established workspace shell while they are migrated incrementally. The document-aware composer is mounted as a React component in the founder chat rail, and the agent-conversation workspace remains React-based. This is an incremental migration, not a claim that every legacy page has already been rewritten.
+The production bundle is built with Vite 8 into `web/app` and served by FastAPI at `/static/app`. The old imperative workspace shell and its separate script entry points are no longer loaded. The UI uses the existing FastAPI contracts and PostgreSQL-backed company graph/event records; it does not introduce a second frontend API or a parallel state store. Tailwind CSS 4, Framer Motion and Lucide remain available to the React interface.
 
 ## Using the founder composer
 

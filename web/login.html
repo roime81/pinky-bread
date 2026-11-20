@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f8f5" />
+  <title>Sign in · The Pinky Bread</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20261120-login1" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261120-commercial-llm1" />
+</head>
+<body class="login-page">
+  <main class="login-layout">
+    <section class="login-card" aria-labelledby="login-heading">
+      <div class="auth-brand"><span class="auth-brand-mark">PB</span><span>THE PINKY BREAD</span></div>
+      <div class="eyebrow">AUTONOMOUS ORGANIZATION</div>
+      <h1 id="login-heading">Your company starts here.</h1>
+      <p class="login-description">Sign in to enter your workspace and meet your AI team.</p>
+      <form id="login-form" class="auth-form">
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" autocomplete="username" value="admin" required />
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+        <button type="submit" class="primary-btn" id="login-submit">Sign in to workspace <span>↗</span></button>
+        <div id="login-error" class="auth-error" role="alert" aria-live="polite"></div>
+      </form>
+      <div id="login-divider" class="auth-divider"><span>OR</span></div>
+      <a id="login-google" class="google-login-button" href="/auth/google"><span class="google-g">G</span> Continue with Google</a>
+      <div class="login-unavailable" id="login-unavailable" role="status" hidden>No sign-in method is configured. Enable development sign-in or configure Google OAuth on the server.</div>
+      <div id="login-dev-note" class="auth-footnote">Local development access: <code>admin / admin</code>. Change the default password before sharing this workspace.</div>
+    </section>
+    <aside class="login-aside">
+      <div class="login-orbit"><span>PB</span><i></i><i></i><i></i></div>
+      <div class="eyebrow">A NEW WAY TO BUILD</div>
+      <h2>One founder.<br/>A whole company.</h2>
+      <p>Build your virtual team, delegate meaningful work, and keep every decision connected.</p>
+      <div class="login-aside-foot">LOCAL-FIRST · HUMAN-LED · AI-POWERED</div>
+    </aside>
+  </main>
+  <script src="/static/login.js?v=20261120-login1"></script>
+</body>
+</html>

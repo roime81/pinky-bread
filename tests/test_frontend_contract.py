@@ -175,13 +175,15 @@ def test_react_durable_workforce_queues_jobs_and_configures_recurring_coordinati
 
 
 
-def test_post_login_flow_verifies_session_before_navigation_and_uses_safe_next_path():
+def test_post_login_flow_verifies_session_and_always_opens_canonical_overview():
     script = source("web/login.js")
     assert 'credentials: "same-origin"' in script
     assert 'fetch("/auth/me"' in script
     assert "if (!sessionResponse.ok || !session.authenticated)" in script
     assert "destinationAfterLogin()" in script
-    assert 'requested.startsWith("//")' in script
+    assert 'window.location.replace(destinationAfterLogin())' in script
+    assert 'return "/";' in script
+    assert 'new URLSearchParams(window.location.search)' not in script
     assert "/static/login.css" in source("web/login.html")
 
 

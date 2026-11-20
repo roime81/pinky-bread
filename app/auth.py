@@ -175,7 +175,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
     if not profile.get("email") or profile.get("email_verified") is not True:
         raise HTTPException(403, "Google account must have a verified email address")
     response = RedirectResponse("/", status_code=303)
-    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google", secure=request.url.scheme == "https")
+    _set_session(response, subject=str(profile.get("sub")), email=str(profile["email"]), provider="google", secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https")
     response.delete_cookie(STATE_COOKIE, path="/auth")
     return response
 

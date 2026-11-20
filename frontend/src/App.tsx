@@ -56,7 +56,7 @@ function dateLabel(value?: string | null): string {
   const date = value ? new Date(value) : new Date();
   return Number.isNaN(date.getTime()) ? "Recently" : date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
-function escapeRegExp(value: string): string { return value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"); }
+function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function isDiscussionIntent(message: string, agents: Agent[]): boolean {
   if (!/\b(discuss|talk|chat|speak|connect|consult|ask|tell|message|greet|introduce|meet|sync|align|brainstorm|say\s+(hello|hi))\b/i.test(message)) return false;
   const mentioned = agents.filter((agent) =>

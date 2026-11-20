@@ -77,6 +77,8 @@ def _validated_model_configuration(value: dict[str, Any] | None) -> dict[str, An
         raise HTTPException(422, f"Unsupported model provider '{provider}'.")
     config["provider"] = provider
     model_name = config.get("model_name")
+    if provider in {"openai", "gemini"} and (not isinstance(model_name, str) or not model_name.strip()):
+        raise HTTPException(422, f"Choose a model identifier for the {PROVIDER_DEFAULTS[provider]['label']} provider.")
     if model_name is not None:
         if not isinstance(model_name, str) or len(model_name.strip()) > 160:
             raise HTTPException(422, "Model identifier must be a string of at most 160 characters.")

@@ -269,7 +269,7 @@
   }
 
   async function loadJobs() {
-    if (!state.company || state.jobsLoading) return;
+    if (!$("#company-job-list") || !state.company || state.jobsLoading) return;
     state.jobsLoading = true;
     try {
       const tenant = encodeURIComponent(state.company.tenant_id);
@@ -326,7 +326,7 @@
   }
 
   function startJobsPolling() {
-    if (state.jobsPollHandle) return;
+    if (!$("#company-job-list") || state.jobsPollHandle) return;
     state.jobsPollHandle = window.setInterval(() => loadJobs(), 2500);
   }
 

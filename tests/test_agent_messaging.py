@@ -70,6 +70,9 @@ def test_greeting_is_bounded_to_one_peer_reply():
     result = agent_messaging.resolve_agent_discussion(agents, "Mira, say hello to Jamal.")
     assert result is not None
     assert result["max_turns"] == 2
+    natural_phrase = agent_messaging.resolve_agent_discussion(agents, "Mira says hello Jamal.")
+    assert natural_phrase is not None
+    assert natural_phrase["initiator"]["id"] == "mira-id"
 
 
 def test_agent_to_agent_conversation_is_streamed_and_persisted(monkeypatch):

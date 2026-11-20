@@ -37,7 +37,7 @@ def test_react_workspace_owns_navigation_company_graph_and_company_creation():
     app = source("frontend/src/WorkspaceApp.tsx")
     for view in [
         "company-graph", "company-events", "founder-view", "company-agents",
-        "agent-messaging", "model-providers", "overview", "workflows", "agents", "audit",
+        "agent-messaging", "durable-workforce", "model-providers", "overview", "workflows", "agents", "audit",
     ]:
         assert f'"{view}"' in app
     assert "/v2/companies?tenant_id=" in app
@@ -54,6 +54,8 @@ def test_react_company_graph_supports_relationship_inspection_and_node_creation(
     assert "setSelectedNodeId" in app
     assert '"/nodes"' in app
     assert "addGraphNode" in app
+    assert "connectGraphNodes" in app
+    assert "/edges" in app
 
 
 def test_react_workforce_supports_agent_crud_model_governance_and_reporting_lines():
@@ -153,3 +155,15 @@ def test_legacy_workspace_dom_scripts_are_not_loaded_by_the_application_shell():
     ]:
         assert path not in html
     assert re.search(r'<div id="root">', html)
+
+
+def test_react_durable_workforce_queues_jobs_and_configures_recurring_coordination():
+    app = source("frontend/src/WorkspaceApp.tsx")
+    assert "/jobs?tenant_id=" in app
+    assert "/coordination?tenant_id=" in app
+    assert 'method: "PUT"' in app
+    assert "saveCoordination" in app
+    assert "cancelJob" in app
+    assert "enqueueForNode" in app
+    assert "PLAN_ONLY" in app
+    assert "AUTO_EXECUTE" in app

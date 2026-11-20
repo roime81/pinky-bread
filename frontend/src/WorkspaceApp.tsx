@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode, type ComponentType } from "react";
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bot, Building2, Check,
+  Activity, AlertCircle, ArrowDownRight, ArrowRight, ArrowUpRight, Bot, Building2, Check,
   ChevronDown, CircleHelp, Clock3, Command, FileClock, FileText, GitBranch,
   LayoutDashboard, LogOut, MessageSquare, Network, PanelLeftClose,
   PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, RefreshCw, Search,

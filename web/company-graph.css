@@ -171,3 +171,181 @@
   .chat-rail .company-command-bar button{font-size:8px;padding:8px 5px}
   .chat-rail .console-footnote{font-size:7px}
 }
+
+
+/* Company Graph redesign: agent directory lives in the left navigation panel. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #dce5de transparent;
+}
+.sidebar-agent-directory {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 18px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--pb-line);
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+}
+.sidebar-agent-directory .graph-panel-heading {
+  align-items: center;
+  margin: 0;
+}
+.sidebar-agent-directory .graph-panel-heading > div {
+  min-width: 0;
+  gap: 4px;
+}
+.sidebar-agent-directory .graph-panel-heading .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.sidebar-agent-directory .graph-panel-heading strong {
+  font-size: 12px;
+}
+.sidebar-agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sidebar-agent-actions > span {
+  color: #8a958d;
+  font: 8px ui-monospace, monospace;
+  white-space: nowrap;
+}
+.sidebar-add-agent {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-color: #e2eae3;
+  color: #4d785b;
+  font-size: 17px;
+  line-height: 1;
+  border-radius: 8px;
+}
+.sidebar-agent-directory .agent-directory-intro {
+  display: none;
+}
+.sidebar-agent-directory .company-agent-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+}
+.sidebar-agent-directory .company-agent-card {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 9px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.sidebar-agent-directory .company-agent-card-top {
+  justify-content: flex-start;
+  gap: 7px;
+}
+.sidebar-agent-directory .company-agent-avatar {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.sidebar-agent-directory .company-agent-state {
+  margin-left: auto;
+  font-size: 7px;
+}
+.sidebar-agent-directory .company-agent-identity {
+  gap: 2px;
+}
+.sidebar-agent-directory .company-agent-identity strong {
+  font-size: 11px;
+}
+.sidebar-agent-directory .company-agent-identity span {
+  font-size: 9px;
+}
+.sidebar-agent-directory .company-agent-description,
+.sidebar-agent-directory .company-agent-meta,
+.sidebar-agent-directory .company-agent-model,
+.sidebar-agent-directory .company-agent-manager {
+  display: none;
+}
+.sidebar-agent-directory .company-agent-actions {
+  gap: 5px;
+}
+.sidebar-agent-directory .company-agent-actions button {
+  min-height: 27px;
+  padding: 5px 7px;
+  font-size: 9px;
+}
+.sidebar-agent-directory .company-agent-empty {
+  padding: 11px 9px;
+  gap: 4px;
+  background: #fbfdfb;
+}
+.sidebar-agent-directory .company-agent-empty strong {
+  font-size: 10px;
+}
+.sidebar-agent-directory .company-agent-empty span {
+  font-size: 9px;
+}
+.company-picker-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+.company-picker-wrap select {
+  width: min(180px, 18vw);
+  min-width: 112px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e1e9e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #516257;
+  font-size: 11px;
+  font-weight: 600;
+}
+.graph-heading-actions .graph-add-agent-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-color: #dbe8de;
+  background: #f0f7f1;
+  color: #477554;
+  font-size: 23px;
+  line-height: 1;
+  box-shadow: none;
+}
+.graph-heading-actions .graph-add-agent-icon:hover {
+  border-color: #a9c6af;
+  background: #e8f3ea;
+  color: #315f3f;
+}
+.graph-heading-actions .primary-btn {
+  white-space: nowrap;
+}
+@media(max-width:960px) {
+  .sidebar-agent-directory {
+    display: none !important;
+  }
+}
+@media(max-width:680px) {
+  .graph-heading-actions {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 9px;
+  }
+  .company-picker-wrap {
+    flex: 1 1 100%;
+  }
+  .company-picker-wrap select {
+    width: 100%;
+    max-width: 100%;
+  }
+}

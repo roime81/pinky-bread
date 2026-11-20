@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Pinky Bread · Autonomous Organization</title>
   <link rel="stylesheet" href="/static/styles.css?v=20261119-chat-rail1" />
-  <link rel="stylesheet" href="/static/company-graph.css?v=20261119-chat-rail1" />
+  <link rel="stylesheet" href="/static/company-graph.css?v=20261120-sidebar-cleanup1" />
   <link rel="stylesheet" href="/static/a2a/agent-workspace.css?v=20261120-a2a1" />
 </head>
 <body>
@@ -20,8 +20,6 @@
         <div class="nav-group">
           <button class="nav-item active" data-view="company-graph" title="Company graph" aria-label="Company graph"><span class="nav-icon">◎</span><span class="nav-label">Company graph</span></button>
           <div class="nav-sublist" aria-label="Company graph sections">
-            <button class="nav-item nav-subitem" data-view="company-graph" data-section="workforce-runtime-panel" title="Durable Workforce" aria-label="Durable Workforce"><span class="nav-icon">↻</span><span class="nav-label">Durable Workforce</span></button>
-            <button class="nav-item nav-subitem" data-view="company-graph" data-section="agent-management-panel" title="Your Virtual Team" aria-label="Your Virtual Team"><span class="nav-icon">◇</span><span class="nav-label">Your Virtual Team</span></button>
             <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-activity-panel" title="Company Event Log" aria-label="Company Event Log"><span class="nav-icon">≋</span><span class="nav-label">Company Event Log</span></button>
             <button class="nav-item nav-subitem" data-view="company-graph" data-section="graph-brief-panel" title="Founder View" aria-label="Founder View"><span class="nav-icon">⌂</span><span class="nav-label">Founder View</span></button>
           </div>
@@ -34,6 +32,16 @@
         <button class="nav-item" data-view="agents" title="Workflow Templates"><span class="nav-icon">▧</span><span class="nav-label">Workflow Templates</span></button>
         <button class="nav-item" data-view="audit" title="Audit Trails"><span class="nav-icon">≋</span><span class="nav-label">Audit Trails</span></button>
       </nav>
+      <section class="sidebar-agent-directory agent-management-panel" id="agent-management-panel" hidden aria-label="Your virtual team">
+        <div class="graph-panel-heading">
+          <div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Agent directory</strong></div>
+          <div class="sidebar-agent-actions">
+            <span id="workspace-agent-count">0 agents</span>
+            <button class="icon-btn sidebar-add-agent" id="graph-add-agent-directory" type="button" title="Create agent" aria-label="Create agent">＋</button>
+          </div>
+        </div>
+        <div id="company-agent-list" class="company-agent-list"><div class="company-agent-empty"><strong>Your workforce starts here.</strong><span>Create your first AI employee.</span></div></div>
+      </section>
       <div class="sidebar-bottom">
         <div class="airgap-card"><div class="airgap-head"><span class="pulse-dot"></span> LOCAL ENVIRONMENT</div><div class="airgap-title">Local-first runtime</div><div class="airgap-desc">No external model API is required. Enforce egress isolation at the deployment network layer.</div></div>
         <div class="user-row"><div class="avatar">PB</div><div><div class="user-name">Enterprise Admin</div><div class="user-role">Workspace operator</div></div><div class="user-menu">···</div></div>
@@ -52,7 +60,15 @@
       <section class="view active" id="view-company-graph">
         <div class="page-heading graph-heading">
           <div><div class="eyebrow">THE AUTONOMOUS ORGANIZATION</div><h1>Your company. Your agents. One living graph.</h1><p>A human founder leads an AI workforce. Build your team, assign each agent its own model, delegate work and see every reporting line.</p></div>
-          <div class="graph-heading-actions"><span class="graph-live"><i></i> LIVE GRAPH</span><button class="primary-btn" id="graph-create-company-shortcut">＋ New company</button></div>
+          <div class="graph-heading-actions">
+            <label class="company-picker-wrap" id="graph-company-picker-wrap" hidden>
+              <span class="sr-only">Select company</span>
+              <select id="graph-company-picker" aria-label="Select company"></select>
+            </label>
+            <span class="graph-live"><i></i> LIVE GRAPH</span>
+            <button class="icon-btn graph-add-agent-icon" id="graph-add-agent" type="button" title="Create AI employee" aria-label="Create AI employee" hidden>＋</button>
+            <button class="primary-btn" id="graph-create-company-shortcut">＋ New company</button>
+          </div>
         </div>
 
         <div class="company-onboarding" id="company-onboarding" hidden>
@@ -64,21 +80,6 @@
         </div>
 
         <div id="company-dashboard" class="company-dashboard" hidden>
-          <div class="company-toolbar">
-            <div class="company-identity"><span class="company-identity-mark">PB</span><div><strong id="graph-company-name">Company</strong><span id="graph-company-mission">Company mission</span></div></div>
-            <div class="graph-tools">
-              <select id="graph-company-picker" aria-label="Select company"></select>
-              <button class="graph-tool-btn" id="graph-add-goal">＋ Goal</button>
-              <button class="graph-tool-btn" id="graph-add-kpi">＋ KPI</button>
-              <button class="graph-tool-btn" id="graph-add-agent">＋ Agent</button>
-              <button class="graph-tool-btn" id="graph-add-work">＋ Work</button>
-              <button class="graph-tool-btn" id="graph-add-meeting">＋ Meeting</button>
-              <button class="graph-tool-btn" id="graph-upload-file">↑ Upload file</button>
-              <input type="file" id="company-artifact-file" hidden />
-              <button class="graph-tool-btn" id="graph-connect">Connect</button>
-              <button class="graph-tool-btn" id="graph-refresh" title="Refresh graph">↻</button>
-            </div>
-          </div>
           <div class="company-graph-layout">
             <div class="company-canvas-wrap">
               <div class="canvas-topline"><span>NETWORK / <b id="graph-node-count">0 NODES</b></span><span id="graph-mode-label">ALL RELATIONSHIPS</span></div>
@@ -92,31 +93,6 @@
               <div class="inspector-empty"><span>◎</span><strong>Select a dot</strong><p>Inspect ownership, assignments, dependencies, activity and evidence.</p></div>
             </aside>
           </div>
-          <section class="graph-runtime-panel" id="workforce-runtime-panel">
-            <div class="graph-panel-heading">
-              <div><div class="eyebrow">DURABLE WORKFORCE</div><strong>Company coordinator</strong></div>
-              <span id="coordination-state">Not scheduled</span>
-            </div>
-            <div class="runtime-controls">
-              <button class="graph-tool-btn" id="coordination-plan-only">Enable planning loop</button>
-              <button class="graph-tool-btn" id="coordination-auto-execute">Enable auto-execution</button>
-              <button class="graph-tool-btn" id="coordination-stop">Pause coordination</button>
-              <span class="runtime-note">Assign COORDINATOR authority to one of your own agents to plan work. PLAN_ONLY creates plans; AUTO_EXECUTE runs assignments.</span>
-            </div>
-            <div class="graph-panel-heading runtime-queue-heading">
-              <div><div class="eyebrow">POSTGRESQL JOB QUEUE</div><strong>Worker activity</strong></div>
-              <span id="graph-job-count">0 jobs</span>
-            </div>
-            <div id="company-job-list" class="company-job-list"><div class="empty-state">Durable jobs will appear here.</div></div>
-          </section>
-          <section class="agent-management-panel" id="agent-management-panel">
-            <div class="graph-panel-heading">
-              <div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Agent directory</strong></div>
-              <button class="graph-tool-btn" id="graph-add-agent-directory">＋ Create agent</button>
-            </div>
-            <p class="agent-directory-intro">Create the roles your company needs. Set each agent's responsibilities, capabilities, seniority and reporting line. Nothing is preloaded.</p>
-            <div id="company-agent-list" class="company-agent-list"><div class="empty-state">Your team is empty. Create your first agent to get started.</div></div>
-          </section>
           <div class="company-bottom-grid">
             <section class="graph-activity-panel" id="graph-activity-panel">
               <div class="graph-panel-heading"><div><div class="eyebrow">COMPANY EVENT LOG</div><strong>What is changing</strong></div><span id="graph-event-count">0 events</span></div>
@@ -137,7 +113,7 @@
           <button class="primary-btn" id="workspace-add-agent">＋ Create agent</button>
         </div>
         <section class="agent-management-panel">
-          <div class="graph-panel-heading"><div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Company agents</strong></div><span id="workspace-agent-count">0 agents</span></div>
+          <div class="graph-panel-heading"><div><div class="eyebrow">YOUR VIRTUAL TEAM</div><strong>Company agents</strong></div><span id="ai-workspace-agent-count">0 agents</span></div>
           <div id="workspace-agent-list" class="company-agent-list"><div class="empty-state">Select or create a company to start building your team.</div></div>
         </section>
       </section>

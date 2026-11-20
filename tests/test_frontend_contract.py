@@ -67,3 +67,24 @@ def test_founder_chat_does_not_require_manual_agent_selection():
     assert 'id="company-chat-agent"' not in html
     assert "renderChatAgentPicker" not in source
     assert "Relevant agents may join" in html
+
+
+def test_company_graph_toolbar_and_durable_workforce_panel_are_removed():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    assert 'class="company-toolbar"' not in html
+    assert 'class="graph-tools"' not in html
+    assert 'id="workforce-runtime-panel"' not in html
+    assert 'id="graph-company-picker"' in html
+    assert 'id="graph-add-agent"' in html
+    assert 'graph-heading-actions' in html
+
+
+def test_company_agent_directory_is_rendered_inside_the_left_sidebar():
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    sidebar_start = html.index('<aside class="sidebar"')
+    main_start = html.index('<main class="main-area">')
+    directory_start = html.index('id="agent-management-panel"')
+    directory_end = html.index('</section>', directory_start)
+    assert sidebar_start < directory_start < directory_end < main_start
+    assert 'id="company-agent-list"' in html
+    assert 'id="graph-add-agent-directory"' in html

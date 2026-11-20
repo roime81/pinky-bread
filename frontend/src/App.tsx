@@ -58,7 +58,7 @@ function dateLabel(value?: string | null): string {
 }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function isDiscussionIntent(message: string, agents: Agent[]): boolean {
-  if (!/\b(discuss|talk|chat|speak|connect|consult|ask|tell|message|greet|introduce|meet|sync|align|brainstorm|say\s+(hello|hi))\b/i.test(message)) return false;
+  if (!/\b(discuss|talk|chat|speak|connect|consult|ask|tell|message|greet|introduce|meet|sync|align|brainstorm|converse|conversation|hello|hi|say\s+(hello|hi)|says?\s+(hello|hi))\b/i.test(message)) return false;
   const mentioned = agents.filter((agent) =>
     new RegExp("(?<![\\w])@?" + escapeRegExp(agent.name) + "(?![\\w])", "i").test(message)
   );

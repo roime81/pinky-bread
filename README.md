@@ -27,6 +27,7 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - [Optional standalone Python / Uvicorn mode](#optional-standalone-python--uvicorn-mode)
 - [Local service ports](#local-service-ports)
 - [Configure the Ollama model](#configure-the-ollama-model)
+- [Configure commercial LLM providers](#configure-commercial-llm-providers)
 - [Configuration reference](#configuration-reference)
 - [Try the demo workflow](#try-the-demo-workflow)
 - [API reference](#api-reference)
@@ -60,7 +61,8 @@ Pinky Bread 2.0 Alpha 4 packages the durable workforce as a local-first runtime:
 - **Valkey coordination:** best-effort wake-up notifications; workers poll PostgreSQL as a loss-safe fallback.
 - **Continuous coordination:** the founder-selected coordinator can run recurring PLAN_ONLY or AUTO_EXECUTE schedules; disabled by default.
 - **Official MCP v2:** Streamable HTTP MCP server/client, tool discovery, per-role allow-list and runtime-injected company/tenant/agent identity. MCP is published on a dedicated host port for private local integrations.
-- **Default private LLM:** Ollama starts with the Compose stack, pulls `qwen2.5:3b` on first startup and stores model files in a persistent Docker volume. vLLM and other OpenAI-compatible local endpoints remain configurable.
+- **Per-agent LLM providers:** each company employee can use Ollama, vLLM, an OpenAI-compatible gateway, OpenAI API or Google Gemini API. Commercial API keys remain in server environment variables while provider/model selection is saved in the employee profile.
+- **Default private LLM:** Ollama starts with the Compose stack, pulls `qwen2.5:3b` on first startup and stores model files in a persistent Docker volume. vLLM and other OpenAI-compatible endpoints remain configurable.
 - **Durable worker service:** separate worker process that can be scaled horizontally.
 
 ### What still needs to be built
@@ -560,11 +562,16 @@ The `.env.example` file is the canonical template. Copy it to `.env` once and ed
 | `DEV_MODE` | `true` | Development mode only; it does not add authentication. |
 | `PB_BIND_ADDRESS` | `127.0.0.1` | Host bind address for Compose-published ports. Use `0.0.0.0` in Codespaces when required by port forwarding. |
 | `MOCK_INFERENCE` | `false` | `false` uses the configured live model. Set `true` only for a deterministic simulation without real LLM reasoning. Compose and the sample `.env` default to `false`. |
-| `MODEL_PROVIDER` | `ollama` | Default reasoning provider: `ollama`, `vllm` or `openai-compatible`. |
+| `MODEL_PROVIDER` | `ollama` | Default provider: `ollama`, `vllm`, `openai-compatible`, `openai` or `gemini`. Company agents can override this selection individually. |
 | `REASONING_API_URL` | `http://127.0.0.1:11434/v1` | Host-run OpenAI-compatible reasoning endpoint. Do not use this host address inside Docker containers. |
 | `REASONING_CONTAINER_API_URL` | `http://ollama:11434/v1` | Compose-only override passed to API, worker and model bootstrap; use Docker DNS here. |
 | `REASONING_MODEL` | `qwen2.5:3b` | Default model name pulled by `ollama-init` and used when an agent does not override it. |
 | `VLLM_API_KEY` | `ollama` in sample; `local-dev-key` in bare settings | Bearer credential for an OpenAI-compatible model server. Ollama local use does not normally require a real API key. |
+| `OPENAI_API_KEY` | Empty | Optional server-side API key for agents configured to use OpenAI. |
+| `OPENAI_API_URL` | `https://api.openai.com/v1` | Optional OpenAI Chat Completions endpoint override. |
+| `GEMINI_API_KEY` | Empty | Optional Google AI Studio API key for agents configured to use Gemini. |
+| `GEMINI_API_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible Chat Completions endpoint. |
+| `OPENAI_COMPATIBLE_API_KEY` | Empty | Optional API key for a custom OpenAI-compatible gateway; falls back to `VLLM_API_KEY`. |
 | `MULTIMODAL_API_URL` | `http://127.0.0.1:8002/v1` | Optional OpenAI-compatible vision endpoint. No vision server is included in this Compose stack. |
 | `MULTIMODAL_MODEL` | `local-vision` | Model identifier for the optional vision endpoint. |
 

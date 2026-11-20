@@ -254,6 +254,9 @@ button:not(:disabled),.nav-item,[role="button"]{cursor:pointer;pointer-events:au
 
 
 /* Dedicated sign-in page, shown before the workspace when authentication is enabled. */
+body.login-page [hidden] {
+  display: none !important;
+}
 body.login-page {
   min-height: 100vh;
   margin: 0;

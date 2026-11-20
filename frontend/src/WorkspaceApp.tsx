@@ -285,7 +285,7 @@ export default function WorkspaceApp() {
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [companyBusy, setCompanyBusy] = useState(false);
   const [leftHidden, setLeftHidden] = useState(() => {
-    try { return localStorage.getItem("pinky-sidebar-hidden") === "true"; } catch { return false; }
+    try { const saved = localStorage.getItem("pinky-sidebar-hidden"); return saved === null ? window.matchMedia("(max-width: 680px)").matches : saved === "true"; } catch { return false; }
   });
   const [chatHidden, setChatHidden] = useState(() => {
     try { const saved = localStorage.getItem("pinky-chat-panel-hidden"); return saved === null ? window.matchMedia("(max-width: 1180px)").matches : saved === "true"; } catch { return false; }
@@ -913,6 +913,8 @@ export default function WorkspaceApp() {
 
         <footer className="pb-statusbar"><span><i /> API {health.status || "connecting"}</span><span>{company?.name || "No company selected"}</span><span>{activeAgents.length} active agents</span><span>Pink Bread 2.0 · React workspace</span></footer>
       </main>
+
+      {(!leftHidden || !chatHidden) && <div className="pb-mobile-backdrop" onClick={() => { setLeftHidden(true); setChatHidden(true); }} aria-hidden="true" />}
 
       <aside className="pb-chat-rail">
         <div className="pb-chat-header"><div><span className="pb-eyebrow">FOUNDER / COMMAND</span><h2>Talk to your company</h2></div><button className="pb-icon-button" onClick={() => setChatHidden(true)} aria-label="Hide founder chat" title="Hide founder chat"><X size={17} /></button></div>

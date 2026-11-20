@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode, type ComponentType } from "react";
 import {
   Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bot, Building2, Check,
   ChevronDown, CircleHelp, Clock3, Command, FileClock, FileText, GitBranch,
@@ -119,7 +119,7 @@ const navGroups = [
 ];
 
 function PageHeading({ eyebrow, title, description, actions }: {
-  eyebrow: string; title: string; description: string; actions?: React.ReactNode;
+  eyebrow: string; title: string; description: string; actions?: ReactNode;
 }) {
   return (
     <div className="pb-page-heading">
@@ -134,7 +134,7 @@ function PageHeading({ eyebrow, title, description, actions }: {
 }
 
 function EmptyState({ icon: Icon = CircleHelp, title, description, action }: {
-  icon?: React.ComponentType<{ size?: number }>; title: string; description: string; action?: React.ReactNode;
+  icon?: ComponentType<{ size?: number }>; title: string; description: string; action?: React.ReactNode;
 }) {
   return (
     <div className="pb-empty-state">
@@ -147,7 +147,7 @@ function EmptyState({ icon: Icon = CircleHelp, title, description, action }: {
 }
 
 function StatCard({ label, value, detail, icon: Icon }: {
-  label: string; value: string | number; detail: string; icon: React.ComponentType<{ size?: number }>;
+  label: string; value: string | number; detail: string; icon: ComponentType<{ size?: number }>;
 }) {
   return (
     <article className="pb-stat-card">
